@@ -1,0 +1,102 @@
+# Getting Started with SAGE Engine
+
+This guide gets you from a fresh `git clone` to a running **3D SAGE Engine** window in just a few minutes — with **zero manual `.dll` or `.lib` hunting** (CMake automatically downloads and builds every dependency from source).
+
+---
+
+## 1. Prerequisites
+
+| Platform | Required Tools |
+| :--- | :--- |
+| **Windows 10/11** | **Visual Studio 2022 or 2026 Build Tools** (*"Desktop development with C++"* workload), **CMake 3.24+**, **Ninja**, **Git** |
+| **Linux (Ubuntu/Debian)** | `g++` (GCC 11+) or `clang++`, `cmake`, `ninja-build`, `git`, `libgl1-mesa-dev`, `libx11-dev` |
+| **macOS** | Xcode Command Line Tools (`xcode-select --install`), `cmake`, `ninja` |
+
+### Quick Windows Install (`winget`)
+Open **Windows Terminal / PowerShell** and run:
+```powershell
+winget install --id Kitware.CMake --exact
+winget install --id Ninja-build.Ninja --exact
+winget install --id Microsoft.VisualStudio.BuildTools --exact --override "--passive --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+*(Restart your terminal after installation so `cmake` and `ninja` are on your `PATH`.)*
+
+---
+
+## 2. Clone, Build & Run
+
+### Windows (Developer Command Prompt for VS or PowerShell)
+```powershell
+git clone https://github.com/dasunsucharith/sage-engine.git
+cd sage-engine
+
+# Configure (fetches SDL3, Lua 5.4, sol2, GLM, cgltf, Jolt Physics, Dear ImGui, miniaudio)
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+# Build the standalone sage.exe binary
+cmake --build build --target sage
+
+# Launch the built-in 3D Aventador SVJ Stunt & Delivery Showcase!
+.\build\sage.exe
+```
+
+> [!TIP]
+> On Windows, if you run from a standard PowerShell window without Visual Studio's environment loaded, either open **Developer Command Prompt for VS** or use the Visual Studio generator directly:
+> ```powershell
+> cmake -S . -B build
+> cmake --build build --target sage --config Release
+> .\build\Release\sage.exe
+> ```
+
+### Linux / macOS
+```bash
+git clone https://github.com/dasunsucharith/sage-engine.git
+cd sage-engine
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target sage
+./build/sage
+```
+
+---
+
+## 3. Command-Line Options
+
+| Flag | Example | Description |
+| :--- | :--- | :--- |
+| `--scene <path>` | `.\build\sage.exe --scene scenes/sandbox.json` | Loads a custom JSON scene file instead of the default `scenes/stunt_city.json`. |
+| `--mute` | `.\build\sage.exe --mute` | Launches with audio muted (no OS audio device opened). |
+| `--smoke-test` | `.\build\sage.exe --smoke-test` | Initializes GPU, Jolt Physics, Dear ImGui, JSON scene, `.glb` models, and Lua scripts, renders 12 real frames, prints diagnostics, and exits `0` (ideal for CI and AI agents!). |
+
+---
+
+## 4. Built-In Controls (Showcase & Editor)
+
+### Engine & Editor Hotkeys (Available in Every Game)
+| Key | Action |
+| :--- | :--- |
+| **`F1`** | Toggle the **Dear ImGui Live Inspector** (FPS graph, Time of Day, Shadows, Jolt Gravity, Audio, Entity Editor) |
+| **`F5`** | Manually hot-reload active JSON scene + all enabled Lua resources (saving files also hot-reloads automatically!) |
+| **`Tab`** | Toggle **Free-Fly 3D Inspector Camera** (Right-Mouse drag to look, `WASD` + `Q`/`E` to fly, Mouse Wheel for speed) |
+| **`Esc`** | Quit cleanly |
+
+### Built-In Showcase Game (`resources/stunt_sandbox/`)
+| Key | Action |
+| :--- | :--- |
+| **`W` / `S`** or **Up / Down** | Accelerate / Brake & Reverse (6-gear automatic transmission) |
+| **`A` / `D`** or **Left / Right** | Speed-sensitive steering |
+| **`Space`** | Handbrake Drift |
+| **`Left Shift`** | Nitro Boost (V12 roar + wider 3D FOV) |
+| **`Right-Mouse Drag`** | Orbit 3D chase camera around the car |
+| **`C`** | Cycle 3 camera angles (*Far Chase → Close Action → Hood Cam*) |
+| **`X`** | Physics Shockwave (blasts nearby Jolt crates, balls & cones sky-high!) |
+| **`B`** | Drop a fresh 6-crate Jolt Physics pyramid ahead of your car |
+| **`T`** | Cycle Time of Day (*Golden Sunset → Bright Noon → Neon Night → Early Sunrise*) |
+| **`R`** | Reset vehicle to city center |
+
+---
+
+## 5. Next Steps
+
+* Ready to build **your own 3D game without touching C++**? Read [**Making Your First Game**](making_a_game.md).
+* Looking for exact Lua function signatures? Read the [**Lua API Reference**](lua_api.md).
+* Want to contribute to the C++20 core? Read [**Engine Architecture**](architecture.md) and [`CONTRIBUTING.md`](../CONTRIBUTING.md).

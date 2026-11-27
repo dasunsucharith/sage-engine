@@ -123,3 +123,42 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `ui.progressBar(fraction01 [, label])` | Draws a progress bar (RPM, Nitro, Health, Loading). |
 | `ui.button(label)` | Draws a clickable button and returns `true` on click. |
 | `ui.separator()` | Draws a horizontal divider line. |
+
+---
+
+## Copy-Paste Cookbook (Common Game Patterns)
+
+### 1. Spawn a Rolling Physics Ball & Kick It
+```lua
+world.spawnModel("soccer_ball", "assets/models/stunt_ball.glb", 0, 4, 10)
+physics.addDynamicSphere("soccer_ball", 0, 4, 10, 1.25, 28.0, 0.75, 0.35)
+physics.applyImpulse("soccer_ball", 0.0, 120.0, 260.0)
+```
+
+### 2. Play a Blender `.glb` Keyframe Animation
+```lua
+world.spawnModel("drone", "assets/models/hover_drone.glb", 0, 6, 0)
+world.playAnimation("drone", "", true, 1.5) -- "" plays all animation tracks, looping at 1.5x speed
+```
+
+### 3. Cast a 3D Physics Ray (Ground Check / Shooting / Interaction)
+```lua
+local hit, hx, hy, hz, entityId = physics.raycast(0, 10, 0, 0, -1, 0, 50.0)
+if hit then
+    sage.log("Ray hit " .. entityId .. " at y=" .. string.format("%.2f", hy))
+end
+```
+
+### 4. Draw a Custom In-Game HUD Window
+```lua
+function onRenderUI()
+    if ui.beginWindow("Player HUD", 20, 20, 220, 95, true) then
+        ui.text("Health")
+        ui.progressBar(0.85, "85 / 100")
+        if ui.button("Heal") then
+            audio.playChime()
+        end
+    end
+    ui.endWindow()
+end
+```
