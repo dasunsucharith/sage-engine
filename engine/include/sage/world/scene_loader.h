@@ -13,6 +13,10 @@ class World;
 class SceneLoader {
 public:
     static bool loadFromFile(const std::filesystem::path& scenePath, World& world, PhysicsWorld* physics = nullptr);
+    static bool saveToFile(
+        const std::filesystem::path& scenePath,
+        const World& world,
+        const std::string& sceneName = "SAGE Exported Scene");
 };
 
 } // namespace sage

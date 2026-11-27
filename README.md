@@ -35,16 +35,16 @@ See [**Getting Started**](docs/getting_started.md) for prerequisite installation
 
 ---
 
-## Core Capabilities (`v0.9.0`)
+## Core Capabilities (`v1.0.0` Production Release)
 
 | Pillar | Technology | What You Get Out of the Box |
 | :--- | :--- | :--- |
-| **Native Performance Core** | **C++20** + **CMake** + **SDL3** | Deterministic 60 Hz fixed-timestep loop, cross-platform window/input, standalone binary |
-| **AAA-Style HDR Graphics** | **OpenGL 3.3 Core** + **cgltf** + **GLM** | **2-Cascade 2048px PCF Soft Shadows (CSM)**, 6-pass `RGBA16F` HDR Bloom & ACES tone mapping, distance-sorted **Nearest-16 dynamic point lights** (reflecting on waves!), starry night sky + drifting clouds, sky clearcoat reflections, contact AO, 3D particles & animated `.glb` models |
+| **Native Performance Core** | **C++20** + **CMake** + **SDL3** | Deterministic 60 Hz fixed-timestep loop, cross-platform window/input, persistent `sage.saveData`/`loadData`, standalone binary |
+| **AAA-Style HDR Graphics & Weather** | **OpenGL 3.3 Core** + **cgltf** + **GLM** | **2-Cascade 2048px PCF Soft Shadows (CSM)**, 6-pass `RGBA16F` HDR Bloom & ACES tone mapping, **dynamic rainstorms + glossy wet-puddle roads**, distance-sorted **Nearest-16 dynamic point lights** (reflecting on waves & wet asphalt!), starry night sky + drifting clouds, sky clearcoat reflections, contact AO, 3D particles & animated `.glb` models |
 | **AAA 3D Physics & Buoyancy** | **Jolt Physics 5.7** | Multithreaded rigid-body simulation (boxes, rolling spheres, capsules, convex-hull ramps, drivable pier/bridge decks, Archimedes water buoyancy & drag, kinematic collisions, shockwaves, raycasts, JSON auto-colliders) |
-| **Live Scripting & HUDs** | **Lua 5.4** (`sol2`) + **Dear ImGui 1.92** | FiveM-style `resources/` folders, automatic file-watch & `F5` hot-reload, built-in `F1` Live Scene Inspector (hidden by default), and Lua `ui.*` Main/Pause Menus & custom HUDs |
+| **Live World Editor, Scripting & Minimap UI** | **Lua 5.4** (`sol2`) + **Dear ImGui 1.92** | FiveM-style `resources/` folders, auto hot-reload, **`F1` Live World Editor** (spawn any `.glb`/primitive/light + **Save Scene to JSON**!), Lua `ui.*` Main/Pause Menus & **2D vector canvas (`ui.drawRect`/`Circle`/`Line`)** for live GTA minimap radars |
 | **Real-Time Audio** | **miniaudio 0.11** | Lock-free 48 kHz stereo audio thread with procedural V12 engine synth, drift screech, nitro roar, impacts, chimes & shockwave booms |
-| **AI-Native & Blender Ready** | Plain-text **JSON** + 24 starter `.glb` models | Ships with a playable **560m × 560m Grand 4-Biome Open World** with GTA-style Exit/Enter Vehicle (`F` to walk/sprint/swim!), 6 autonomous AI traffic cruisers, patrol helicopter, 24m spinning Ferris wheel, alpine cabins, cactus canyon & 72m marina lagoon |
+| **AI-Native & Blender Ready** | Plain-text **JSON** + 28 starter `.glb` models | Ships with a playable **560m × 560m Grand 4-Biome Open World** featuring GTA minimap radar, weather/rainstorms, Exit/Enter Vehicle (`F` to walk/sprint/swim!), 6 AI traffic cruisers, patrol helicopter, suspension bridges, neon stunt stadium, Ferris wheel, luxury yachts & persistent Best Scores |
 
 ---
 
@@ -55,7 +55,7 @@ sage-engine/
 ├── engine/                 # C++20 core engine (platform, renderer, world, physics, audio, editor, Lua VM)
 │   ├── include/sage/       # Clean public C++ subsystem interfaces
 │   └── src/                # Engine implementation
-├── assets/models/          # 24 ready-to-use static & animated .glb 3D models
+├── assets/models/          # 28 ready-to-use static & animated .glb 3D models
 ├── scenes/                 # Human- & AI-readable JSON 3D worlds (hot-reloadable!)
 ├── resources/              # FiveM-style Lua game resources (hot-reloadable!)
 ├── tools/                  # Blender 5.3 procedural asset & glTF export scripts
@@ -80,8 +80,9 @@ We follow the **Table Tennis Rule** (learned from RAGE's history): prove every c
 - [x] **v0.6 — Multi-Biome Open World & Game Menus:** Declarative JSON auto-colliders on all world objects (trees, turbines, lamps, rocks, towers), Main/Pause Menu with auto-hidden Inspector (`F1`), and a 320m × 320m 4-biome world with 15 Blender `.glb` assets.
 - [x] **v0.7 — HDR Bloom, Animated 3D Ocean Water & Flicker-Free Roads:** 6-pass `RGBA16F` HDR Bloom + ACES post-processing, multi-wave 3D animated ocean water shader (Fresnel reflections, sun glints & shoreline foam), drifting procedural sky clouds, procedural terrain micro-grain, and zero-flicker layered roads.
 - [x] **v0.8 — Realistic Water Physics, Dynamic Point Lights & 3D Particles:** Synchronized CPU/GPU water volume queries (`world.sampleWater`), Archimedes Jolt buoyancy & drag for floating props, realistic car water submersion & engine flooding (no driving on water!), drivable pier decks, up to 16 real-time dynamic point lights reflecting on water, 3D HDR particle FX (splashes, drift smoke, nitro sparks), and 3 new Blender assets (18 total `.glb` models).
-- [x] **v0.9 — 560m Grand Open World, 2-Cascade CSM, Walk/Drive & AI Traffic:** Dual `2048×2048` Cascaded Shadow Maps (32m Near + 135m Far), starry night sky, metallic clearcoat reflections, contact AO, distance-sorted nearest-16 point lights, 560m × 560m 4-biome island (3× larger!), GTA-style Exit/Enter Car (`F`) with walking/swimming 3rd-person character, 6 autonomous AI traffic cruisers, patrol helicopter, 24m spinning Ferris wheel, and 6 new Blender assets (**24 total `.glb` models**).
-- [ ] **v1.0 — Production Open-World Engine Milestone:** Full Jolt 4-Wheel Raycast Vehicle Suspension, skeletal skinning, live in-editor scene save/export, world chunk streaming, and Vulkan/DX12 backend foundation.
+- [x] **v0.9 — 560m Grand Open World, 2-Cascade CSM, Walk/Drive & AI Traffic:** Dual `2048×2048` Cascaded Shadow Maps (32m Near + 135m Far), starry night sky, metallic clearcoat reflections, contact AO, distance-sorted nearest-16 point lights, 560m × 560m 4-biome island (3× larger!), GTA-style Exit/Enter Car (`F`) with walking/swimming 3rd-person character, 6 autonomous AI traffic cruisers, patrol helicopter, 24m spinning Ferris wheel, and 6 new Blender assets (24 total `.glb` models).
+- [x] **v1.0.0 — Production AI-Native 3D Engine:** Dynamic Weather (3D falling rain + glossy wet-puddle road reflections + wet-road tire physics), Live `F1` World Builder & JSON Scene Save/Export (`SceneLoader::saveToFile`), 2D Vector Minimap/Radar Canvas API (`ui.drawRect`/`Circle`/`Line`), persistent game save API (`sage.saveData`/`loadData`), live GTA-style corner minimap radar, and 4 new landmark Blender models (**28 total `.glb` models**).
+- [ ] **v1.1+ — Next-Gen Expansion:** Full Jolt 4-Wheel Raycast Suspension & spinning wheels, skeletal skinning, spatial 3D audio emitters, multiplayer networking foundation, and Vulkan/DX12 renderer backend.
 
 ---
 

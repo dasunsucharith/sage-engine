@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE v0.9 Showcase — 560m Grand 4-Biome Open World, GTA-Style Exit/Enter Supercar (F) + Walkable/Swimmable Character, 6 Autonomous AI Traffic Cruisers, Patrol Helicopter, Spinning Ferris Wheel, 2-Cascade Soft Shadows, HDR Bloom & 24 Blender .glb Models.",
+  "description": "SAGE Engine v1.0.0 Flagship Showcase — 560m 4-Biome Open World, GTA Minimap Radar, Dynamic Rain & Wet Reflective Roads, Persistent High-Score Saves, Exit/Enter Supercar (F), AI Traffic, 2-Cascade Soft Shadows & 28 Blender .glb Models.",
   "scripts": [
     "main.lua"
   ]

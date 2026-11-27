@@ -79,6 +79,35 @@ struct LuaEngine::Impl {
                 callbacks.requestQuit();
             }
         });
+        sageTbl.set_function("saveData", [this](const std::string& key, const std::string& data) -> bool {
+            std::string safeKey;
+            for (char c : key) {
+                if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') {
+                    safeKey.push_back(c);
+                }
+            }
+            if (safeKey.empty()) return false;
+            const fs::path saveDir = resourcesRoot.parent_path() / "saves";
+            std::error_code ec;
+            fs::create_directories(saveDir, ec);
+            std::ofstream out(saveDir / (safeKey + ".dat"), std::ios::trunc);
+            if (!out.is_open()) return false;
+            out << data;
+            return true;
+        });
+        sageTbl.set_function("loadData", [this](const std::string& key) -> std::string {
+            std::string safeKey;
+            for (char c : key) {
+                if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') {
+                    safeKey.push_back(c);
+                }
+            }
+            if (safeKey.empty()) return "";
+            const fs::path filePath = resourcesRoot.parent_path() / "saves" / (safeKey + ".dat");
+            std::ifstream in(filePath);
+            if (!in.is_open()) return "";
+            return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        });
 
         // --- input.* namespace ---
         sol::table inputTbl = state.create_named_table("input");
@@ -169,6 +198,13 @@ struct LuaEngine::Impl {
                 if (intensity.has_value()) {
                     world->sky().bloomIntensity = std::clamp(*intensity, 0.0f, 2.0f);
                 }
+            }
+        });
+        worldTbl.set_function("setWeather", [this](float rainIntensity, sol::optional<float> wetness) {
+            if (world) {
+                const float r = std::clamp(rainIntensity, 0.0f, 1.0f);
+                world->sky().rainIntensity = r;
+                world->sky().wetness = std::clamp(wetness.value_or(r), 0.0f, 1.0f);
             }
         });
         worldTbl.set_function("setPointLight", [this](
@@ -416,6 +452,42 @@ struct LuaEngine::Impl {
         });
         uiTbl.set_function("separator", []() {
             ImGui::Separator();
+        });
+        // 2D Canvas Vector Drawing inside any ui.beginWindow() — ideal for Minimaps, Radars & Crosshairs!
+        uiTbl.set_function("drawRect", [](
+            float x, float y, float w, float h, float r, float g, float b, float a,
+            sol::optional<bool> filled, sol::optional<float> rounding) {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImVec2 winPos = ImGui::GetWindowPos();
+            const ImVec2 p0(winPos.x + x, winPos.y + y);
+            const ImVec2 p1(p0.x + w, p0.y + h);
+            const ImU32 col = ImGui::ColorConvertFloat4ToU32(ImVec4(r, g, b, a));
+            if (filled.value_or(true)) {
+                dl->AddRectFilled(p0, p1, col, rounding.value_or(0.0f));
+            } else {
+                dl->AddRect(p0, p1, col, rounding.value_or(0.0f), 0, 1.5f);
+            }
+        });
+        uiTbl.set_function("drawCircle", [](
+            float cx, float cy, float radius, float r, float g, float b, float a, sol::optional<bool> filled) {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImVec2 winPos = ImGui::GetWindowPos();
+            const ImVec2 center(winPos.x + cx, winPos.y + cy);
+            const ImU32 col = ImGui::ColorConvertFloat4ToU32(ImVec4(r, g, b, a));
+            if (filled.value_or(true)) {
+                dl->AddCircleFilled(center, radius, col);
+            } else {
+                dl->AddCircle(center, radius, col, 0, 1.5f);
+            }
+        });
+        uiTbl.set_function("drawLine", [](
+            float x1, float y1, float x2, float y2, float r, float g, float b, float a, sol::optional<float> thickness) {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImVec2 winPos = ImGui::GetWindowPos();
+            const ImVec2 p0(winPos.x + x1, winPos.y + y1);
+            const ImVec2 p1(winPos.x + x2, winPos.y + y2);
+            const ImU32 col = ImGui::ColorConvertFloat4ToU32(ImVec4(r, g, b, a));
+            dl->AddLine(p0, p1, col, thickness.value_or(1.5f));
         });
     }
 

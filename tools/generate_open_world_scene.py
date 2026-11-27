@@ -216,7 +216,6 @@ def build_world():
         # Outer Financial Skyline (between Mid ±148 and Ring ±236!)
         ("tower_dt_6",   -186.0,  44.0,   0.0, (1.20, 1.85, 1.20), [0.90, 1.00, 1.12]),
         ("tower_dt_7",   -190.0, 104.0,  90.0, (1.15, 1.60, 1.15), [1.02, 0.92, 1.06]),
-        ("tower_dt_8",   -188.0, 188.0, 180.0, (1.35, 2.15, 1.35), [0.86, 0.98, 1.14]),
         ("tower_dt_9",   -104.0, 188.0, -90.0, (1.15, 1.65, 1.15), [1.06, 0.94, 0.92]),
         ("tower_dt_10",   -40.0, 188.0,  45.0, (1.10, 1.55, 1.10), [0.94, 1.04, 1.06]),
     ]
@@ -227,6 +226,38 @@ def build_world():
             yaw=yaw, scale=scl, color=tint,
             collider={"type": "box", "halfExtents": [5.9 * scl[0], 12.0 * scl[1], 5.9 * scl[2]], "offsetY": 12.0 * scl[1]},
         )
+
+    # NEW v1.0.0 Grand Neon Stunt Stadium Colosseum in NW Outer Block (-192, 192)!
+    add_model(
+        "metro_stadium", "assets/models/stadium_arena.glb", -192.0, 0.0, 192.0,
+        yaw=22.5, scale=(1.15, 1.15, 1.15),
+        collider={"type": "cylinder", "radius": 21.5, "height": 12.0},
+    )
+    add_light("stadium_flood_light", -192.0, 22.0, 192.0, [0.92, 0.96, 1.0], radius=56.0, intensity=3.8)
+
+    # NEW v1.0.0 Grand Cable-Stayed Highway Arch Monuments spanning North & South Expressways!
+    for bid, bz in [("bridge_arch_n", 108.0), ("bridge_arch_s", -108.0)]:
+        add_model(bid, "assets/models/suspension_bridge.glb", 0.0, 0.0, bz, yaw=0.0, scale=(1.0, 1.0, 1.0))
+        add_box(bid + "_col_l", -10.5, 6.0, bz, 2.4, 12.0, 3.6, [0.2, 0.2, 0.2],
+                collider={"type": "box", "halfExtents": [1.3, 6.0, 1.9]}, visible=False)
+        add_box(bid + "_col_r",  10.5, 6.0, bz, 2.4, 12.0, 3.6, [0.2, 0.2, 0.2],
+                collider={"type": "box", "halfExtents": [1.3, 6.0, 1.9]}, visible=False)
+        add_light(bid + "_light", 0.0, 10.0, bz, [1.0, 0.82, 0.34], radius=34.0, intensity=3.0)
+
+    # NEW v1.0.0 Glowing Neon Highway Billboards lining the Grand Expressways!
+    billboards = [
+        ("billboard_n",  15.5,  88.0, -35.0, [0.14, 0.85, 1.0]),
+        ("billboard_s", -15.5, -88.0, 145.0, [1.0, 0.24, 0.65]),
+        ("billboard_e",  88.0,  15.5, -125.0, [0.14, 0.85, 1.0]),
+        ("billboard_w", -88.0, -15.5,  55.0, [1.0, 0.78, 0.20]),
+    ]
+    for bbid, bx, bz, yaw, lcol in billboards:
+        add_model(
+            bbid, "assets/models/billboard.glb", bx, 0.0, bz,
+            yaw=yaw, scale=(1.0, 1.0, 1.0),
+            collider={"type": "cylinder", "radius": 0.75, "height": 10.0},
+        )
+        add_light(bbid + "_light", bx, 9.5, bz, lcol, radius=24.0, intensity=2.4)
 
     # Neon Roadside Gas Stations across Metro, Desert & Outer Highway!
     gas_stations = [
@@ -360,10 +391,13 @@ def build_world():
     add_light("pier_light_mid", 169.0, 2.4, -192.0, [1.0, 0.78, 0.36], radius=24.0, intensity=2.4)
     add_light("pier_light_end", 185.0, 2.4, -192.0, [1.0, 0.80, 0.38], radius=28.0, intensity=2.8)
 
-    # 3 Animated Wave-Rocking Sailboats (2 in big Marina Lagoon + 1 Offshore!)
+    # 3 Animated Wave-Rocking Sailboats + 2 NEW v1.0.0 Animated Luxury Superyachts!
     add_model("sailboat_lagoon_1", "assets/models/sailboat.glb", 204.0, -0.34, -172.0, yaw=125.0, scale=(1.10, 1.10, 1.10))
     add_model("sailboat_lagoon_2", "assets/models/sailboat.glb", 176.0, -0.34, -214.0, yaw= 40.0, scale=(1.00, 1.00, 1.00))
     add_model("sailboat_offshore", "assets/models/sailboat.glb", 312.0, -0.44,  -95.0, yaw=-35.0, scale=(1.45, 1.45, 1.45))
+    add_model("yacht_marina",      "assets/models/yacht.glb",    204.0, -0.30, -196.0, yaw=-25.0, scale=(1.00, 1.00, 1.00))
+    add_model("yacht_offshore",    "assets/models/yacht.glb",    316.0, -0.44, -185.0, yaw= 15.0, scale=(1.25, 1.25, 1.25))
+    add_light("yacht_marina_light", 204.0, 2.2, -196.0, [0.14, 0.86, 1.0], radius=24.0, intensity=2.4)
 
     # 3 Coastal Lifeguard Towers overlooking the Beach & Lagoon
     lifeguards = [
@@ -455,7 +489,7 @@ def build_world():
         )
 
     scene = {
-        "name": "SAGE v0.9 — 560m Grand 4-Biome Open World (2-Cascade CSM, Walk/Drive, AI Traffic & 24 Models)",
+        "name": "SAGE v1.0.0 — Production 560m Grand Open World (28 Models, Weather/Wet Roads, 2-Cascade CSM & Live Editor)",
         "version": 2,
         "sky": {
             "timeOfDay": 17.4,

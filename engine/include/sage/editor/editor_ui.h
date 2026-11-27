@@ -15,6 +15,7 @@ struct EditorStats {
     float fps = 60.0f;
     float frameMs = 16.6f;
     std::string gpuRenderer;
+    std::string assetsDir;
     std::size_t loadedModels = 0;
     std::size_t luaResources = 0;
     bool freeFlyMode = false;
@@ -24,6 +25,7 @@ struct EditorActions {
     std::function<void()> onHotReload;
     std::function<void()> onToggleFreeFly;
     std::function<void()> onTriggerShockwave;
+    std::function<bool()> onSaveScene;
     std::function<void()> onRenderCustomUi; // Called inside ImGui frame for Lua ui.* HUDs!
 };
 
@@ -58,6 +60,9 @@ private:
     bool m_initialized = false;
     bool m_visible = false; // Hidden during gameplay by default — press F1 to open developer inspector!
     int m_selectedEntityIndex = -1;
+    int m_selectedModelIndex = 0;
+    int m_spawnCounter = 1;
+    std::string m_saveStatusMessage;
     float m_fpsHistory[90]{};
     int m_fpsOffset = 0;
 };

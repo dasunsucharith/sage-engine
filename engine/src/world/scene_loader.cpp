@@ -82,6 +82,12 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
         if (skyJson.contains("fogEnd") && skyJson["fogEnd"].is_number()) {
             world.sky().fogEnd = skyJson["fogEnd"].get<float>();
         }
+        if (skyJson.contains("rainIntensity") && skyJson["rainIntensity"].is_number()) {
+            world.sky().rainIntensity = skyJson["rainIntensity"].get<float>();
+        }
+        if (skyJson.contains("wetness") && skyJson["wetness"].is_number()) {
+            world.sky().wetness = skyJson["wetness"].get<float>();
+        }
     }
 
     if (root.contains("camera") && root["camera"].is_object()) {
@@ -197,6 +203,88 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
     std::cout << "[SAGE][Scene] Loaded \"" << sceneName << "\" from " << scenePath.string()
               << " (" << loadedCount << " entities, " << colliderCount << " solid collider(s), "
               << lightCount << " dynamic light(s))\n";
+    return true;
+}
+
+bool SceneLoader::saveToFile(
+    const std::filesystem::path& scenePath,
+    const World& world,
+    const std::string& sceneName) {
+    nlohmann::json root;
+    root["name"] = sceneName;
+    root["version"] = 2;
+
+    const SkySettings& sky = world.sky();
+    root["sky"] = {
+        {"timeOfDay", sky.timeOfDay},
+        {"ambientIntensity", sky.ambientIntensity},
+        {"fogStart", sky.fogStart},
+        {"fogEnd", sky.fogEnd},
+        {"rainIntensity", sky.rainIntensity},
+        {"wetness", sky.wetness},
+    };
+
+    const CameraState& cam = world.camera();
+    root["camera"] = {
+        {"position", {cam.position.x, cam.position.y, cam.position.z}},
+        {"target", {cam.target.x, cam.target.y, cam.target.z}},
+        {"fov", cam.fovDegrees},
+    };
+
+    nlohmann::json lightsArr = nlohmann::json::array();
+    for (const PointLight& pl : world.pointLights()) {
+        lightsArr.push_back({
+            {"id", pl.id},
+            {"position", {pl.position.x, pl.position.y, pl.position.z}},
+            {"color", {pl.color.r, pl.color.g, pl.color.b}},
+            {"radius", pl.radius},
+            {"intensity", pl.intensity},
+        });
+    }
+    root["lights"] = std::move(lightsArr);
+
+    nlohmann::json entitiesArr = nlohmann::json::array();
+    for (const Entity& e : world.entities()) {
+        nlohmann::json obj;
+        obj["id"] = e.id;
+        switch (e.shape) {
+            case EntityShape::Model:
+                obj["type"] = "model";
+                obj["model"] = e.modelPath;
+                break;
+            case EntityShape::Plane: obj["type"] = "primitive_plane"; break;
+            case EntityShape::Water:
+                obj["type"] = "water";
+                obj["seabedY"] = e.waterSeabedY;
+                break;
+            case EntityShape::Sphere: obj["type"] = "primitive_sphere"; break;
+            case EntityShape::Ring: obj["type"] = "primitive_ring"; break;
+            case EntityShape::Triangle: obj["type"] = "primitive_triangle"; break;
+            case EntityShape::Box:
+            default: obj["type"] = "primitive_box"; break;
+        }
+        obj["position"] = {e.position.x, e.position.y, e.position.z};
+        obj["rotation"] = {e.rotation.x, e.rotation.y, e.rotation.z};
+        obj["scale"] = {e.scale.x, e.scale.y, e.scale.z};
+        obj["color"] = {e.color.r, e.color.g, e.color.b};
+        if (e.emissive) obj["emissive"] = true;
+        if (!e.visible) obj["visible"] = false;
+        entitiesArr.push_back(std::move(obj));
+    }
+    root["entities"] = std::move(entitiesArr);
+
+    std::error_code ec;
+    if (scenePath.has_parent_path()) {
+        std::filesystem::create_directories(scenePath.parent_path(), ec);
+    }
+    std::ofstream out(scenePath);
+    if (!out.is_open()) {
+        std::cerr << "[SAGE][Scene] Failed to save scene file: " << scenePath.string() << "\n";
+        return false;
+    }
+    out << root.dump(2) << "\n";
+    std::cout << "[SAGE][Scene] Saved \"" << sceneName << "\" -> " << scenePath.string()
+              << " (" << world.entityCount() << " entities, " << world.pointLights().size() << " lights)\n";
     return true;
 }
 

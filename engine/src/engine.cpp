@@ -132,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v0.9.0 (2-Cascade CSM + 560m Open World + Walk/Drive + AI Traffic + 24 Models)\n";
+    std::cout << "  SAGE Engine v1.0.0 — Production AI-Native 3D Game Engine\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -251,6 +251,7 @@ void Engine::render(double elapsedSeconds) {
     stats.fps = m_smoothedFps;
     stats.frameMs = m_lastFrameMs;
     stats.gpuRenderer = m_renderer->info().gpuRenderer;
+    stats.assetsDir = (m_projectRoot / "assets").string();
     stats.loadedModels = m_renderer->loadedModelCount();
     stats.luaResources = m_lua.activeResourceCount();
     stats.freeFlyMode = m_freeFlyMode;
@@ -272,6 +273,10 @@ void Engine::render(double elapsedSeconds) {
             : m_world.camera().target;
         m_physics.applyExplosion(carPos, 24.0f, 360.0f);
         m_audio.playExplosion();
+    };
+    actions.onSaveScene = [this]() -> bool {
+        const fs::path exportPath = m_projectRoot / "scenes" / "exported_scene.json";
+        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.0 Exported World");
     };
     actions.onRenderCustomUi = [this]() {
         m_lua.renderUI();
@@ -385,7 +390,7 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v0.9.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v1.0.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()

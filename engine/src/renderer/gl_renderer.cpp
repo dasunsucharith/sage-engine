@@ -203,6 +203,7 @@ uniform sampler2D uAlbedoTex;
 uniform float uPulse;
 uniform float uTime;
 uniform int uIsGround;
+uniform float uWetness;
 
 uniform int uShadowsEnabled;
 uniform mat4 uLightViewProj;
@@ -294,14 +295,23 @@ void main() {
         albedo *= pow(texel.rgb, vec3(2.2));
     }
 
-    // Procedural world-space micro-grain on terrain & asphalt so surfaces look textured & tactile!
+    // Procedural world-space micro-grain + dynamic rain wetness & glossy puddles on roads/terrain!
     float rough = clamp(uRoughness, 0.08, 1.0);
+    float metal = uMetallic;
     if (uIsGround == 1) {
         float nLarge = groundNoise(vWorldPos.xz * 0.14);
         float nFine  = groundNoise(vWorldPos.xz * 1.65);
         float grain  = (nLarge * 0.65 + nFine * 0.35) - 0.5;
         albedo *= (1.0 + grain * 0.24);
         rough = clamp(rough + grain * 0.15, 0.25, 0.96);
+
+        if (uWetness > 0.01) {
+            float puddleNoise = groundNoise(vWorldPos.xz * 0.11 + vec2(3.7, 9.1));
+            float puddle = smoothstep(0.42, 0.72, puddleNoise) * uWetness;
+            albedo *= (1.0 - 0.34 * uWetness); // Wet asphalt & sand naturally darken
+            rough = mix(rough, 0.06, clamp(uWetness * 0.45 + puddle * 0.55, 0.0, 0.92));
+            metal = mix(metal, 0.45, puddle * 0.75);
+        }
     }
 
     vec3 N = normalize(vWorldNormal);
@@ -313,22 +323,22 @@ void main() {
 
     float ndotl = max(dot(N, L), 0.0);
     float wrapDiffuse = max((dot(N, L) + 0.18) / 1.18, 0.0);
-    vec3 directDiffuse = albedo * (1.0 - 0.5 * uMetallic) * uSunColor * mix(ndotl, wrapDiffuse, 0.25) * 1.38 * shadowVis;
+    vec3 directDiffuse = albedo * (1.0 - 0.5 * metal) * uSunColor * mix(ndotl, wrapDiffuse, 0.25) * 1.38 * shadowVis;
 
     float hemiT = N.y * 0.5 + 0.5;
     vec3 skyFill = mix(uSkyHorizon, uSkyZenith, 0.35);
     vec3 hemiAmbient = mix(uGroundAmbient, skyFill, hemiT) * albedo * (uAmbientIntensity * 1.35);
 
     float shininess = mix(110.0, 8.0, rough);
-    float specStrength = mix(0.24, 0.92, uMetallic) * (1.0 - rough * 0.65);
-    vec3 specTint = mix(vec3(1.0), albedo, uMetallic);
+    float specStrength = mix(0.24, 0.92, metal) * (1.0 - rough * 0.65);
+    vec3 specTint = mix(vec3(1.0), albedo, metal);
     vec3 specular = specTint * uSunColor * pow(max(dot(N, H), 0.0), shininess) * specStrength * step(0.001, ndotl) * shadowVis;
 
     float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * (1.0 - rough) * 0.36;
-    // Glossy sky-dome clearcoat reflection on metallic & smooth surfaces (supercar paint, glass, chrome!)
+    // Glossy sky-dome clearcoat reflection on metallic surfaces AND wet rain-slicked roads!
     vec3 R = reflect(-V, N);
     vec3 envSky = mix(uSkyHorizon, uSkyZenith, clamp(R.y * 1.2 + 0.15, 0.0, 1.0));
-    float envStrength = mix(0.08, 0.52, uMetallic) * (1.0 - rough * 0.85);
+    float envStrength = mix(0.08, 0.52, metal) * (1.0 - rough * 0.85);
     vec3 rim = envSky * (fresnel + envStrength * 0.55);
 
     // Subtle ground-contact ambient occlusion for grounded 3D buildings & cars near y=0
@@ -1019,7 +1029,7 @@ public:
     bool initialize(int viewportWidth, int viewportHeight) override {
         if (!gl::loadFunctions()) return false;
 
-        m_info.backendName = "OpenGL 3.3 Core (2-Cascade CSM + HDR Bloom + 16 Nearest Lights + 3D Ocean + Stars)";
+        m_info.backendName = "OpenGL 3.3 Core (v1.0: 2-Cascade CSM + HDR Bloom + Wet Roads/Rain + 3D Ocean + 16 Lights)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
@@ -1095,6 +1105,7 @@ public:
         m_uPulse = gl::getUniformLocation(m_litProgram, "uPulse");
         m_uTime = gl::getUniformLocation(m_litProgram, "uTime");
         m_uIsGround = gl::getUniformLocation(m_litProgram, "uIsGround");
+        m_uWetness = gl::getUniformLocation(m_litProgram, "uWetness");
         m_uShadowsEnabled = gl::getUniformLocation(m_litProgram, "uShadowsEnabled");
         m_uLightViewProj = gl::getUniformLocation(m_litProgram, "uLightViewProj");
         m_uLightViewProjFar = gl::getUniformLocation(m_litProgram, "uLightViewProjFar");
@@ -1398,6 +1409,7 @@ public:
         gl::uniform1f(m_uFogStart, sky.fogStart);
         gl::uniform1f(m_uFogEnd, sky.fogEnd);
         gl::uniform1f(m_uTime, timeSeconds);
+        gl::uniform1f(m_uWetness, std::clamp(sky.wetness, 0.0f, 1.0f));
         gl::uniform1i(m_uAlbedoTex, 0);
         gl::uniform1i(m_uShadowsEnabled, useShadows ? 1 : 0);
         gl::uniformMatrix4fv(m_uLightViewProj, 1, GL_FALSE, glm::value_ptr(lightViewProj));
@@ -1550,6 +1562,42 @@ public:
                 gl::uniform1f(m_uRoughness, 0.7f);
                 gl::uniform1f(m_uPulse, 0.0f);
                 glDrawElements(GL_TRIANGLES, m_sphereMesh.indexCount, GL_UNSIGNED_INT, nullptr);
+            }
+        }
+
+        // --- Pass 3C: Real-Time 3D Falling Rain Streaks (when Weather rainIntensity > 0.05!) ---
+        if (sky.rainIntensity > 0.05f) {
+            gl::useProgram(m_litProgram);
+            gl::uniform1i(m_uIsGround, 0);
+            gl::uniform1i(m_uHasTexture, 0);
+            gl::uniform3f(m_uBaseColor, 0.72f, 0.84f, 0.96f);
+            gl::uniform3f(m_uEmissive, 0.45f, 0.58f, 0.78f);
+            gl::uniform1f(m_uMetallic, 0.0f);
+            gl::uniform1f(m_uRoughness, 0.3f);
+            gl::uniform1f(m_uPulse, 0.0f);
+            gl::bindVertexArray(m_boxMesh.vao);
+
+            const int dropCount = static_cast<int>(std::clamp(sky.rainIntensity, 0.0f, 1.0f) * 140.0f);
+            constexpr float kBoxSpan = 38.0f;
+            constexpr float kHeightSpan = 22.0f;
+            const float fallOffset = timeSeconds * 28.0f;
+            for (int i = 0; i < dropCount; ++i) {
+                const float fi = static_cast<float>(i);
+                const float hx = std::fmod(std::sin(fi * 12.9898f) * 43758.5453f, 1.0f);
+                const float hy = std::fmod(std::sin(fi * 78.2330f) * 24634.6345f, 1.0f);
+                const float hz = std::fmod(std::sin(fi * 39.4250f) * 19583.2317f, 1.0f);
+
+                const float rx = camTarget.x + (hx - 0.5f) * kBoxSpan;
+                const float rz = camTarget.z + (hz - 0.5f) * kBoxSpan;
+                float ry = std::fmod(std::abs(hy) * kHeightSpan - fallOffset, kHeightSpan);
+                if (ry < 0.0f) ry += kHeightSpan;
+                ry += std::max(camTarget.y - 3.0f, 0.0f);
+
+                glm::mat4 rMat(1.0f);
+                rMat = glm::translate(rMat, glm::vec3(rx, ry, rz));
+                rMat = glm::scale(rMat, glm::vec3(0.025f, 0.78f, 0.025f));
+                gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(rMat));
+                glDrawElements(GL_TRIANGLES, m_boxMesh.indexCount, GL_UNSIGNED_INT, nullptr);
             }
         }
 
@@ -1854,7 +1902,7 @@ private:
     GLuint m_litProgram = 0;
     GLint m_uModel = -1, m_uViewProj = -1, m_uBaseColor = -1, m_uEmissive = -1;
     GLint m_uMetallic = -1, m_uRoughness = -1, m_uHasTexture = -1, m_uAlbedoTex = -1;
-    GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1;
+    GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1, m_uWetness = -1;
     GLint m_uShadowsEnabled = -1, m_uLightViewProj = -1, m_uLightViewProjFar = -1, m_uShadowMap = -1, m_uShadowMapFar = -1, m_uShadowTexelSize = -1;
     GLint m_uCameraPos = -1, m_uSunDir = -1, m_uSunColor = -1;
     GLint m_uSkyZenith = -1, m_uSkyHorizon = -1, m_uGroundAmbient = -1, m_uAmbientIntensity = -1;

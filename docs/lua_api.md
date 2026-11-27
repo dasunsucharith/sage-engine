@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (`v0.9.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **2-Cascade PCF Soft Shadows (CSM)**, **Nearest-16 Dynamic Point Lights**, **3D Particles**, **Realistic Water Submersion & Jolt Buoyancy**, **HDR Bloom & Animated 3D Ocean Water**, **Starry Night Sky**, **24 Blender `.glb` Models**, **Jolt Physics 5.7 + JSON Auto-Colliders**, **miniaudio 0.11**, and **Lua Menus & HUDs (`ui.*`)**.
+> **Status:** Live (**`v1.0.0` Production Release**) — **Lua 5.4.9** + **`sol2` 3.5.0**, **2-Cascade PCF Soft Shadows (CSM)**, **Dynamic Rain & Wet Reflective Roads**, **Nearest-16 Dynamic Point Lights**, **3D Particles**, **Realistic Water Submersion & Jolt Buoyancy**, **HDR Bloom & Animated 3D Ocean Water**, **Live World Editor & Scene JSON Export (`F1`)**, **2D Minimap/Canvas API (`ui.draw*`)**, **Persistent Save Data (`sage.saveData`/`loadData`)**, **28 Blender `.glb` Models**, **Jolt Physics 5.7**, and **miniaudio 0.11**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -39,7 +39,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 
 ---
 
-## Implemented Namespaces (`v0.9`)
+## Implemented Namespaces (`v1.0.0`)
 
 ### `sage`
 | Function | Description |
@@ -48,6 +48,8 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 | `sage.getTime()` | Returns elapsed seconds since engine startup. |
 | `sage.setTitle(title)` | Sets custom HUD text in the OS window title bar (FPS is appended automatically). |
 | `sage.quit()` | Requests a clean engine shutdown (ideal for Quit buttons in Lua Main/Pause Menus). |
+| `sage.saveData(key, content)` | Persists a string/JSON save file safely under `saves/<key>.dat` (ideal for high scores, unlocks & game saves). |
+| `sage.loadData(key)` | Reads previously saved string data from `saves/<key>.dat` (returns `""` if not found). |
 
 ### `input`
 | Function | Description |
@@ -79,6 +81,7 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setVisible(id, visible)` | Shows or hides an entity without destroying it. |
 | `world.setTimeOfDay(hours)` | Dynamically updates sun angle, sky gradient, cloud lighting, ambient fill, and horizon fog (`0.0`–`24.0`). |
 | `world.setBloom(enabled [, intensity])` | Toggles real-time HDR `RGBA16F` Bloom post-processing and optionally sets bloom strength (`0.0`–`2.0`, default `0.55`). |
+| `world.setWeather(rainIntensity [, wetness])` | Controls real-time 3D falling rain (`0.0`–`1.0`) and reflective wet-puddle road/terrain shading (`0.0`–`1.0`). |
 | `world.setPointLight(id, x, y, z, r, g, b [, radius, intensity])` | Creates or updates a real-time dynamic point light (up to 16 active) that illuminates 3D meshes, roads, and reflects off animated ocean waves. |
 | `world.removePointLight(id)` | Removes a dynamic point light by `id`. |
 | `world.spawnParticles(x, y, z, vx, vy, vz, r, g, b, count [, size, life, emissive, gravity])` | Emits a burst of 3D particles (water splashes, tire drift smoke, nitro sparks, debris) with optional HDR emission and gravity. |
@@ -140,6 +143,9 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `ui.sameLine()` | Places the next widget on the same horizontal row. |
 | `ui.spacing()` | Adds vertical spacing between widgets. |
 | `ui.separator()` | Draws a horizontal divider line. |
+| `ui.drawRect(x, y, w, h, r, g, b, a [, filled, rounding])` | Draws a 2D filled or outlined rectangle inside the current `ui` window (great for minimaps, radar zones & HUD panels). |
+| `ui.drawCircle(cx, cy, radius, r, g, b, a [, filled])` | Draws a 2D filled or outlined circle inside the current `ui` window (great for radar blips & crosshairs). |
+| `ui.drawLine(x1, y1, x2, y2, r, g, b, a [, thickness])` | Draws a 2D line segment inside the current `ui` window (great for minimap roads & compasses). |
 
 ---
 

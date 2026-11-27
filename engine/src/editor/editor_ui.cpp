@@ -18,7 +18,9 @@
 #endif
 
 #include <algorithm>
+#include <filesystem>
 #include <iostream>
+#include <vector>
 
 namespace sage {
 
@@ -32,16 +34,15 @@ bool EditorUI::initialize(Window& window) {
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.IniFilename = nullptr; // Keep workspace clean without imgui.ini clutter
+    io.IniFilename = nullptr;
 
-    // Modern dark translucent SAGE Engine editor style
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = 8.0f;
     style.FrameRounding = 5.0f;
     style.GrabRounding = 4.0f;
     style.WindowBorderSize = 1.0f;
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.07f, 0.09f, 0.13f, 0.86f);
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.07f, 0.09f, 0.13f, 0.88f);
     style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.11f, 0.24f, 0.38f, 0.95f);
     style.Colors[ImGuiCol_Button] = ImVec4(0.16f, 0.36f, 0.56f, 0.85f);
     style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.22f, 0.48f, 0.72f, 0.95f);
@@ -61,7 +62,7 @@ bool EditorUI::initialize(Window& window) {
     }
 
     m_initialized = true;
-    std::cout << "[SAGE][Editor] Dear ImGui " << IMGUI_VERSION << " live viewport HUD ready (Press F1 to toggle)\n";
+    std::cout << "[SAGE][Editor] Dear ImGui " << IMGUI_VERSION << " v1.0 Live World Editor ready (Press F1 to toggle)\n";
     return true;
 }
 
@@ -109,11 +110,11 @@ void EditorUI::render(
 
     if (m_visible) {
         ImGui::SetNextWindowPos(ImVec2(14.0f, 14.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(320.0f, 0.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(345.0f, 0.0f), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("SAGE Engine v0.9 — Live Inspector (F1)", &m_visible)) {
+        if (ImGui::Begin("SAGE Engine v1.0 — Live World Editor (F1)", &m_visible)) {
             ImGui::Text("FPS: %.0f (%.2f ms)", stats.fps, stats.frameMs);
-            ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 36.0f));
+            ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 34.0f));
             ImGui::TextDisabled("GPU: %s", stats.gpuRenderer.c_str());
             ImGui::Text("Entities: %zu | .glb Models: %zu | Lua: %zu",
                 world.entityCount(), stats.loadedModels, stats.luaResources);
@@ -125,16 +126,23 @@ void EditorUI::render(
                 if (actions.onHotReload) actions.onHotReload();
             }
             ImGui::SameLine();
-            if (ImGui::Button(stats.freeFlyMode ? "Drive Cam (Tab)" : "Free-Fly (Tab)")) {
+            if (ImGui::Button(stats.freeFlyMode ? "Play Cam (Tab)" : "Free-Fly (Tab)")) {
                 if (actions.onToggleFreeFly) actions.onToggleFreeFly();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Shockwave (X)")) {
-                if (actions.onTriggerShockwave) actions.onTriggerShockwave();
+            if (ImGui::Button("Save Scene")) {
+                if (actions.onSaveScene && actions.onSaveScene()) {
+                    m_saveStatusMessage = "Saved -> scenes/exported_scene.json";
+                } else {
+                    m_saveStatusMessage = "Save failed (check console)";
+                }
+            }
+            if (!m_saveStatusMessage.empty()) {
+                ImGui::TextColored(ImVec4(0.35f, 0.95f, 0.65f, 1.0f), "%s", m_saveStatusMessage.c_str());
             }
 
-            // --- Sky & Lighting ---
-            if (ImGui::CollapsingHeader("Sky & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // --- Sky, Weather & Lighting ---
+            if (ImGui::CollapsingHeader("Sky, Weather & Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
                 float tod = world.sky().timeOfDay;
                 if (ImGui::SliderFloat("Time of Day", &tod, 0.0f, 24.0f, "%.1f h")) {
                     world.setTimeOfDay(tod);
@@ -143,18 +151,96 @@ void EditorUI::render(
                 ImGui::SameLine();
                 if (ImGui::SmallButton("Noon")) world.setTimeOfDay(12.5f);
                 ImGui::SameLine();
-                if (ImGui::SmallButton("Sunset")) world.setTimeOfDay(17.5f);
+                if (ImGui::SmallButton("Sunset")) world.setTimeOfDay(17.4f);
                 ImGui::SameLine();
-                if (ImGui::SmallButton("Night")) world.setTimeOfDay(22.5f);
-                ImGui::Checkbox("Real-Time Soft Shadows (2048px PCF)", &world.sky().shadowsEnabled);
+                if (ImGui::SmallButton("Starry Night")) world.setTimeOfDay(22.5f);
+
+                ImGui::SliderFloat("Rain Storm", &world.sky().rainIntensity, 0.0f, 1.0f, "%.2f");
+                ImGui::SliderFloat("Road Wetness", &world.sky().wetness, 0.0f, 1.0f, "%.2f");
+                if (ImGui::SmallButton("Clear Sky")) {
+                    world.sky().rainIntensity = 0.0f;
+                    world.sky().wetness = 0.0f;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Light Drizzle")) {
+                    world.sky().rainIntensity = 0.35f;
+                    world.sky().wetness = 0.55f;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Neon Rainstorm")) {
+                    world.sky().rainIntensity = 0.95f;
+                    world.sky().wetness = 1.0f;
+                }
+
+                ImGui::Checkbox("2-Cascade Soft Shadows (2048px CSM)", &world.sky().shadowsEnabled);
                 ImGui::Checkbox("HDR Bloom Post-Processing", &world.sky().bloomEnabled);
                 if (world.sky().bloomEnabled) {
                     ImGui::SliderFloat("Bloom Intensity", &world.sky().bloomIntensity, 0.0f, 1.5f, "%.2f");
                 }
             }
 
+            // --- Live World Builder (Spawn any .glb model or primitive in front of camera!) ---
+            if (ImGui::CollapsingHeader("World Builder (Spawn Objects)")) {
+                static std::vector<std::string> cachedModels;
+                if (cachedModels.empty() && !stats.assetsDir.empty()) {
+                    std::error_code ec;
+                    const std::filesystem::path modelsDir = std::filesystem::path(stats.assetsDir) / "models";
+                    if (std::filesystem::exists(modelsDir, ec)) {
+                        for (const auto& entry : std::filesystem::directory_iterator(modelsDir, ec)) {
+                            if (entry.is_regular_file(ec) && entry.path().extension() == ".glb") {
+                                cachedModels.push_back(entry.path().filename().string());
+                            }
+                        }
+                        std::sort(cachedModels.begin(), cachedModels.end());
+                    }
+                }
+
+                const Vec3 spawnPos = {world.camera().target.x, 0.0f, world.camera().target.z};
+                if (!cachedModels.empty()) {
+                    m_selectedModelIndex = std::clamp(m_selectedModelIndex, 0, static_cast<int>(cachedModels.size()) - 1);
+                    if (ImGui::BeginCombo(".glb Model", cachedModels[static_cast<std::size_t>(m_selectedModelIndex)].c_str())) {
+                        for (int i = 0; i < static_cast<int>(cachedModels.size()); ++i) {
+                            const bool sel = (m_selectedModelIndex == i);
+                            if (ImGui::Selectable(cachedModels[static_cast<std::size_t>(i)].c_str(), sel)) {
+                                m_selectedModelIndex = i;
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                    if (ImGui::Button("Spawn Selected .glb Here", ImVec2(-1.0f, 0.0f))) {
+                        const std::string id = "editor_model_" + std::to_string(m_spawnCounter++);
+                        const std::string path = "assets/models/" + cachedModels[static_cast<std::size_t>(m_selectedModelIndex)];
+                        world.spawnModel(id, path, spawnPos, {1.0f, 1.0f, 1.0f});
+                        m_selectedEntityIndex = static_cast<int>(world.entityCount()) - 1;
+                    }
+                }
+                if (ImGui::SmallButton("+ Box")) {
+                    const std::string id = "editor_box_" + std::to_string(m_spawnCounter++);
+                    world.spawnEntity(id, EntityShape::Box, {spawnPos.x, 1.0f, spawnPos.z}, {2.0f, 2.0f, 2.0f}, {0.2f, 0.8f, 1.0f});
+                    m_selectedEntityIndex = static_cast<int>(world.entityCount()) - 1;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("+ Water")) {
+                    const std::string id = "editor_water_" + std::to_string(m_spawnCounter++);
+                    world.spawnEntity(id, EntityShape::Water, {spawnPos.x, -0.25f, spawnPos.z}, {24.0f, 1.0f, 24.0f}, {0.06f, 0.58f, 0.72f});
+                    m_selectedEntityIndex = static_cast<int>(world.entityCount()) - 1;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("+ Glow Ring")) {
+                    const std::string id = "editor_ring_" + std::to_string(m_spawnCounter++);
+                    world.spawnEntity(id, EntityShape::Ring, {spawnPos.x, 0.2f, spawnPos.z}, {6.0f, 4.0f, 6.0f}, {1.0f, 0.8f, 0.15f});
+                    world.setEmissive(id, true);
+                    m_selectedEntityIndex = static_cast<int>(world.entityCount()) - 1;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("+ Light")) {
+                    const std::string lid = "editor_light_" + std::to_string(m_spawnCounter++);
+                    world.setPointLight(lid, {spawnPos.x, 4.0f, spawnPos.z}, {0.2f, 0.9f, 1.0f}, 24.0f, 2.8f);
+                }
+            }
+
             // --- Jolt Physics Controls ---
-            if (ImGui::CollapsingHeader("Jolt Physics", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("Jolt Physics")) {
                 Vec3 g = physics.getGravity();
                 float gy = g.y;
                 if (ImGui::SliderFloat("Gravity Y", &gy, -40.0f, 2.0f, "%.1f m/s^2")) {
@@ -165,6 +251,10 @@ void EditorUI::render(
                 if (ImGui::SmallButton("Moon (-5)")) physics.setGravity({0.0f, -5.0f, 0.0f});
                 ImGui::SameLine();
                 if (ImGui::SmallButton("Zero-G (0)")) physics.setGravity({0.0f, 0.0f, 0.0f});
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Shockwave (X)")) {
+                    if (actions.onTriggerShockwave) actions.onTriggerShockwave();
+                }
             }
 
             // --- Audio Controls ---
@@ -205,7 +295,7 @@ void EditorUI::render(
                         e.useQuaternion = false;
                     }
                     float scl[3] = {e.scale.x, e.scale.y, e.scale.z};
-                    if (ImGui::DragFloat3("Scale", scl, 0.05f, 0.05f, 200.0f)) {
+                    if (ImGui::DragFloat3("Scale", scl, 0.05f, 0.05f, 300.0f)) {
                         e.scale = {scl[0], scl[1], scl[2]};
                     }
                     float col[3] = {e.color.r, e.color.g, e.color.b};
@@ -215,16 +305,21 @@ void EditorUI::render(
                     ImGui::Checkbox("Visible", &e.visible);
                     ImGui::SameLine();
                     ImGui::Checkbox("Emissive", &e.emissive);
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Delete")) {
+                        const std::string delId = e.id;
+                        world.destroy(delId);
+                        m_selectedEntityIndex = -1;
+                    }
                 }
             }
 
             ImGui::Separator();
-            ImGui::TextWrapped("Controls: WASD Drive | Space Drift | Shift Nitro | C Cam | Right-Mouse Orbit | X Shockwave | B Drop Crates | T Sky");
+            ImGui::TextWrapped("Controls: WASD Move | F Exit/Enter Car | G Weather | T Sky | Space Drift/Jump | Shift Nitro/Sprint | Esc Menu");
         }
         ImGui::End();
     }
 
-    // Allow Lua resources to draw custom game HUDs/menus (onRenderUI) even when inspector is hidden!
     if (actions.onRenderCustomUi) {
         actions.onRenderCustomUi();
     }

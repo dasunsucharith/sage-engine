@@ -39,3 +39,5 @@ Thumbs.db
 .cache/
 logs/
 *.log
+saves/
+scenes/exported_scene.json

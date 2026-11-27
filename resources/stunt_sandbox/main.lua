@@ -1,10 +1,11 @@
 -- =============================================================================
--- SAGE Engine v0.9 Showcase: 560m Grand 4-Biome Open World Sandbox
+-- SAGE Engine v1.0.0 Flagship Showcase: 560m Grand 4-Biome Open World Sandbox
+--   * Dynamic Weather (Press G: Clear -> Drizzle -> Neon Rainstorm + Wet Roads!)
+--   * Live GTA-Style 2D Corner Minimap Radar (Biomes, Lagoon, AI Traffic, Target)
+--   * Persistent Best Score Save/Load (saves/stunt_sandbox_best.dat)
 --   * GTA-Style Exit / Enter Supercar (Press F to walk/sprint/swim on foot!)
---   * 6 Autonomous AI Traffic Cruisers patrolling the Mid & Coastal Ring Highways
---   * Patrolling Animated Helicopter, Spinning 24m Ferris Wheel & Rocking Sailboats
---   * Realistic Water Submersion & Engine Flooding (Car sinks; Driver can swim!)
---   * 2-Cascade Soft Shadows, HDR Bloom, 16 Nearest Dynamic Lights & 3D Particles
+--   * 6 Autonomous AI Traffic Cruisers, Patrol Helicopter, Ferris Wheel & Yachts
+--   * 2-Cascade Soft Shadows, HDR Bloom, Live World Editor (F1) & 28 .glb Models
 -- =============================================================================
 -- CONTROLS:
 --   W / S (or Up / Down)   : Drive / Brake (or Walk Forward / Back on foot)
@@ -67,8 +68,17 @@ local timePresets = {
 }
 local timePresetIdx = 1
 
+local weatherPresets = {
+    { name = "Clear Sky",      rain = 0.00, wet = 0.00 },
+    { name = "Light Drizzle",  rain = 0.35, wet = 0.55 },
+    { name = "Neon Rainstorm", rain = 0.95, wet = 1.00 },
+}
+local weatherPresetIdx = 1
+
 local gameState = "MENU" -- "MENU" | "PLAYING" | "PAUSED"
 local showHud = true
+local bestScore = 0
+local heliPos = { x = 145.0, z = 0.0 }
 
 -- -----------------------------------------------------------------------------
 -- Vehicle & Playable 3rd-Person Character State (Press F to Exit / Enter Car!)
@@ -147,7 +157,7 @@ local deliverySpots = {
     { x =  148.0, z =  192.0, label = "Pine Wind Ridge Overlook" },
 }
 
-local keyLatch = { T = false, C = false, X = false, B = false, R = false, H = false, F = false, Escape = false }
+local keyLatch = { T = false, G = false, C = false, X = false, B = false, R = false, H = false, F = false, Escape = false }
 
 local crates = {}
 local nextCrateSeq = 0
@@ -195,6 +205,19 @@ local function getCurrentBiomeName(x, z)
         return "Palm Coast Marina"
     else
         return "Red Rock Desert"
+    end
+end
+
+local function applyWeatherPreset(idx)
+    weatherPresetIdx = idx
+    local wp = weatherPresets[weatherPresetIdx] or weatherPresets[1]
+    world.setWeather(wp.rain, wp.wet)
+end
+
+local function updateBestScore()
+    if score > bestScore then
+        bestScore = score
+        sage.saveData("stunt_sandbox_best", tostring(bestScore))
     end
 end
 
@@ -431,6 +454,7 @@ local function checkPhysicsCrateSmashes(dt)
                 c.smashed = true
                 cratesSmashed = cratesSmashed + 1
                 score = score + 25
+                updateBestScore()
                 world.setColor(c.id, 1.0, 0.65, 0.42)
                 local cx, cy, cz = world.getPosition(c.id)
                 world.spawnParticles(cx, cy + 0.4, cz, 0.0, 5.5, 0.0, 1.0, 0.72, 0.24, 8, 0.20, 0.55, true, 16.0)
@@ -466,6 +490,7 @@ local function updateDeliveryMission(dt, timeNow, focusX, focusY, focusZ)
         local speedBonus = math.floor(math.max(0.0, 40.0 - deliveryTimer) * 10.0)
         local earned = 150 + speedBonus
         score = score + earned
+        updateBestScore()
         car.boostEnergy = 100.0
         audio.playChime()
 
@@ -493,13 +518,18 @@ end
 function onStart()
     math.randomseed(42)
     nextCrateSeq = 0
+    local savedBest = tonumber(sage.loadData("stunt_sandbox_best"))
+    if savedBest and savedBest > 0 then
+        bestScore = math.floor(savedBest)
+    end
     spawnDynamicPropsAndPhysics()
+    applyWeatherPreset(1)
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
 
     sage.log("===================================================================")
-    sage.log("  SAGE Engine v0.9 — 560m Grand 4-Biome Open World Sandbox")
-    sage.log("  Press F anytime to Exit/Enter Supercar! (Walk, Sprint & Swim!)")
-    sage.log("  Features: 2-Cascade Shadows | AI Traffic | Ferris Wheel | 24 Models")
+    sage.log("  SAGE Engine v1.0.0 — Production 560m Grand Open World Sandbox")
+    sage.log("  Press F = Walk/Drive | G = Weather/Rain | T = Sky | F1 = World Editor")
+    sage.log("  All-Time Best Score Loaded: " .. tostring(bestScore))
     sage.log("===================================================================")
 end
 
@@ -519,6 +549,7 @@ function onTick(dt)
     local ha = timeNow * 0.14
     local hx = math.cos(ha) * 145.0
     local hz = math.sin(ha) * 145.0
+    heliPos.x, heliPos.z = hx, hz
     world.setPosition("patrol_heli", hx, 32.0 + math.sin(timeNow * 0.8) * 2.5, hz)
     world.setRotation("patrol_heli", 6.0, math.deg(-ha), -10.0)
 
@@ -552,9 +583,9 @@ function onTick(dt)
             camera.setPosition(car.x + math.sin(orbit) * 10.8, car.y + 3.8, car.z + math.cos(orbit) * 10.8)
             camera.setTarget(car.x, car.y + 1.1, car.z)
             camera.setFov(55.0)
-            sage.setTitle("SAGE Engine v0.9 — Main Menu | 560m Grand Open World")
+            sage.setTitle("SAGE Engine v1.0.0 — Main Menu | 560m Grand Open World")
         else
-            sage.setTitle("SAGE Engine v0.9 — PAUSED (Press Esc to Resume)")
+            sage.setTitle("SAGE Engine v1.0.0 — PAUSED (Press Esc to Resume)")
         end
         return
     end
@@ -567,6 +598,11 @@ function onTick(dt)
         local preset = timePresets[timePresetIdx]
         world.setTimeOfDay(preset.hour)
         sage.log("Sky Time of Day -> " .. preset.name)
+    end
+
+    if keyJustPressed("G") then
+        applyWeatherPreset((weatherPresetIdx % #weatherPresets) + 1)
+        sage.log("Weather -> " .. weatherPresets[weatherPresetIdx].name)
     end
 
     if keyJustPressed("C") then
@@ -822,7 +858,8 @@ function onTick(dt)
         end
         forwardVel = clamp(forwardVel, -15.0, topSpeed)
 
-        local grip = car.isDrifting and CONFIG.driftGrip or CONFIG.normalGrip
+        local wetGripMult = 1.0 - weatherPresets[weatherPresetIdx].wet * 0.34
+        local grip = (car.isDrifting and CONFIG.driftGrip or CONFIG.normalGrip) * wetGripMult
         lateralVel = lateralVel * math.exp(-grip * dt)
 
         car.vx = fwdX * forwardVel + leftX * lateralVel
@@ -885,6 +922,7 @@ function onTick(dt)
                 stuntJumps = stuntJumps + 1
                 local airBonus = math.floor(car.airTime * 150.0)
                 score = score + airBonus
+                updateBestScore()
                 car.boostEnergy = math.min(100.0, car.boostEnergy + 45.0)
                 audio.playImpact(0.75)
                 audio.playChime()
@@ -1066,8 +1104,8 @@ function onTick(dt)
         local kmh = math.floor(speed * 3.6)
         local biome = getCurrentBiomeName(car.x, car.z)
         sage.setTitle(string.format(
-            "SAGE v0.9 | %s | G%d %d km/h | F = Walk | Score: %d | Esc = Menu",
-            biome, car.gear, kmh, score
+            "SAGE v1.0 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
+            biome, car.gear, kmh, weatherPresets[weatherPresetIdx].name, score, bestScore
         ))
     end
 end
@@ -1079,16 +1117,17 @@ function onRenderUI()
     local vpW, vpH = ui.getViewportSize()
 
     if gameState == "MENU" then
-        if ui.beginCenteredWindow("SAGE ENGINE v0.9 — 560m GRAND OPEN WORLD", 460, 405) then
-            ui.setFontScale(1.35)
+        if ui.beginCenteredWindow("SAGE ENGINE v1.0.0 — PRODUCTION OPEN WORLD", 470, 455) then
+            ui.setFontScale(1.38)
             ui.textCentered("SAGE STUNT & DELIVERY")
             ui.setFontScale(1.0)
-            ui.textCentered("2-Cascade Shadows  |  Drive & Walk (F)  |  AI Traffic  |  24 Models")
+            ui.textCentered("v1.0.0  |  560m Island  |  Rain & Wet Roads  |  28 Models")
+            ui.textCentered("All-Time Best Score: " .. tostring(bestScore))
             ui.spacing()
             ui.separator()
             ui.spacing()
 
-            if ui.button("PLAY GAME", 440, 44) then
+            if ui.button("PLAY GAME", 450, 44) then
                 respawnCarAtBiome(selectedBiomeIdx)
                 applySelectedVehicle()
                 audio.playChime()
@@ -1100,36 +1139,42 @@ function onRenderUI()
             ui.spacing()
 
             ui.text("Vehicle: " .. vehicles[selectedVehicleIdx].name)
-            if ui.button("Switch Vehicle", 215, 30) then
+            if ui.button("Switch Vehicle", 220, 30) then
                 selectedVehicleIdx = (selectedVehicleIdx % #vehicles) + 1
                 applySelectedVehicle()
             end
 
             ui.spacing()
             ui.text("Starting Biome (560m x 560m Island): " .. biomeSpawns[selectedBiomeIdx].name)
-            if ui.button("Downtown", 104, 28) then selectedBiomeIdx = 1; respawnCarAtBiome(1) end
+            if ui.button("Downtown", 106, 28) then selectedBiomeIdx = 1; respawnCarAtBiome(1) end
             ui.sameLine()
-            if ui.button("Highlands", 104, 28) then selectedBiomeIdx = 2; respawnCarAtBiome(2) end
+            if ui.button("Highlands", 106, 28) then selectedBiomeIdx = 2; respawnCarAtBiome(2) end
             ui.sameLine()
-            if ui.button("Palm Marina", 104, 28) then selectedBiomeIdx = 3; respawnCarAtBiome(3) end
+            if ui.button("Palm Marina", 106, 28) then selectedBiomeIdx = 3; respawnCarAtBiome(3) end
             ui.sameLine()
-            if ui.button("Red Desert", 104, 28) then selectedBiomeIdx = 4; respawnCarAtBiome(4) end
+            if ui.button("Red Desert", 106, 28) then selectedBiomeIdx = 4; respawnCarAtBiome(4) end
 
             ui.spacing()
-            ui.text("Sky & Lighting: " .. timePresets[timePresetIdx].name)
-            if ui.button("Sunset", 104, 28) then timePresetIdx = 1; world.setTimeOfDay(17.4) end
+            ui.text("Sky & Weather: " .. timePresets[timePresetIdx].name .. "  /  " .. weatherPresets[weatherPresetIdx].name)
+            if ui.button("Sunset", 106, 26) then timePresetIdx = 1; world.setTimeOfDay(17.4) end
             ui.sameLine()
-            if ui.button("Noon", 104, 28) then timePresetIdx = 2; world.setTimeOfDay(12.5) end
+            if ui.button("Noon", 106, 26) then timePresetIdx = 2; world.setTimeOfDay(12.5) end
             ui.sameLine()
-            if ui.button("Starry Night", 104, 28) then timePresetIdx = 3; world.setTimeOfDay(22.5) end
+            if ui.button("Starry Night", 106, 26) then timePresetIdx = 3; world.setTimeOfDay(22.5) end
             ui.sameLine()
-            if ui.button("Sunrise", 104, 28) then timePresetIdx = 4; world.setTimeOfDay(6.4) end
+            if ui.button("Sunrise", 106, 26) then timePresetIdx = 4; world.setTimeOfDay(6.4) end
+
+            if ui.button("Clear Sky", 145, 26) then applyWeatherPreset(1) end
+            ui.sameLine()
+            if ui.button("Light Drizzle", 145, 26) then applyWeatherPreset(2) end
+            ui.sameLine()
+            if ui.button("Neon Rainstorm", 145, 26) then applyWeatherPreset(3) end
 
             ui.spacing()
             ui.separator()
             ui.spacing()
 
-            if ui.button("Quit to Desktop", 440, 32) then
+            if ui.button("Quit to Desktop", 450, 32) then
                 sage.quit()
             end
         end
@@ -1189,8 +1234,65 @@ function onRenderUI()
         local fx = player.onFoot and player.x or car.x
         local fz = player.onFoot and player.z or car.z
         local biome = getCurrentBiomeName(fx, fz)
-        local hudW, hudH = 310, 186
-        if ui.beginWindow("HUD (H = Hide | F = Walk/Drive | Esc = Menu)", vpW - hudW - 14, vpH - hudH - 14, hudW, hudH, true) then
+
+        -- 1. LIVE GTA-STYLE 2D CORNER MINIMAP RADAR (Bottom-Left!)
+        local mapSize = 166
+        local mapWinW, mapWinH = mapSize + 18, mapSize + 36
+        if ui.beginWindow("Radar (N ^) | G = Weather", 14, vpH - mapWinH - 14, mapWinW, mapWinH, true) then
+            local ox, oy = 9, 27
+            local half = mapSize * 0.5
+            local function toMap(wx, wz)
+                -- SAGE +X is West/Left, +Z is North/Up -> map X = -wx/280, map Y = -wz/280
+                local mx = ox + half + clamp(wx / 280.0, -1.0, 1.0) * half
+                local my = oy + half - clamp(wz / 280.0, -1.0, 1.0) * half
+                return mx, my
+            end
+
+            -- 4 Biome Quadrants + Carved Turquoise Palm Lagoon
+            ui.drawRect(ox,        oy,        half, half, 0.16, 0.18, 0.24, 0.92, true) -- NW Downtown
+            ui.drawRect(ox + half, oy,        half, half, 0.13, 0.28, 0.16, 0.92, true) -- NE Highlands
+            ui.drawRect(ox,        oy + half, half, half, 0.52, 0.30, 0.17, 0.92, true) -- SW Red Desert
+            ui.drawRect(ox + half, oy + half, half, half, 0.62, 0.54, 0.34, 0.92, true) -- SE Palm Coast
+
+            local lx0, ly0 = toMap(156.0, -156.0)
+            local lx1, ly1 = toMap(228.0, -228.0)
+            ui.drawRect(lx0, ly0, lx1 - lx0, ly1 - ly0, 0.06, 0.58, 0.72, 0.96, true, 3.0)
+
+            -- Highway Cross & 3 Ring Loops
+            ui.drawLine(ox + half, oy, ox + half, oy + mapSize, 0.30, 0.32, 0.38, 0.95, 2.0)
+            ui.drawLine(ox, oy + half, ox + mapSize, oy + half, 0.30, 0.32, 0.38, 0.95, 2.0)
+            for _, r in ipairs({ 64.0, 148.0, 236.0 }) do
+                local rx0, ry0 = toMap(-r, r)
+                local rx1, ry1 = toMap(r, -r)
+                ui.drawRect(rx0, ry0, rx1 - rx0, ry1 - ry0, 0.36, 0.38, 0.44, 0.85, false)
+            end
+
+            -- AI Traffic Cruisers (Silver), Patrol Helicopter (Orange), Delivery Target (Pulsing Gold)
+            for _, tc in ipairs(trafficCars) do
+                local tx, ty = toMap(tc.x, tc.z)
+                ui.drawCircle(tx, ty, 2.5, 0.85, 0.88, 0.94, 0.95, true)
+            end
+            local hmx, hmy = toMap(heliPos.x, heliPos.z)
+            ui.drawCircle(hmx, hmy, 3.0, 1.0, 0.52, 0.12, 0.95, true)
+
+            local dmx, dmy = toMap(spot.x, spot.z)
+            ui.drawCircle(dmx, dmy, 5.2, 1.0, 0.84, 0.14, 0.95, false)
+            ui.drawCircle(dmx, dmy, 3.0, 1.0, 0.84, 0.14, 1.0, true)
+
+            -- Player Supercar (Cyan) + Walking Character (Bright White)
+            local cmx, cmy = toMap(car.x, car.z)
+            ui.drawCircle(cmx, cmy, 4.0, 0.14, 0.92, 1.0, 1.0, true)
+            if player.onFoot then
+                local pmx, pmy = toMap(player.x, player.z)
+                ui.drawCircle(pmx, pmy, 3.6, 1.0, 1.0, 1.0, 1.0, true)
+            end
+            ui.drawRect(ox, oy, mapSize, mapSize, 0.35, 0.72, 0.95, 0.85, false, 2.0)
+        end
+        ui.endWindow()
+
+        -- 2. COMPACT DRIVING / WALKING HUD (Bottom-Right!)
+        local hudW, hudH = 316, 192
+        if ui.beginWindow("HUD (H = Hide | F = Walk | G = Rain)", vpW - hudW - 14, vpH - hudH - 14, hudW, hudH, true) then
             if player.onFoot then
                 local modeStr = player.swimming and "SWIMMING" or "ON FOOT"
                 ui.text("Zone: " .. biome .. " [" .. modeStr .. "]")
@@ -1200,25 +1302,26 @@ function onRenderUI()
                 else
                     ui.text(string.format("Car Distance: %d m  (Walk back or press R)", math.floor(dCar)))
                 end
-                ui.text("Controls: WASD Walk | Shift Sprint | Space Jump")
+                ui.text("Weather: " .. weatherPresets[weatherPresetIdx].name .. " (G = Cycle)")
             else
                 local speed = math.sqrt(car.vx * car.vx + car.vz * car.vz)
                 local kmh = math.floor(speed * 3.6)
                 local statusTag = car.flooded and " [FLOODED]" or (car.inWater and " [SHALLOW WATER]" or "")
                 ui.text("Zone: " .. biome .. statusTag)
-                ui.text(string.format("Speed: %d km/h   |   Gear: G%d   |   [F] Exit Car", kmh, car.gear))
+                ui.text(string.format("Speed: %d km/h  |  G%d  |  %s", kmh, car.gear, weatherPresets[weatherPresetIdx].name))
                 ui.progressBar(car.rpm, string.format("V12 RPM %d%%", math.floor(car.rpm * 100)))
                 ui.progressBar(car.boostEnergy / 100.0, string.format("NITRO %d%%", math.floor(car.boostEnergy)))
             end
             ui.separator()
             ui.text("Next: " .. spot.label)
-            ui.text(string.format("Score: %d | Deliveries: %d | Jumps: %d", score, deliveriesDone, stuntJumps))
+            ui.text(string.format("Score: %d (Best: %d) | Deliv: %d", score, bestScore, deliveriesDone))
         end
         ui.endWindow()
     end
 end
 
 function onShutdown()
+    updateBestScore()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
-    sage.log("v0.9 560m Grand Open World Sandbox shutting down cleanly.")
+    sage.log("v1.0.0 Production Open World Sandbox shutting down cleanly.")
 end
