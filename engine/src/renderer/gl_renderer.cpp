@@ -952,7 +952,7 @@ public:
 
         if (useShadows) {
             const glm::vec3 sunDir = glm::normalize(glm::vec3(sky.sunDirection.x, sky.sunDirection.y, sky.sunDirection.z));
-            constexpr float kShadowRadius = 56.0f;
+            constexpr float kShadowRadius = 64.0f;
             const glm::vec3 focusPoint = glm::vec3(camTarget.x, 0.0f, camTarget.z);
 
             const glm::vec3 upAxis = std::abs(sunDir.y) > 0.98f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);

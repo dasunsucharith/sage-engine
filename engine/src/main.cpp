@@ -4,7 +4,7 @@
 
 int main(int argc, char* argv[]) {
     sage::EngineConfig config;
-    config.appName = "SAGE Engine v0.5 — 3D Stunt & Delivery Sandbox";
+    config.appName = "SAGE Engine v0.6 — Multi-Biome Open World Sandbox";
     config.windowWidth = 1280;
     config.windowHeight = 720;
 

@@ -64,8 +64,8 @@ struct SkySettings {
     Color3 skyHorizonColor{0.82f, 0.54f, 0.42f};
     Color3 groundAmbientColor{0.18f, 0.17f, 0.20f};
     float ambientIntensity = 0.36f;
-    float fogStart = 75.0f;
-    float fogEnd = 240.0f;
+    float fogStart = 125.0f;
+    float fogEnd = 420.0f;
     bool shadowsEnabled = true;
 };
 
@@ -73,8 +73,8 @@ struct CameraState {
     Vec3 position{0.0f, 8.0f, -18.0f};
     Vec3 target{0.0f, 1.5f, 0.0f};
     float fovDegrees = 60.0f;
-    float nearPlane = 0.2f;
-    float farPlane = 450.0f;
+    float nearPlane = 0.25f;
+    float farPlane = 800.0f;
 };
 
 class World {

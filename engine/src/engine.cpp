@@ -132,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v0.5.0 (Shadows + glTF Anim + Jolt + Audio + UI)\n";
+    std::cout << "  SAGE Engine v0.6.0 (Multi-Biome Open World + Auto-Colliders + Game Menus)\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -201,8 +201,11 @@ bool Engine::initialize() {
     };
     callbacks.beforeResourcesStart = [this]() {
         if (!m_resolvedScenePath.empty() && fs::exists(m_resolvedScenePath)) {
-            SceneLoader::loadFromFile(m_resolvedScenePath, m_world);
+            SceneLoader::loadFromFile(m_resolvedScenePath, m_world, &m_physics);
         }
+    };
+    callbacks.requestQuit = [this]() {
+        m_window.requestClose();
     };
     callbacks.isUiCapturingKeyboard = [this]() -> bool {
         return m_editor.wantsCaptureKeyboard();
@@ -323,7 +326,8 @@ int Engine::run() {
             m_window.clearResizedFlag();
         }
 
-        if (m_input.wasKeyPressed(Key::Escape)) {
+        // Only handle Escape at engine level if no Lua resource is active (otherwise Lua manages Pause Menu!)
+        if (m_input.wasKeyPressed(Key::Escape) && m_lua.activeResourceCount() == 0) {
             m_window.requestClose();
             break;
         }

@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (`v0.5.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **3D Soft Shadows & Animated glTF 2.0 (`.glb`)**, **Jolt Physics 5.7**, **miniaudio 0.11**, **Dear ImGui 1.92**, and **Lua Game HUDs (`ui.*`)**.
+> **Status:** Live (`v0.6.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **3D Soft Shadows & Animated glTF 2.0 (`.glb`)**, **Jolt Physics 5.7 + JSON Auto-Colliders**, **miniaudio 0.11**, and **Lua Menus & HUDs (`ui.*`)**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -47,6 +47,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 | `sage.log(message)` | Prints a prefixed `[Lua]` message to the SAGE console. |
 | `sage.getTime()` | Returns elapsed seconds since engine startup. |
 | `sage.setTitle(title)` | Sets custom HUD text in the OS window title bar (FPS is appended automatically). |
+| `sage.quit()` | Requests a clean engine shutdown (ideal for Quit buttons in Lua Main/Pause Menus). |
 
 ### `input`
 | Function | Description |
@@ -93,6 +94,7 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | Function | Description |
 | :--- | :--- |
 | `physics.addStaticBox(id, px, py, pz, hx, hy, hz)` | Registers an immovable 3D box collider (ground, walls, buildings) with half-extents `(hx, hy, hz)`. |
+| `physics.addStaticCylinder(id, px, py, pz, radius, height)` | Registers a solid vertical cylinder collider (tree trunks, street lamps, wind turbine masts, lighthouses). |
 | `physics.addStaticRamp(id, px, py, pz, w, h, l, yawDeg)` | Registers a 3D convex-hull ramp wedge collider so physics objects can roll up and launch off ramps. |
 | `physics.addDynamicBox(id, px, py, pz, hx, hy, hz [, mass, restitution, friction])` | Attaches a full 3D tumbling box rigid body to `id`. |
 | `physics.addDynamicSphere(id, px, py, pz, radius [, mass, restitution, friction])` | Attaches a rolling, bouncing 3D sphere rigid body to `id`. |
@@ -104,6 +106,8 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `physics.getSpeed(id)` | Returns the current linear speed (`m/s`) of a physics body. |
 | `physics.setGravity(gx, gy, gz)` | Sets world gravity vector (default `0, -22, 0`; try `0, -5, 0` for Moon gravity!). |
 | `physics.raycast(ox, oy, oz, dx, dy, dz, maxDist)` | Casts a 3D physics ray and returns `hit, hx, hy, hz, entityId`. |
+| `physics.resolveCircleXZ(x, y, z, radius, vx, vz [, bounce])` | Resolves a horizontal circle (car or character) against ALL static boxes & cylinders (including JSON auto-colliders!) and returns `hit, newX, newZ, newVx, newVz, hitEntityId`. |
+| `physics.sampleRampSurface(x, z)` | Samples elevation across ALL registered 3D ramps and returns `onRamp, groundY, rampHeight, rampYawDeg`. |
 
 ### `audio` *(miniaudio 0.11)*
 | Function | Description |
@@ -114,14 +118,20 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `audio.playExplosion()` | Plays a sub-bass shockwave boom SFX. |
 | `audio.setVolume(vol01)` | Sets master audio volume (`0.0`–`1.0`). |
 
-### `ui` *(Lua-Driven Game HUDs & Menus — call inside `onRenderUI()`)*
+### `ui` *(Lua-Driven Game Menus & HUDs — call inside `onRenderUI()`)*
 | Function | Description |
 | :--- | :--- |
-| `ui.beginWindow(title, x, y, w, h [, overlay])` | Opens an in-game HUD/menu window and returns `true` if visible. |
-| `ui.endWindow()` | Closes the current HUD window (always pair with `ui.beginWindow`). |
-| `ui.text(message)` | Draws a line of HUD text. |
+| `ui.getViewportSize()` | Returns current window `width, height` in pixels (for responsive corner HUDs). |
+| `ui.beginCenteredWindow(title, w, h)` | Opens a centered modal menu window (ideal for Main Menu / Pause Menu). |
+| `ui.beginWindow(title, x, y, w, h [, overlay])` | Opens a positioned HUD/menu window and returns `true` if visible. |
+| `ui.endWindow()` | Closes the current HUD/menu window (always pair with `beginWindow` / `beginCenteredWindow`). |
+| `ui.text(message)` | Draws a line of text. |
+| `ui.textCentered(message)` | Draws horizontally centered text inside the current window. |
+| `ui.setFontScale(scale)` | Scales window font size (`0.5`–`3.0`) for menu headings. |
 | `ui.progressBar(fraction01 [, label])` | Draws a progress bar (RPM, Nitro, Health, Loading). |
-| `ui.button(label)` | Draws a clickable button and returns `true` on click. |
+| `ui.button(label [, width, height])` | Draws a clickable button and returns `true` on click. |
+| `ui.sameLine()` | Places the next widget on the same horizontal row. |
+| `ui.spacing()` | Adds vertical spacing between widgets. |
 | `ui.separator()` | Draws a horizontal divider line. |
 
 ---

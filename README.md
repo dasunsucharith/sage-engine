@@ -35,7 +35,7 @@ See [**Getting Started**](docs/getting_started.md) for prerequisite installation
 
 ---
 
-## Core Capabilities (`v0.5.0`)
+## Core Capabilities (`v0.6.0`)
 
 | Pillar | Technology | What You Get Out of the Box |
 | :--- | :--- | :--- |
@@ -44,7 +44,7 @@ See [**Getting Started**](docs/getting_started.md) for prerequisite installation
 | **AAA 3D Physics** | **Jolt Physics 5.7** | Multithreaded rigid-body simulation (boxes, rolling spheres, capsules, convex-hull ramps, kinematic collisions, shockwaves, raycasts) |
 | **Live Scripting & HUDs** | **Lua 5.4** (`sol2`) + **Dear ImGui 1.92** | FiveM-style `resources/` folders, automatic file-watch & `F5` hot-reload, built-in `F1` Live Scene Inspector, and Lua `ui.*` custom game HUDs |
 | **Real-Time Audio** | **miniaudio 0.11** | Lock-free 48 kHz stereo audio thread with procedural V12 engine synth, drift screech, nitro roar, impacts, chimes & shockwave booms |
-| **AI-Native & Blender Ready** | Plain-text **JSON** + 11 starter `.glb` models | Ships with a playable **3D Lamborghini Aventador SVJ Stunt & Delivery Sandbox** + Blender 5.3 asset scripts |
+| **AI-Native & Blender Ready** | Plain-text **JSON** + 15 starter `.glb` models | Ships with a playable **320m 4-Biome Open World** (Downtown Metro, Pine Highlands, Palm Coast Beach, Red Rock Desert) with Main/Pause Menu & solid auto-colliders |
 
 ---
 
@@ -55,7 +55,7 @@ sage-engine/
 ├── engine/                 # C++20 core engine (platform, renderer, world, physics, audio, editor, Lua VM)
 │   ├── include/sage/       # Clean public C++ subsystem interfaces
 │   └── src/                # Engine implementation
-├── assets/models/          # 11 ready-to-use static & animated .glb 3D models
+├── assets/models/          # 15 ready-to-use static & animated .glb 3D models
 ├── scenes/                 # Human- & AI-readable JSON 3D worlds (hot-reloadable!)
 ├── resources/              # FiveM-style Lua game resources (hot-reloadable!)
 ├── tools/                  # Blender 5.3 procedural asset & glTF export scripts
@@ -77,7 +77,8 @@ We follow the **Table Tennis Rule** (learned from RAGE's history): prove every c
 - [x] **v0.3 — 3D World:** Free-fly 3D camera, `.glb`/`.gltf` model loader, PBR lighting, and JSON scene loader.
 - [x] **v0.4 — Editor & Physics:** Live `Dear ImGui` viewport/inspector + `Jolt Physics` (gravity, collisions, drivable car) + 3D audio (`miniaudio`).
 - [x] **v0.5 — General-Purpose 3D Expansion:** Real-time soft Shadow Maps (2048px PCF), native glTF 2.0 keyframe animations, Jolt spheres/capsules/convex ramps, Blender animated asset kit, and Lua `ui.*` game HUDs.
-- [ ] **v0.6+ — RAGE-Scale Tech:** Deferred G-Buffer PBR, Multi-Cascade CSM, Jolt 4-Wheel Raycast Suspension & `CharacterVirtual`, skeletal skinning, open-world chunk streaming, and Vulkan/DX12 backend.
+- [x] **v0.6 — Multi-Biome Open World & Game Menus:** Declarative JSON auto-colliders on all world objects (trees, turbines, lamps, rocks, towers), Main/Pause Menu with auto-hidden Inspector (`F1`), and a 320m × 320m 4-biome world with 15 Blender `.glb` assets.
+- [ ] **v0.7+ — RAGE-Scale Tech:** Deferred G-Buffer PBR, Multi-Cascade CSM, Jolt 4-Wheel Raycast Suspension & `CharacterVirtual`, skeletal skinning, open-world chunk streaming, and Vulkan/DX12 backend.
 
 ---
 

@@ -14,6 +14,7 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -133,6 +134,29 @@ struct BodyEntry {
     bool isDynamic = false;
 };
 
+struct StaticObstacle2D {
+    std::string id;
+    bool isCylinder = false;
+    float cx = 0.0f;
+    float cz = 0.0f;
+    float minY = -10.0f;
+    float maxY = 100.0f;
+    float hx = 1.0f;
+    float hz = 1.0f;
+    float radius = 0.5f;
+    float yawRad = 0.0f;
+};
+
+struct StaticRampInfo {
+    float cx = 0.0f;
+    float cz = 0.0f;
+    float baseY = 0.0f;
+    float width = 5.0f;
+    float height = 2.2f;
+    float length = 7.5f;
+    float yawDeg = 0.0f;
+};
+
 struct PhysicsWorld::Impl {
     bool initialized = false;
     BPLayerInterfaceImpl broadPhaseLayerInterface;
@@ -145,6 +169,8 @@ struct PhysicsWorld::Impl {
 
     std::unordered_map<std::string, BodyEntry> bodiesByEntity;
     std::unordered_map<JPH::uint32, std::string> entityByBodyRaw;
+    std::vector<StaticObstacle2D> staticObstacles;
+    std::vector<StaticRampInfo> staticRamps;
 
     void removeExisting(const std::string& entityId) {
         const auto it = bodiesByEntity.find(entityId);
@@ -237,6 +263,8 @@ void PhysicsWorld::clearBodies() {
     }
     m_impl->bodiesByEntity.clear();
     m_impl->entityByBodyRaw.clear();
+    m_impl->staticObstacles.clear();
+    m_impl->staticRamps.clear();
 }
 
 bool PhysicsWorld::addStaticBox(const std::string& entityId, Vec3 pos, Vec3 halfExtents, Vec3 rotDeg) {
@@ -267,6 +295,61 @@ bool PhysicsWorld::addStaticBox(const std::string& entityId, Vec3 pos, Vec3 half
 
     m_impl->bodiesByEntity[entityId] = {bid, false};
     m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
+
+    // Register solid above-ground boxes as driveable obstacle colliders (skip buried ground floor slab)
+    if (pos.y + he.GetY() > 0.25f) {
+        StaticObstacle2D obs;
+        obs.id = entityId;
+        obs.isCylinder = false;
+        obs.cx = pos.x;
+        obs.cz = pos.z;
+        obs.minY = pos.y - he.GetY();
+        obs.maxY = pos.y + he.GetY();
+        obs.hx = he.GetX();
+        obs.hz = he.GetZ();
+        obs.yawRad = glm::radians(rotDeg.y);
+        m_impl->staticObstacles.push_back(std::move(obs));
+    }
+    return true;
+}
+
+bool PhysicsWorld::addStaticCylinder(const std::string& entityId, Vec3 basePos, float radius, float height) {
+    if (!m_impl->initialized) {
+        return false;
+    }
+    m_impl->removeExisting(entityId);
+
+    const float r = std::max(radius, 0.12f);
+    const float h = std::max(height, 0.5f);
+    const float halfH = h * 0.5f;
+
+    JPH::BodyCreationSettings settings(
+        new JPH::CylinderShape(halfH, r),
+        JPH::RVec3(basePos.x, basePos.y + halfH, basePos.z),
+        JPH::Quat::sIdentity(),
+        JPH::EMotionType::Static,
+        Layers::NON_MOVING);
+    settings.mFriction = 0.7f;
+    settings.mRestitution = 0.25f;
+
+    auto& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID bid = bi.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+    if (bid.IsInvalid()) {
+        return false;
+    }
+
+    m_impl->bodiesByEntity[entityId] = {bid, false};
+    m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
+
+    StaticObstacle2D obs;
+    obs.id = entityId;
+    obs.isCylinder = true;
+    obs.cx = basePos.x;
+    obs.cz = basePos.z;
+    obs.minY = basePos.y;
+    obs.maxY = basePos.y + h;
+    obs.radius = r;
+    m_impl->staticObstacles.push_back(std::move(obs));
     return true;
 }
 
@@ -320,6 +403,7 @@ bool PhysicsWorld::addStaticRamp(
 
     m_impl->bodiesByEntity[entityId] = {bid, false};
     m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
+    m_impl->staticRamps.push_back({pos.x, pos.z, pos.y, width, height, length, yawDeg});
     return true;
 }
 
@@ -532,6 +616,119 @@ int PhysicsWorld::applyExplosion(Vec3 center, float radius, float strength) {
         ++affected;
     }
     return affected;
+}
+
+CircleCollisionResult PhysicsWorld::resolveCircleXZ(
+    float x, float y, float z, float radius, float vx, float vz, float bounce) const {
+    CircleCollisionResult res{};
+    res.x = x;
+    res.z = z;
+    res.vx = vx;
+    res.vz = vz;
+
+    for (const StaticObstacle2D& obs : m_impl->staticObstacles) {
+        if (y > obs.maxY || (y + 1.5f) < obs.minY) {
+            continue;
+        }
+
+        if (obs.isCylinder) {
+            const float dx = res.x - obs.cx;
+            const float dz = res.z - obs.cz;
+            const float minDist = radius + obs.radius;
+            const float distSq = dx * dx + dz * dz;
+            if (distSq < minDist * minDist) {
+                const float dist = std::sqrt(std::max(distSq, 1e-6f));
+                const float nx = dist > 1e-4f ? dx / dist : 1.0f;
+                const float nz = dist > 1e-4f ? dz / dist : 0.0f;
+                const float push = minDist - dist;
+                res.x += nx * push;
+                res.z += nz * push;
+
+                const float vn = res.vx * nx + res.vz * nz;
+                if (vn < 0.0f) {
+                    res.vx -= (1.0f + bounce) * vn * nx;
+                    res.vz -= (1.0f + bounce) * vn * nz;
+                }
+                res.hit = true;
+                res.hitEntityId = obs.id;
+            }
+        } else {
+            // Oriented 2D box push-out in obstacle local space
+            const float c = std::cos(obs.yawRad);
+            const float s = std::sin(obs.yawRad);
+            const float dx = res.x - obs.cx;
+            const float dz = res.z - obs.cz;
+
+            const float localX =  dx * c - dz * s;
+            const float localZ =  dx * s + dz * c;
+
+            const float clampedX = std::clamp(localX, -obs.hx, obs.hx);
+            const float clampedZ = std::clamp(localZ, -obs.hz, obs.hz);
+
+            const float diffX = localX - clampedX;
+            const float diffZ = localZ - clampedZ;
+            const float distSq = diffX * diffX + diffZ * diffZ;
+
+            if (distSq < radius * radius) {
+                float lnx = 0.0f, lnz = 0.0f, push = 0.0f;
+                if (distSq > 1e-6f) {
+                    const float dist = std::sqrt(distSq);
+                    lnx = diffX / dist;
+                    lnz = diffZ / dist;
+                    push = radius - dist;
+                } else {
+                    const float penX = obs.hx - std::abs(localX);
+                    const float penZ = obs.hz - std::abs(localZ);
+                    if (penX < penZ) {
+                        lnx = localX >= 0.0f ? 1.0f : -1.0f;
+                        push = penX + radius;
+                    } else {
+                        lnz = localZ >= 0.0f ? 1.0f : -1.0f;
+                        push = penZ + radius;
+                    }
+                }
+
+                // Rotate normal back to world XZ
+                const float wnx =  lnx * c + lnz * s;
+                const float wnz = -lnx * s + lnz * c;
+                res.x += wnx * push;
+                res.z += wnz * push;
+
+                const float vn = res.vx * wnx + res.vz * wnz;
+                if (vn < 0.0f) {
+                    res.vx -= (1.0f + bounce) * vn * wnx;
+                    res.vz -= (1.0f + bounce) * vn * wnz;
+                }
+                res.hit = true;
+                res.hitEntityId = obs.id;
+            }
+        }
+    }
+
+    return res;
+}
+
+RampSampleResult PhysicsWorld::sampleRampSurface(float x, float z) const {
+    RampSampleResult best{};
+    for (const StaticRampInfo& r : m_impl->staticRamps) {
+        const float rad = glm::radians(r.yawDeg);
+        const float dx = x - r.cx;
+        const float dz = z - r.cz;
+        const float localZ = dx * std::sin(rad) + dz * std::cos(rad);
+        const float localX = dx * std::cos(rad) - dz * std::sin(rad);
+
+        if (std::abs(localX) <= (r.width * 0.5f + 0.65f) && std::abs(localZ) <= (r.length * 0.5f + 0.25f)) {
+            const float t = std::clamp((localZ + r.length * 0.5f) / r.length, 0.0f, 1.0f);
+            const float h = r.baseY + t * r.height;
+            if (!best.onRamp || h > best.groundY) {
+                best.onRamp = true;
+                best.groundY = h;
+                best.rampHeight = r.height;
+                best.rampYawDeg = r.yawDeg;
+            }
+        }
+    }
+    return best;
 }
 
 float PhysicsWorld::getLinearSpeed(const std::string& entityId) const {

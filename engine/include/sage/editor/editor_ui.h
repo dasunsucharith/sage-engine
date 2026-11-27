@@ -56,7 +56,7 @@ public:
 
 private:
     bool m_initialized = false;
-    bool m_visible = true;
+    bool m_visible = false; // Hidden during gameplay by default — press F1 to open developer inspector!
     int m_selectedEntityIndex = -1;
     float m_fpsHistory[90]{};
     int m_fpsOffset = 0;

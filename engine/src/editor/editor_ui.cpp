@@ -111,7 +111,7 @@ void EditorUI::render(
         ImGui::SetNextWindowPos(ImVec2(14.0f, 14.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(320.0f, 0.0f), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("SAGE Engine v0.5 — Live Inspector (F1)", &m_visible)) {
+        if (ImGui::Begin("SAGE Engine v0.6 — Live Inspector (F1)", &m_visible)) {
             ImGui::Text("FPS: %.0f (%.2f ms)", stats.fps, stats.frameMs);
             ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 36.0f));
             ImGui::TextDisabled("GPU: %s", stats.gpuRenderer.c_str());

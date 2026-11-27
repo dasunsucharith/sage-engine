@@ -74,6 +74,11 @@ struct LuaEngine::Impl {
                 callbacks.setWindowTitle(title);
             }
         });
+        sageTbl.set_function("quit", [this]() {
+            if (callbacks.requestQuit) {
+                callbacks.requestQuit();
+            }
+        });
 
         // --- input.* namespace ---
         sol::table inputTbl = state.create_named_table("input");
@@ -206,6 +211,9 @@ struct LuaEngine::Impl {
         physTbl.set_function("addStaticBox", [this](const std::string& id, float px, float py, float pz, float hx, float hy, float hz) -> bool {
             return physics ? physics->addStaticBox(id, {px, py, pz}, {hx, hy, hz}) : false;
         });
+        physTbl.set_function("addStaticCylinder", [this](const std::string& id, float px, float py, float pz, float radius, float height) -> bool {
+            return physics ? physics->addStaticCylinder(id, {px, py, pz}, radius, height) : false;
+        });
         physTbl.set_function("addStaticRamp", [this](
             const std::string& id, float px, float py, float pz, float w, float h, float l, float yawDeg) -> bool {
             return physics ? physics->addStaticRamp(id, {px, py, pz}, w, h, l, yawDeg) : false;
@@ -260,6 +268,23 @@ struct LuaEngine::Impl {
             const RaycastHit hit = physics->raycast({ox, oy, oz}, {dx, dy, dz}, maxDist);
             return {hit.hit, hit.position.x, hit.position.y, hit.position.z, hit.entityId};
         });
+        physTbl.set_function("resolveCircleXZ", [this](
+            float x, float y, float z, float radius, float vx, float vz, sol::optional<float> bounce)
+            -> std::tuple<bool, float, float, float, float, std::string> {
+            if (!physics) {
+                return {false, x, z, vx, vz, ""};
+            }
+            const CircleCollisionResult r = physics->resolveCircleXZ(x, y, z, radius, vx, vz, bounce.value_or(0.32f));
+            return {r.hit, r.x, r.z, r.vx, r.vz, r.hitEntityId};
+        });
+        physTbl.set_function("sampleRampSurface", [this](float x, float z)
+            -> std::tuple<bool, float, float, float> {
+            if (!physics) {
+                return {false, 0.0f, 0.0f, 0.0f};
+            }
+            const RampSampleResult r = physics->sampleRampSurface(x, z);
+            return {r.onRamp, r.groundY, r.rampHeight, r.rampYawDeg};
+        });
 
         // --- audio.* namespace (miniaudio 0.11) ---
         sol::table audioTbl = state.create_named_table("audio");
@@ -289,8 +314,21 @@ struct LuaEngine::Impl {
             }
         });
 
-        // --- ui.* namespace (Lua-driven Dear ImGui Game HUDs & Menus!) ---
+        // --- ui.* namespace (Lua-driven Dear ImGui Game HUDs & Fullscreen Menus!) ---
         sol::table uiTbl = state.create_named_table("ui");
+        uiTbl.set_function("getViewportSize", []() -> std::tuple<float, float> {
+            const ImVec2 sz = ImGui::GetIO().DisplaySize;
+            return {sz.x, sz.y};
+        });
+        uiTbl.set_function("beginCenteredWindow", [](const std::string& title, float w, float h) -> bool {
+            const ImVec2 disp = ImGui::GetIO().DisplaySize;
+            ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(w, h), ImGuiCond_Always);
+            constexpr ImGuiWindowFlags flags =
+                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+            return ImGui::Begin(title.c_str(), nullptr, flags);
+        });
         uiTbl.set_function("beginWindow", [](
             const std::string& title, float x, float y, float w, float h, sol::optional<bool> overlay) -> bool {
             ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
@@ -309,14 +347,29 @@ struct LuaEngine::Impl {
         uiTbl.set_function("text", [](const std::string& msg) {
             ImGui::TextUnformatted(msg.c_str());
         });
+        uiTbl.set_function("textCentered", [](const std::string& msg) {
+            const float winW = ImGui::GetWindowSize().x;
+            const float txtW = ImGui::CalcTextSize(msg.c_str()).x;
+            ImGui::SetCursorPosX(std::max((winW - txtW) * 0.5f, 8.0f));
+            ImGui::TextUnformatted(msg.c_str());
+        });
+        uiTbl.set_function("setFontScale", [](float scale) {
+            ImGui::SetWindowFontScale(std::clamp(scale, 0.5f, 3.0f));
+        });
         uiTbl.set_function("progressBar", [](float fraction, sol::optional<std::string> overlay) {
             ImGui::ProgressBar(
                 std::clamp(fraction, 0.0f, 1.0f),
                 ImVec2(-1.0f, 0.0f),
                 overlay.has_value() ? overlay->c_str() : nullptr);
         });
-        uiTbl.set_function("button", [](const std::string& label) -> bool {
-            return ImGui::Button(label.c_str());
+        uiTbl.set_function("button", [](const std::string& label, sol::optional<float> w, sol::optional<float> h) -> bool {
+            return ImGui::Button(label.c_str(), ImVec2(w.value_or(0.0f), h.value_or(0.0f)));
+        });
+        uiTbl.set_function("sameLine", []() {
+            ImGui::SameLine();
+        });
+        uiTbl.set_function("spacing", []() {
+            ImGui::Spacing();
         });
         uiTbl.set_function("separator", []() {
             ImGui::Separator();

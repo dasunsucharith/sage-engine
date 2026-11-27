@@ -152,21 +152,25 @@ SAGE natively loads **glTF 2.0 Binary (`.glb`)** files — including multi-mater
 
 ## Step 5: Built-In Starter 3D Asset Library (`assets/models/`)
 
-Every SAGE clone already ships with **11 ready-to-use Blender `.glb` assets**:
+Every SAGE clone already ships with **15 ready-to-use Blender `.glb` assets**:
 
-| Model Path | Description | Animated? | Suggested Physics Shape |
+| Model Path | Description | Animated? | Suggested JSON `"collider"` |
 | :--- | :--- | :---: | :--- |
 | `assets/models/aventador_svj.glb` | Custom sculpted Lamborghini Aventador SVJ (128 submeshes, Verde Mantis PBR) | Static | `addKinematicBox(..., 1.05, 0.62, 2.25)` |
 | `assets/models/sports_car.glb` | Stylized red sports coupe with 5-spoke rims & GT spoiler | Static | `addKinematicBox(..., 1.05, 0.62, 2.25)` |
-| `assets/models/stunt_ramp.glb` | Neon-railed concrete 3D stunt jump ramp (`5m × 2.2m × 7.5m`) | Static | `addStaticRamp(..., 5.0, 2.2, 7.5, yaw)` |
+| `assets/models/stunt_ramp.glb` | Neon-railed concrete 3D stunt jump ramp (`5m × 2.2m × 7.5m`) | Static | `{"type": "ramp", "width": 5, "height": 2.2, "length": 7.5}` |
 | `assets/models/crate.glb` | Framed wooden shipping crate (`1.28m` cube) | Static | `addDynamicBox(..., 0.64, 0.64, 0.64)` |
 | `assets/models/stunt_ball.glb` | Giant metallic neon-ringed stunt soccer ball (`r = 1.25m`) | Static | `addDynamicSphere(..., 1.25)` |
 | `assets/models/traffic_cone.glb` | High-visibility reflective stunt cone | Static | `addDynamicCapsule(..., 0.24, 0.26)` |
-| `assets/models/wind_turbine.glb` | 15m city wind turbine with 3 spinning blades | **Yes** | Static scenery |
+| `assets/models/wind_turbine.glb` | 15m city wind turbine with 3 spinning blades | **Yes** | `{"type": "cylinder", "radius": 0.95, "height": 18}` |
 | `assets/models/hover_drone.glb` | Sci-fi quad-rotor drone (bobbing chassis + 4 spinning rotors) | **Yes** | Kinematic / patrol |
-| `assets/models/city_tower.glb` | Multi-tier glass & concrete skyscraper with neon crown | Static | `addStaticBox(..., 5.9, 12.0, 5.9)` |
-| `assets/models/palm_tree.glb` | Curved tropical palm tree (Vice City style) | Static | Static scenery |
-| `assets/models/street_lamp.glb` | 6.4m modern boulevard LED street lamp | Static | Static scenery |
+| `assets/models/lighthouse.glb` | Coastal lighthouse with 360° rotating glowing searchlight beam | **Yes** | `{"type": "cylinder", "radius": 3.5, "height": 22}` |
+| `assets/models/city_tower.glb` | Multi-tier glass & concrete skyscraper with neon crown | Static | `{"type": "box", "halfExtents": [5.9, 12, 5.9], "offsetY": 12}` |
+| `assets/models/warehouse.glb` | Industrial steel delivery depot / garage hangar | Static | `{"type": "box", "halfExtents": [7.2, 3.6, 5.2], "offsetY": 3.6}` |
+| `assets/models/palm_tree.glb` | Curved tropical palm tree (Palm Coast biome) | Static | `{"type": "cylinder", "radius": 0.55, "height": 8}` |
+| `assets/models/pine_tree.glb` | Layered alpine evergreen conifer (Pine Highlands biome) | Static | `{"type": "cylinder", "radius": 0.65, "height": 9}` |
+| `assets/models/desert_rock.glb` | Stratified red-rock canyon mesa (Red Rock Desert biome) | Static | `{"type": "cylinder", "radius": 4.2, "height": 7.5}` |
+| `assets/models/street_lamp.glb` | 6.4m modern boulevard LED street lamp | Static | `{"type": "cylinder", "radius": 0.35, "height": 6.5}` |
 
 ---
 

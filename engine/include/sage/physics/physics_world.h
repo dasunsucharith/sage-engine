@@ -15,7 +15,24 @@ struct RaycastHit {
     std::string entityId;
 };
 
-// Multithreaded general-purpose 3D rigid-body physics world powered by Jolt Physics 5.7.
+struct CircleCollisionResult {
+    bool hit = false;
+    float x = 0.0f;
+    float z = 0.0f;
+    float vx = 0.0f;
+    float vz = 0.0f;
+    std::string hitEntityId;
+};
+
+struct RampSampleResult {
+    bool onRamp = false;
+    float groundY = 0.0f;
+    float rampHeight = 0.0f;
+    float rampYawDeg = 0.0f;
+};
+
+// Multithreaded general-purpose 3D rigid-body physics world powered by Jolt Physics 5.7,
+// plus fast unified obstacle & ramp queries for vehicles and character controllers.
 class PhysicsWorld {
 public:
     PhysicsWorld();
@@ -30,6 +47,7 @@ public:
     void clearBodies();
 
     bool addStaticBox(const std::string& entityId, Vec3 pos, Vec3 halfExtents, Vec3 rotDeg = {});
+    bool addStaticCylinder(const std::string& entityId, Vec3 basePos, float radius, float height);
     bool addStaticRamp(const std::string& entityId, Vec3 pos, float width, float height, float length, float yawDeg);
 
     bool addDynamicBox(
@@ -63,6 +81,13 @@ public:
     bool moveKinematic(const std::string& entityId, Vec3 pos, Vec3 rotDeg, float dt);
     bool applyImpulse(const std::string& entityId, Vec3 impulse);
     int applyExplosion(Vec3 center, float radius, float strength);
+
+    // Pushes a horizontal circle (e.g. car or character) out of ALL static boxes & cylinders in the world!
+    CircleCollisionResult resolveCircleXZ(
+        float x, float y, float z, float radius, float vx, float vz, float bounce = 0.32f) const;
+
+    // Samples elevation across ALL registered 3D stunt ramps in the world!
+    RampSampleResult sampleRampSurface(float x, float z) const;
 
     float getLinearSpeed(const std::string& entityId) const;
     void setGravity(Vec3 gravity);

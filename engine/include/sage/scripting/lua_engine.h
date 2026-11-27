@@ -16,6 +16,7 @@ struct LuaHostCallbacks {
     std::function<void(const std::string&)> setWindowTitle;
     std::function<double()> getTimeSeconds;
     std::function<void()> beforeResourcesStart;
+    std::function<void()> requestQuit;
     std::function<bool()> isUiCapturingKeyboard;
     std::function<bool()> isUiCapturingMouse;
 };

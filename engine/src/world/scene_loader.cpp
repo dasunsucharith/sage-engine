@@ -1,5 +1,6 @@
 #include "sage/world/scene_loader.h"
 
+#include "sage/physics/physics_world.h"
 #include "sage/world/world.h"
 
 #include <nlohmann/json.hpp>
@@ -35,7 +36,7 @@ Color3 readColor3(const nlohmann::json& obj, const char* key, Color3 fallback) {
 
 } // namespace
 
-bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& world) {
+bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& world, PhysicsWorld* physics) {
     if (!std::filesystem::exists(scenePath)) {
         std::cerr << "[SAGE][Scene] Scene file not found: " << scenePath.string() << "\n";
         return false;
@@ -75,6 +76,12 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
         if (skyJson.contains("ambientIntensity") && skyJson["ambientIntensity"].is_number()) {
             world.sky().ambientIntensity = skyJson["ambientIntensity"].get<float>();
         }
+        if (skyJson.contains("fogStart") && skyJson["fogStart"].is_number()) {
+            world.sky().fogStart = skyJson["fogStart"].get<float>();
+        }
+        if (skyJson.contains("fogEnd") && skyJson["fogEnd"].is_number()) {
+            world.sky().fogEnd = skyJson["fogEnd"].get<float>();
+        }
     }
 
     if (root.contains("camera") && root["camera"].is_object()) {
@@ -85,6 +92,7 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
     }
 
     std::size_t loadedCount = 0;
+    std::size_t colliderCount = 0;
     if (root.contains("entities") && root["entities"].is_array()) {
         for (std::size_t i = 0; i < root["entities"].size(); ++i) {
             const auto& e = root["entities"][i];
@@ -129,11 +137,36 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
             world.setRotation(id, rot.x, rot.y, rot.z);
             world.setEmissive(id, emissive);
             ++loadedCount;
+
+            // Optional declarative collider in JSON — automatically solid for Jolt AND vehicles!
+            if (physics && e.contains("collider") && e["collider"].is_object()) {
+                const auto& col = e["collider"];
+                const std::string colType = col.value("type", "box");
+                const float offsetY = col.value("offsetY", 0.0f);
+                const std::string colId = "scene_" + id;
+
+                if (colType == "cylinder") {
+                    const float radius = col.value("radius", 0.6f);
+                    const float height = col.value("height", 8.0f);
+                    physics->addStaticCylinder(colId, {pos.x, pos.y + offsetY, pos.z}, radius, height);
+                    ++colliderCount;
+                } else if (colType == "ramp") {
+                    const float w = col.value("width", 5.0f * scale.x);
+                    const float h = col.value("height", 2.2f * scale.y);
+                    const float l = col.value("length", 7.5f * scale.z);
+                    physics->addStaticRamp(colId, {pos.x, pos.y + offsetY, pos.z}, w, h, l, rot.y);
+                    ++colliderCount;
+                } else {
+                    const Vec3 he = readVec3(col, "halfExtents", {scale.x * 0.5f, scale.y * 0.5f, scale.z * 0.5f});
+                    physics->addStaticBox(colId, {pos.x, pos.y + offsetY, pos.z}, he, rot);
+                    ++colliderCount;
+                }
+            }
         }
     }
 
     std::cout << "[SAGE][Scene] Loaded \"" << sceneName << "\" from " << scenePath.string()
-              << " (" << loadedCount << " entities)\n";
+              << " (" << loadedCount << " entities, " << colliderCount << " solid collider(s))\n";
     return true;
 }
 
