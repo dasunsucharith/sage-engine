@@ -40,6 +40,8 @@ PFNGLDELETEBUFFERSPROC deleteBuffers = nullptr;
 
 PFNGLVERTEXATTRIBPOINTERPROC vertexAttribPointer = nullptr;
 PFNGLENABLEVERTEXATTRIBARRAYPROC enableVertexAttribArray = nullptr;
+PFNGLVERTEXATTRIBDIVISORPROC vertexAttribDivisor = nullptr;
+PFNGLDRAWARRAYSINSTANCEDPROC drawArraysInstanced = nullptr;
 
 PFNGLACTIVETEXTUREPROC activeTexture = nullptr;
 PFNGLGENERATEMIPMAPPROC generateMipmap = nullptr;
@@ -109,6 +111,8 @@ bool loadFunctions() {
 
     ok &= loadOne(vertexAttribPointer, "glVertexAttribPointer");
     ok &= loadOne(enableVertexAttribArray, "glEnableVertexAttribArray");
+    ok &= loadOne(vertexAttribDivisor, "glVertexAttribDivisor");
+    ok &= loadOne(drawArraysInstanced, "glDrawArraysInstanced");
 
     ok &= loadOne(activeTexture, "glActiveTexture");
     ok &= loadOne(generateMipmap, "glGenerateMipmap");

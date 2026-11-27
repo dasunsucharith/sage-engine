@@ -176,8 +176,8 @@ void main() {
         sky = mix(sky, cloudColor, density * 0.76);
     }
 
-    // Outputs linear HDR color for post-processing Bloom + ACES Tone Mapping
-    FragColor = vec4(sky, 1.0);
+    // Outputs linear HDR color (alpha = 0.0 -> non-reflective sky for SSR pass)
+    FragColor = vec4(sky, 0.0);
 }
 )GLSL";
 
@@ -519,8 +519,149 @@ void main() {
     vec3 fogColor = mix(uSkyHorizon, uSunColor * 1.15, sunInscatter * 0.42);
     color = mix(color, fogColor, fogFactor * fogFactor * 0.86);
 
-    // Output linear HDR (tone-mapped in PostPass!)
-    FragColor = vec4(color, 1.0);
+    // Output linear HDR + per-pixel surface reflectivity in alpha for Screen-Space Reflections (v1.4.0)!
+    float wetBoost = (uIsGround == 1) ? (uWetness * 0.85) : 0.0;
+    float reflectivity = clamp((1.0 - rough) * (0.20 + 0.80 * metal + wetBoost), 0.0, 1.0);
+    if (uIsGround == 2) reflectivity *= 0.22; // Natural grassy hills stay mostly matte
+    FragColor = vec4(color, reflectivity);
+}
+)GLSL";
+
+// -----------------------------------------------------------------------------
+// Pass 2B: GPU-Instanced Wind-Swaying 3D Grass & Wildflowers (Single Draw Call!)
+// -----------------------------------------------------------------------------
+constexpr const char* kGrassVertexShader = R"GLSL(
+#version 330 core
+layout (location = 0) in vec3 aBladePos;   // Local crossed-clump geometry (y in 0..1)
+layout (location = 1) in vec4 aInstPosH;   // xyz = world base, w = height scale
+layout (location = 2) in vec4 aInstMeta;   // x = yaw, y = colorShift, z = windPhase, w = flowerFlag
+
+uniform mat4 uViewProj;
+uniform vec3 uCameraPos;
+uniform vec3 uInteractPos;
+uniform float uTime;
+
+out float vHeightFrac;
+out float vColorShift;
+out float vFlowerFlag;
+out vec3 vWorldPos;
+
+void main() {
+    vec3 basePos = aInstPosH.xyz;
+    float dist = length(uCameraPos.xz - basePos.xz);
+    float lodScale = 1.0 - smoothstep(105.0, 155.0, dist);
+    if (lodScale <= 0.01) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        vHeightFrac = 0.0;
+        vColorShift = 0.0;
+        vFlowerFlag = 0.0;
+        vWorldPos = basePos;
+        return;
+    }
+
+    float hFrac = clamp(aBladePos.y, 0.0, 1.0);
+    float cy = cos(aInstMeta.x);
+    float sy = sin(aInstMeta.x);
+
+    vec3 local = vec3(
+        aBladePos.x * cy - aBladePos.z * sy,
+        aBladePos.y * aInstPosH.w * lodScale,
+        aBladePos.x * sy + aBladePos.z * cy
+    );
+
+    // Multi-wave rolling wind gusts bending grass tips quadratically!
+    float gust = sin(basePos.x * 0.13 + basePos.z * 0.09 + uTime * 2.2 + aInstMeta.z) * 0.24
+               + cos(basePos.x * 0.29 - basePos.z * 0.21 + uTime * 3.6) * 0.10;
+    float bend = hFrac * hFrac * aInstPosH.w * lodScale;
+    local.x += gust * bend;
+    local.z += gust * 0.65 * bend;
+
+    // Interactive player / vehicle grass parting & flattening!
+    vec2 toBlade = basePos.xz - uInteractPos.xz;
+    float pDist = length(toBlade);
+    if (pDist < 3.4 && abs(basePos.y - uInteractPos.y) < 2.8) {
+        float push = (1.0 - pDist / 3.4);
+        push = push * push;
+        vec2 pushDir = (pDist > 0.05) ? (toBlade / pDist) : vec2(1.0, 0.0);
+        local.xz += pushDir * (push * 0.65 * hFrac * aInstPosH.w);
+        local.y *= (1.0 - push * 0.58 * hFrac);
+    }
+
+    vec3 wp = basePos + local;
+    vWorldPos = wp;
+    vHeightFrac = hFrac;
+    vColorShift = aInstMeta.y;
+    vFlowerFlag = aInstMeta.w;
+    gl_Position = uViewProj * vec4(wp, 1.0);
+}
+)GLSL";
+
+constexpr const char* kGrassFragmentShader = R"GLSL(
+#version 330 core
+in float vHeightFrac;
+in float vColorShift;
+in float vFlowerFlag;
+in vec3 vWorldPos;
+
+uniform vec3 uCameraPos;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyHorizon;
+uniform vec3 uGroundAmbient;
+uniform float uAmbientIntensity;
+uniform float uFogStart;
+uniform float uFogEnd;
+uniform float uTime;
+uniform int uCloudShadowsEnabled;
+
+out vec4 FragColor;
+
+float hash21G(vec2 p) {
+    p = fract(p * vec2(234.34, 435.345));
+    p += dot(p, p + 34.23);
+    return fract(p.x * p.y);
+}
+float noiseG(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash21G(i), hash21G(i + vec2(1, 0)), f.x),
+               mix(hash21G(i + vec2(0, 1)), hash21G(i + vec2(1, 1)), f.x), f.y);
+}
+
+void main() {
+    vec3 rootCol = vec3(0.045, 0.13, 0.038);
+    vec3 tipCol  = mix(vec3(0.18, 0.39, 0.10), vec3(0.32, 0.44, 0.11), vColorShift);
+    vec3 albedo  = mix(rootCol, tipCol, smoothstep(0.0, 0.95, vHeightFrac));
+
+    // Occasional alpine yellow / lavender wildflower tips!
+    if (vFlowerFlag > 0.5 && vHeightFrac > 0.72) {
+        vec3 flw = (vColorShift > 0.5) ? vec3(0.95, 0.78, 0.18) : vec3(0.82, 0.56, 0.95);
+        albedo = mix(albedo, flw, smoothstep(0.72, 0.92, vHeightFrac));
+    }
+
+    vec3 L = normalize(uSunDir);
+    vec3 V = normalize(uCameraPos - vWorldPos);
+    float ndotl = clamp(L.y * 0.85 + 0.25, 0.15, 1.0);
+    float translucency = pow(max(dot(-V, L), 0.0), 3.0) * vHeightFrac * 0.55;
+
+    float cloudVis = 1.0;
+    if (uCloudShadowsEnabled == 1) {
+        float c1 = noiseG(vWorldPos.xz * 0.0085 + vec2(uTime * 0.022, uTime * 0.011));
+        cloudVis = mix(1.0, 0.76, smoothstep(0.48, 0.78, c1));
+    }
+
+    float rootAO = mix(0.48, 1.0, vHeightFrac);
+    vec3 skyFill = mix(uGroundAmbient, mix(uSkyHorizon, uSkyZenith, 0.35), 0.65);
+    vec3 color = albedo * (skyFill * uAmbientIntensity * 1.45 + uSunColor * (ndotl * 1.55 + translucency) * cloudVis) * rootAO;
+
+    float dist = length(uCameraPos - vWorldPos);
+    float fogFactor = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1.0), 0.0, 1.0);
+    float sunInscatter = pow(max(dot(-V, L), 0.0), 6.0);
+    vec3 fogColor = mix(uSkyHorizon, uSunColor * 1.15, sunInscatter * 0.42);
+    color = mix(color, fogColor, fogFactor * fogFactor * 0.86);
+
+    FragColor = vec4(color, 0.0);
 }
 )GLSL";
 
@@ -714,6 +855,11 @@ uniform int uGodRaysEnabled;
 uniform float uGodRayIntensity;
 uniform vec2 uSunScreenPos;
 uniform vec3 uSunColorComp;
+uniform int uSsrEnabled;
+uniform float uSsrIntensity;
+uniform mat4 uViewProjComp;
+uniform mat4 uInvViewProjComp;
+uniform vec3 uCameraPosComp;
 uniform float uExposure;
 uniform vec2 uTexelSize;
 uniform float uNearPlane;
@@ -786,7 +932,51 @@ vec3 sampleHdrFxaa(vec2 uv) {
 }
 
 void main() {
+    vec4 hdrRaw = texture(uHdrTex, vUV);
     vec3 hdr = sampleHdrFxaa(vUV);
+
+    // Real-Time Screen-Space Reflections (SSR) on Wet Roads, Glossy Vehicles & Reflective Surfaces (v1.4.0)!
+    if (uSsrEnabled == 1 && hdrRaw.a > 0.14) {
+        float depthCenter = texture(uDepthTex, vUV).r;
+        if (depthCenter < 0.9985) {
+            vec4 ndc = vec4(vUV * 2.0 - 1.0, depthCenter * 2.0 - 1.0, 1.0);
+            vec4 wpH = uInvViewProjComp * ndc;
+            vec3 worldPos = wpH.xyz / max(wpH.w, 0.0001);
+
+            vec3 dPdx = dFdx(worldPos);
+            vec3 dPdy = dFdy(worldPos);
+            vec3 N = normalize(cross(dPdx, dPdy));
+            vec3 viewDir = normalize(worldPos - uCameraPosComp);
+            if (dot(N, -viewDir) < 0.0) N = -N;
+
+            vec3 R = normalize(reflect(viewDir, N));
+            float fresnel = 0.25 + 0.75 * pow(clamp(1.0 - max(dot(N, -viewDir), 0.0), 0.0, 1.0), 3.0);
+
+            float stepDist = 1.6;
+            vec3 marchPos = worldPos + N * 0.08;
+            for (int i = 0; i < 12; ++i) {
+                marchPos += R * stepDist;
+                stepDist *= 1.24;
+                vec4 clip = uViewProjComp * vec4(marchPos, 1.0);
+                if (clip.w <= 0.05) break;
+                vec3 proj = (clip.xyz / clip.w) * 0.5 + 0.5;
+                if (proj.x < 0.01 || proj.x > 0.99 || proj.y < 0.01 || proj.y > 0.99 || proj.z > 0.999) break;
+
+                float sceneDepth = texture(uDepthTex, proj.xy).r;
+                float rayLinZ = linearizeDepth(proj.z);
+                float sceneLinZ = linearizeDepth(sceneDepth);
+                float diff = rayLinZ - sceneLinZ;
+                if (diff > 0.08 && diff < (0.85 + stepDist * 0.65)) {
+                    vec2 edgeDist = min(proj.xy, 1.0 - proj.xy);
+                    float edgeFade = smoothstep(0.0, 0.14, min(edgeDist.x, edgeDist.y));
+                    vec3 reflCol = texture(uHdrTex, proj.xy).rgb;
+                    float weight = clamp(hdrRaw.a * uSsrIntensity * fresnel * edgeFade * 0.72, 0.0, 0.72);
+                    hdr = mix(hdr, reflCol, weight);
+                    break;
+                }
+            }
+        }
+    }
 
     // Real-time Screen-Space Depth Contact AO (SSAO) darkening geometric crevices & contact seams!
     if (uSsaoEnabled == 1) {
@@ -1350,7 +1540,7 @@ public:
     bool initialize(int viewportWidth, int viewportHeight) override {
         if (!gl::loadFunctions()) return false;
 
-        m_info.backendName = "OpenGL 3.3 Core (v1.3.0: 3D Heightmap Terrain + Volumetric God-Rays + GPU Skinning + FXAA + GGX PBR + SSAO)";
+        m_info.backendName = "OpenGL 3.3 Core (v1.4.0: GPU Instanced Grass + SSR + Frustum Culling + 3D Terrain + God-Rays + GPU Skinning + FXAA + GGX PBR)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
@@ -1358,12 +1548,13 @@ public:
         m_shadowProgram = linkProgram(kShadowVertexShader, kShadowFragmentShader, "ShadowPass");
         m_skyProgram = linkProgram(kSkyVertexShader, kSkyFragmentShader, "SkyPass");
         m_litProgram = linkProgram(kLitVertexShader, kLitFragmentShader, "Lit3DPass");
+        m_grassProgram = linkProgram(kGrassVertexShader, kGrassFragmentShader, "InstancedGrassPass");
         m_waterProgram = linkProgram(kWaterVertexShader, kWaterFragmentShader, "OceanWaterPass");
         m_bloomExtractProgram = linkProgram(kPostVertexShader, kBloomExtractFrag, "BloomExtract");
         m_bloomBlurProgram = linkProgram(kPostVertexShader, kBloomBlurFrag, "BloomBlur");
         m_compositeProgram = linkProgram(kPostVertexShader, kCompositeFrag, "HDRComposite");
 
-        if (!m_shadowProgram || !m_skyProgram || !m_litProgram || !m_waterProgram ||
+        if (!m_shadowProgram || !m_skyProgram || !m_litProgram || !m_grassProgram || !m_waterProgram ||
             !m_bloomExtractProgram || !m_bloomBlurProgram || !m_compositeProgram) {
             shutdown();
             return false;
@@ -1484,7 +1675,26 @@ public:
         m_compGodRayIntensity = gl::getUniformLocation(m_compositeProgram, "uGodRayIntensity");
         m_compSunScreenPos = gl::getUniformLocation(m_compositeProgram, "uSunScreenPos");
         m_compSunColor = gl::getUniformLocation(m_compositeProgram, "uSunColorComp");
+        m_compSsrEnabled = gl::getUniformLocation(m_compositeProgram, "uSsrEnabled");
+        m_compSsrIntensity = gl::getUniformLocation(m_compositeProgram, "uSsrIntensity");
+        m_compViewProj = gl::getUniformLocation(m_compositeProgram, "uViewProjComp");
+        m_compInvViewProj = gl::getUniformLocation(m_compositeProgram, "uInvViewProjComp");
+        m_compCameraPos = gl::getUniformLocation(m_compositeProgram, "uCameraPosComp");
         m_compExposure = gl::getUniformLocation(m_compositeProgram, "uExposure");
+
+        m_grassViewProj = gl::getUniformLocation(m_grassProgram, "uViewProj");
+        m_grassCamPos = gl::getUniformLocation(m_grassProgram, "uCameraPos");
+        m_grassInteractPos = gl::getUniformLocation(m_grassProgram, "uInteractPos");
+        m_grassTime = gl::getUniformLocation(m_grassProgram, "uTime");
+        m_grassSunDir = gl::getUniformLocation(m_grassProgram, "uSunDir");
+        m_grassSunColor = gl::getUniformLocation(m_grassProgram, "uSunColor");
+        m_grassSkyZenith = gl::getUniformLocation(m_grassProgram, "uSkyZenith");
+        m_grassSkyHorizon = gl::getUniformLocation(m_grassProgram, "uSkyHorizon");
+        m_grassGroundAmbient = gl::getUniformLocation(m_grassProgram, "uGroundAmbient");
+        m_grassAmbientInt = gl::getUniformLocation(m_grassProgram, "uAmbientIntensity");
+        m_grassFogStart = gl::getUniformLocation(m_grassProgram, "uFogStart");
+        m_grassFogEnd = gl::getUniformLocation(m_grassProgram, "uFogEnd");
+        m_grassCloudShadows = gl::getUniformLocation(m_grassProgram, "uCloudShadowsEnabled");
         m_compTexelSize = gl::getUniformLocation(m_compositeProgram, "uTexelSize");
         m_compNearPlane = gl::getUniformLocation(m_compositeProgram, "uNearPlane");
         m_compFarPlane = gl::getUniformLocation(m_compositeProgram, "uFarPlane");
@@ -1582,6 +1792,7 @@ public:
         m_ringMesh.destroy();
         m_terrainMesh.destroy();
         m_terrainMeshBuilt = false;
+        destroyGrassBuffers();
 
         destroyPostBuffers();
         if (m_shadowTexFar) { glDeleteTextures(1, &m_shadowTexFar); m_shadowTexFar = 0; }
@@ -1594,6 +1805,7 @@ public:
         delProg(m_shadowProgram);
         delProg(m_skyProgram);
         delProg(m_litProgram);
+        delProg(m_grassProgram);
         delProg(m_waterProgram);
         delProg(m_bloomExtractProgram);
         delProg(m_bloomBlurProgram);
@@ -1602,6 +1814,30 @@ public:
     }
 
     void setAssetRoot(const std::filesystem::path& assetRoot) override { m_assetRoot = assetRoot; }
+
+    void preloadModels(const World& world) override {
+        if (!m_initialized) return;
+        std::size_t preloaded = 0;
+        for (const Entity& e : world.entities()) {
+            if (e.shape == EntityShape::Model && !e.modelPath.empty()) {
+                const bool alreadyCached = m_modelCache.contains(e.modelPath);
+                if (getOrLoadModel(e.modelPath) && !alreadyCached) {
+                    ++preloaded;
+                }
+            }
+        }
+        if (world.terrain().enabled) {
+            ensureTerrainMesh(world);
+        }
+        if (world.sky().grassEnabled) {
+            ensureGrassField(world);
+        }
+        if (preloaded > 0) {
+            std::cout << "[SAGE][Preload] Pre-warmed " << preloaded
+                      << " .glb model(s) + 3D Terrain + " << m_grassCount
+                      << " instanced grass clumps before Frame 1!\n";
+        }
+    }
 
     void onResize(int width, int height) override {
         m_viewportWidth = width > 0 ? width : 1;
@@ -1641,6 +1877,41 @@ public:
         if (world.terrain().enabled) {
             ensureTerrainMesh(world);
         }
+        if (sky.grassEnabled) {
+            ensureGrassField(world);
+        }
+
+        // Extract 6 normalized camera frustum planes (Gribb-Hartmann) for fast AAA off-screen culling!
+        glm::vec4 frustumPlanes[6];
+        {
+            const glm::vec4 r0(viewProj[0][0], viewProj[1][0], viewProj[2][0], viewProj[3][0]);
+            const glm::vec4 r1(viewProj[0][1], viewProj[1][1], viewProj[2][1], viewProj[3][1]);
+            const glm::vec4 r2(viewProj[0][2], viewProj[1][2], viewProj[2][2], viewProj[3][2]);
+            const glm::vec4 r3(viewProj[0][3], viewProj[1][3], viewProj[2][3], viewProj[3][3]);
+            frustumPlanes[0] = r3 + r0; // Left
+            frustumPlanes[1] = r3 - r0; // Right
+            frustumPlanes[2] = r3 + r1; // Bottom
+            frustumPlanes[3] = r3 - r1; // Top
+            frustumPlanes[4] = r3 + r2; // Near
+            frustumPlanes[5] = r3 - r2; // Far
+            for (int i = 0; i < 6; ++i) {
+                const float len = glm::length(glm::vec3(frustumPlanes[i]));
+                if (len > 1e-5f) frustumPlanes[i] /= len;
+            }
+        }
+        auto isEntityInFrustum = [&](const Entity& e) -> bool {
+            // Never cull huge ground/water planes or close entities
+            if (e.shape == EntityShape::Plane || e.shape == EntityShape::Water) return true;
+            const float maxScale = std::max({std::abs(e.scale.x), std::abs(e.scale.y), std::abs(e.scale.z), 1.0f});
+            const float boundRadius = (e.shape == EntityShape::Model) ? (maxScale * 26.0f + 12.0f) : (maxScale * 1.4f + 2.0f);
+            const glm::vec3 center(e.position.x, e.position.y + boundRadius * 0.25f, e.position.z);
+            for (int i = 0; i < 6; ++i) {
+                if (glm::dot(glm::vec3(frustumPlanes[i]), center) + frustumPlanes[i].w < -boundRadius) {
+                    return false;
+                }
+            }
+            return true;
+        };
 
         // --- Pass 0: Texel-Snapped 2-Cascade 2048x2048 Directional Shadow Maps (Near 32m + Far 135m!) ---
         const bool useShadows = sky.shadowsEnabled && (m_shadowFbo != 0) && (m_shadowFboFar != 0);
@@ -1851,10 +2122,15 @@ public:
             drawSubMesh(m_terrainMesh, glm::vec3(1.0f), glm::vec3(0.0f), 0.02f, 0.88f, 0.0f);
         }
 
+        m_lastCulledCount = 0;
         for (const Entity& e : world.entities()) {
             if (!e.visible) continue;
             if (e.shape == EntityShape::Water) {
                 m_waterEntitiesScratch.push_back(&e);
+                continue;
+            }
+            if (!isEntityInFrustum(e)) {
+                ++m_lastCulledCount;
                 continue;
             }
 
@@ -1913,6 +2189,28 @@ public:
             const glm::vec3 baseCol(e.color.r, e.color.g, e.color.b);
             const glm::vec3 emissiveCol = (e.emissive || e.shape == EntityShape::Ring) ? baseCol * 1.15f : glm::vec3(0.0f);
             drawSubMesh(*prim, baseCol, emissiveCol, 0.10f, roughness, pulse);
+        }
+
+        // --- Pass 2B: GPU-Instanced Wind-Swaying 3D Grass & Wildflowers (Single Instanced Draw Call!) ---
+        if (sky.grassEnabled && m_grassVao != 0 && m_grassCount > 0) {
+            gl::useProgram(m_grassProgram);
+            gl::uniformMatrix4fv(m_grassViewProj, 1, GL_FALSE, glm::value_ptr(viewProj));
+            gl::uniform3f(m_grassCamPos, camPos.x, camPos.y, camPos.z);
+            gl::uniform3f(m_grassInteractPos, sky.grassInteractPos.x, sky.grassInteractPos.y, sky.grassInteractPos.z);
+            gl::uniform1f(m_grassTime, timeSeconds);
+            gl::uniform3f(m_grassSunDir, sky.sunDirection.x, sky.sunDirection.y, sky.sunDirection.z);
+            gl::uniform3f(m_grassSunColor, sky.sunColor.r, sky.sunColor.g, sky.sunColor.b);
+            gl::uniform3f(m_grassSkyZenith, sky.skyZenithColor.r, sky.skyZenithColor.g, sky.skyZenithColor.b);
+            gl::uniform3f(m_grassSkyHorizon, sky.skyHorizonColor.r, sky.skyHorizonColor.g, sky.skyHorizonColor.b);
+            gl::uniform3f(m_grassGroundAmbient, sky.groundAmbientColor.r, sky.groundAmbientColor.g, sky.groundAmbientColor.b);
+            gl::uniform1f(m_grassAmbientInt, sky.ambientIntensity);
+            gl::uniform1f(m_grassFogStart, sky.fogStart);
+            gl::uniform1f(m_grassFogEnd, sky.fogEnd);
+            gl::uniform1i(m_grassCloudShadows, sky.cloudShadowsEnabled ? 1 : 0);
+
+            gl::bindVertexArray(m_grassVao);
+            gl::drawArraysInstanced(GL_TRIANGLES, 0, 12, static_cast<GLsizei>(m_grassCount));
+            gl::bindVertexArray(0);
         }
 
         // --- Pass 3: Animated 3D Ocean Water (Alpha-Blended Waves + Fresnel + Foam) ---
@@ -2076,6 +2374,11 @@ public:
             gl::uniform1f(m_compGodRayIntensity, sky.godRayIntensity * sunVisFactor);
             gl::uniform2f(m_compSunScreenPos, sunUv.x, sunUv.y);
             gl::uniform3f(m_compSunColor, sky.sunColor.r, sky.sunColor.g, sky.sunColor.b);
+            gl::uniform1i(m_compSsrEnabled, sky.ssrEnabled ? 1 : 0);
+            gl::uniform1f(m_compSsrIntensity, sky.ssrIntensity);
+            gl::uniformMatrix4fv(m_compViewProj, 1, GL_FALSE, glm::value_ptr(viewProj));
+            gl::uniformMatrix4fv(m_compInvViewProj, 1, GL_FALSE, glm::value_ptr(invViewProj));
+            gl::uniform3f(m_compCameraPos, camPos.x, camPos.y, camPos.z);
 
             gl::uniform1f(m_compExposure, sky.exposure);
             gl::uniform2f(m_compTexelSize, 1.0f / static_cast<float>(m_viewportWidth), 1.0f / static_cast<float>(m_viewportHeight));
@@ -2092,9 +2395,106 @@ public:
     void endFrame() override {}
     RendererInfo info() const override { return m_info; }
     std::size_t loadedModelCount() const override { return m_modelCache.size(); }
+    std::size_t grassInstanceCount() const override { return m_grassCount; }
+    std::size_t lastCulledCount() const override { return m_lastCulledCount; }
 
 private:
     bool m_hdrProgramReady() const { return m_compositeProgram != 0; }
+
+    void destroyGrassBuffers() {
+        if (m_grassInstVbo) { gl::deleteBuffers(1, &m_grassInstVbo); m_grassInstVbo = 0; }
+        if (m_grassBladeVbo) { gl::deleteBuffers(1, &m_grassBladeVbo); m_grassBladeVbo = 0; }
+        if (m_grassVao) { gl::deleteVertexArrays(1, &m_grassVao); m_grassVao = 0; }
+        m_grassCount = 0;
+        m_grassBuilt = false;
+    }
+
+    void ensureGrassField(const World& world) {
+        if (m_grassBuilt) return;
+        destroyGrassBuffers();
+
+        // Crossed 2-blade tapered 3D grass clump (4 triangles = 12 vertices per instance!)
+        constexpr float kW = 0.085f;
+        constexpr float kBladeVerts[12 * 3] = {
+            // Blade A (along X)
+            -kW,       0.0f, 0.0f,    kW,       0.0f, 0.0f,    kW * 0.45f, 0.55f, 0.03f,
+            -kW,       0.0f, 0.0f,    kW * 0.45f, 0.55f, 0.03f, 0.0f,      1.00f, 0.08f,
+            // Blade B (crossed along Z)
+            0.0f,      0.0f, -kW,     0.0f,      0.0f, kW,     -0.03f,     0.55f, kW * 0.45f,
+            0.0f,      0.0f, -kW,     -0.03f,    0.55f, kW * 0.45f, -0.08f, 1.00f, 0.0f,
+        };
+
+        struct GrassInst {
+            float px, py, pz, h;
+            float yaw, colorShift, windPhase, flower;
+        };
+        std::vector<GrassInst> instances;
+        instances.reserve(42000);
+
+        std::uint32_t rng = 0x5A6E1400u;
+        auto rand01 = [&]() -> float {
+            rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5;
+            return static_cast<float>(rng & 0x00FFFFFFu) / static_cast<float>(0x01000000u);
+        };
+
+        // Scatter lush swaying grass clumps across Alpine Highlands (NE) & outer Parkland (NW) away from roads/plaza/water!
+        constexpr int kCandidates = 75000;
+        for (int i = 0; i < kCandidates; ++i) {
+            const float x = -255.0f + rand01() * 510.0f;
+            const float z = -40.0f + rand01() * 295.0f; // Northern lush biomes (NE Highlands + NW Parkland)
+            const float ax = std::abs(x);
+            const float az = std::abs(z);
+            const float cheb = std::max(ax, az);
+
+            // Exclude highways, 3 ring roads, Downtown core & Marina lagoon!
+            if (ax < 15.0f || az < 15.0f) continue;
+            if (std::abs(cheb - 64.0f) < 13.0f || std::abs(cheb - 148.0f) < 14.0f || std::abs(cheb - 236.0f) < 14.0f) continue;
+            if (cheb < 66.0f) continue; // Keep Downtown Plaza crisp
+            if (x < 0.0f && cheb < 158.0f) continue; // Keep NW city blocks clean asphalt
+            if (z < 12.0f) continue;
+
+            const TerrainSample ts = world.sampleTerrain(x, z);
+            if (ts.height > 16.0f || ts.normal.y < 0.72f) continue; // Keep off sheer cliffs & snow peaks
+
+            const float h = 0.42f + rand01() * 0.48f;
+            const float yaw = rand01() * 2.0f * kPi;
+            const float colShift = rand01();
+            const float phase = rand01() * 6.2831f;
+            const float flower = (rand01() > 0.93f) ? 1.0f : 0.0f;
+            instances.push_back({x, ts.height, z, h, yaw, colShift, phase, flower});
+            if (instances.size() >= 38000) break;
+        }
+
+        m_grassCount = instances.size();
+        if (m_grassCount == 0) {
+            m_grassBuilt = true;
+            return;
+        }
+
+        gl::genVertexArrays(1, &m_grassVao);
+        gl::genBuffers(1, &m_grassBladeVbo);
+        gl::genBuffers(1, &m_grassInstVbo);
+        gl::bindVertexArray(m_grassVao);
+
+        gl::bindBuffer(GL_ARRAY_BUFFER, m_grassBladeVbo);
+        gl::bufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(kBladeVerts)), kBladeVerts, GL_STATIC_DRAW);
+        gl::vertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+        gl::enableVertexAttribArray(0);
+
+        gl::bindBuffer(GL_ARRAY_BUFFER, m_grassInstVbo);
+        gl::bufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(instances.size() * sizeof(GrassInst)), instances.data(), GL_STATIC_DRAW);
+        gl::vertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(GrassInst), reinterpret_cast<void*>(offsetof(GrassInst, px)));
+        gl::enableVertexAttribArray(1);
+        gl::vertexAttribDivisor(1, 1);
+        gl::vertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(GrassInst), reinterpret_cast<void*>(offsetof(GrassInst, yaw)));
+        gl::enableVertexAttribArray(2);
+        gl::vertexAttribDivisor(2, 1);
+
+        gl::bindVertexArray(0);
+        m_grassBuilt = true;
+        std::cout << "[SAGE][Foliage] Built GPU-instanced grass field (" << m_grassCount
+                  << " clumps = " << (m_grassCount * 2) << " wind-swaying 3D blades, 1 draw call)\n";
+    }
 
     void ensureTerrainMesh(const World& world) {
         const TerrainSettings& cfg = world.terrain();
@@ -2488,6 +2888,14 @@ private:
     GLint m_uFogStart = -1, m_uFogEnd = -1;
     GLint m_uPointLightCount = -1, m_uPointLightPosRadius = -1, m_uPointLightColorInt = -1;
 
+    GLuint m_grassProgram = 0;
+    GLint m_grassViewProj = -1, m_grassCamPos = -1, m_grassInteractPos = -1, m_grassTime = -1;
+    GLint m_grassSunDir = -1, m_grassSunColor = -1, m_grassSkyZenith = -1, m_grassSkyHorizon = -1;
+    GLint m_grassGroundAmbient = -1, m_grassAmbientInt = -1, m_grassFogStart = -1, m_grassFogEnd = -1, m_grassCloudShadows = -1;
+    GLuint m_grassVao = 0, m_grassBladeVbo = 0, m_grassInstVbo = 0;
+    std::size_t m_grassCount = 0;
+    bool m_grassBuilt = false;
+
     GLuint m_waterProgram = 0;
     GLint m_waterModel = -1, m_waterViewProj = -1, m_waterTime = -1, m_waterShallow = -1;
     GLint m_waterCamPos = -1, m_waterSunDir = -1, m_waterSunColor = -1;
@@ -2499,7 +2907,9 @@ private:
     GLint m_compHdrTex = -1, m_compBloomTex = -1, m_compDepthTex = -1, m_compBloomEnabled = -1, m_compBloomIntensity = -1;
     GLint m_compSsaoEnabled = -1, m_compFxaaEnabled = -1, m_compGodRaysEnabled = -1, m_compGodRayIntensity = -1;
     GLint m_compSunScreenPos = -1, m_compSunColor = -1;
+    GLint m_compSsrEnabled = -1, m_compSsrIntensity = -1, m_compViewProj = -1, m_compInvViewProj = -1, m_compCameraPos = -1;
     GLint m_compExposure = -1, m_compTexelSize = -1, m_compNearPlane = -1, m_compFarPlane = -1;
+    std::size_t m_lastCulledCount = 0;
 
     GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh, m_terrainMesh;
     bool m_terrainMeshBuilt = false;

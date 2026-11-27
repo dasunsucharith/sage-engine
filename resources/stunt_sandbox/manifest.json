@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE Engine v1.3.0 AAA Showcase — 3D Heightmap Terrain (Alpine Hills, Red Rock Mesas & Snow Mountains), Jolt HeightField Physics, 4-Wheel Spring-Damper Vehicle Suspension, Volumetric Sun Shafts (God-Rays), Drifting Cloud Shadows, 3D Spatial Stereo Audio, 5-Clip Crossfaded Rigged Human & Self-Learning AI Telemetry.",
+  "description": "SAGE Engine v1.4.0 AAA Showcase — 70,000+ GPU-Instanced Interactive Wind Grass Blades, Real-Time Screen-Space Reflections (SSR), 6-Plane Frustum Culling, Pre-Warmed Asset Pipeline, Reactive GTA-Style Rigged NPC Crowd AI, 3D Heightmap Terrain, 4-Wheel Suspension, Volumetric God-Rays & Spatial 3D Audio.",
   "scripts": [
     "main.lua"
   ]

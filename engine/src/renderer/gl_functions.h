@@ -143,6 +143,8 @@ using PFNGLDELETEBUFFERSPROC = void(APIENTRYP)(GLsizei n, const GLuint* buffers)
 
 using PFNGLVERTEXATTRIBPOINTERPROC = void(APIENTRYP)(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void* pointer);
 using PFNGLENABLEVERTEXATTRIBARRAYPROC = void(APIENTRYP)(GLuint index);
+using PFNGLVERTEXATTRIBDIVISORPROC = void(APIENTRYP)(GLuint index, GLuint divisor);
+using PFNGLDRAWARRAYSINSTANCEDPROC = void(APIENTRYP)(GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
 
 using PFNGLACTIVETEXTUREPROC = void(APIENTRYP)(GLenum texture);
 using PFNGLGENERATEMIPMAPPROC = void(APIENTRYP)(GLenum target);
@@ -193,6 +195,8 @@ extern PFNGLDELETEBUFFERSPROC deleteBuffers;
 
 extern PFNGLVERTEXATTRIBPOINTERPROC vertexAttribPointer;
 extern PFNGLENABLEVERTEXATTRIBARRAYPROC enableVertexAttribArray;
+extern PFNGLVERTEXATTRIBDIVISORPROC vertexAttribDivisor;
+extern PFNGLDRAWARRAYSINSTANCEDPROC drawArraysInstanced;
 
 extern PFNGLACTIVETEXTUREPROC activeTexture;
 extern PFNGLGENERATEMIPMAPPROC generateMipmap;

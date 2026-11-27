@@ -34,6 +34,7 @@ public:
     virtual void shutdown() = 0;
 
     virtual void setAssetRoot(const std::filesystem::path& assetRoot) = 0;
+    virtual void preloadModels(const World& world) = 0;
     virtual void onResize(int width, int height) = 0;
     virtual void beginFrame(const ClearColor& clearColor) = 0;
     virtual void renderWorld(const World& world, float timeSeconds) = 0;
@@ -41,6 +42,8 @@ public:
 
     virtual RendererInfo info() const = 0;
     virtual std::size_t loadedModelCount() const = 0;
+    virtual std::size_t grassInstanceCount() const { return 0; }
+    virtual std::size_t lastCulledCount() const { return 0; }
 };
 
 // Creates the default OpenGL 3.3 Core 3D renderer backend.

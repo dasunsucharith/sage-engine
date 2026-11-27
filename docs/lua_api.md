@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (**`v1.3.0`**) — **Procedural 3D Heightmap Terrain (Alpine Hills, Red Rock Mesas & Snow Mountains) + Jolt 129×129 HeightField Physics**, **Volumetric Sun Shafts (God-Rays)**, **Drifting Cloud Shadows**, **3D Spatial Stereo Audio Emitters**, **Self-Learning AI Session Telemetry**, **glTF 2.0 GPU Skeletal Skinning (`JOINTS_0`/`WEIGHTS_0`) & Crossfade Blending**, **FXAA 3.11**, **Cook-Torrance GGX PBR + Depth SSAO**, **2-Cascade PCF Soft Shadows**, **Dynamic Rain & Wet Roads**, **Live World Editor (`F1`)**, **33 Blender `.glb` Models**, **Jolt Physics 5.7**, and **miniaudio 0.11**.
+> **Status:** Live (**`v1.4.0`**) — **GPU-Instanced Wind-Swaying 3D Grass & Wildflowers (~57k blades in 1 draw call + interactive parting)**, **Real-Time Screen-Space Reflections (SSR)**, **6-Plane Camera Frustum Culling & Startup Asset Pre-Warming**, **Autonomous Reactive GTA-Style AI Crowd**, **Procedural 3D Heightmap Terrain + Jolt 129×129 HeightField Physics**, **Volumetric Sun Shafts (God-Rays)**, **Drifting Cloud Shadows**, **3D Spatial Stereo Audio Emitters**, **Self-Learning AI Session Telemetry**, **glTF 2.0 GPU Skeletal Skinning & Crossfade Blending**, **FXAA 3.11**, **Cook-Torrance GGX PBR + Depth SSAO**, **2-Cascade PCF Soft Shadows**, **Dynamic Rain & Wet Roads**, **Live World Editor (`F1`)**, **33 Blender `.glb` Models**, **Jolt Physics 5.7**, and **miniaudio 0.11**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -39,7 +39,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 
 ---
 
-## Implemented Namespaces (`v1.3.0`)
+## Implemented Namespaces (`v1.4.0`)
 
 ### `sage`
 | Function | Description |
@@ -83,6 +83,9 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setBloom(enabled [, intensity])` | Toggles real-time HDR `RGBA16F` Bloom post-processing and optionally sets bloom strength (`0.0`–`2.0`, default `0.55`). |
 | `world.setFXAA(enabled)` | Enables or disables GPU FXAA 3.11 edge-directed anti-aliasing in the HDR composite pass (`true` by default). |
 | `world.setSSAO(enabled)` | Enables or disables Screen-Space Depth Contact Ambient Occlusion (`true` by default). |
+| `world.setSSR(enabled [, intensity])` | Toggles Real-Time Screen-Space Reflections (SSR) for glossy wet roads & metallic vehicles and optionally sets reflection strength (`0.0`–`1.2`, default `0.62`). |
+| `world.setGrassEnabled(enabled)` | Enables or disables the single-draw-call GPU-instanced wind-swaying 3D grass & wildflower field (`true` by default). |
+| `world.setGrassInteractPos(x, y, z)` | Updates the real-time 3D world position (player or active vehicle) that bends and parts nearby 3D grass blades smoothly as you move through meadows. |
 | `world.setGodRays(enabled [, intensity])` | Toggles Screen-Space Volumetric Sun Shafts (Crepuscular God-Rays) and optionally sets intensity (`0.0`–`1.5`, default `0.42`). |
 | `world.setCloudShadows(enabled)` | Toggles drifting FBM cloud shadows cast across terrain, mountains, roads, and city blocks (`true` by default). |
 | `world.setTerrainEnabled(enabled)` | Enables or disables the synchronized 160×160 3D multi-biome heightmap terrain (`true` by default). |

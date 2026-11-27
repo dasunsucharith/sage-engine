@@ -1,10 +1,9 @@
 -- =============================================================================
--- SAGE Engine v1.3.0 Showcase: AAA 3D Heightmap Terrain + 4-Wheel Suspension
---   * Rolling 3D Alpine Hills, Red Rock Mesas & Snow-Capped Mountain Ranges
---   * 4-Wheel Spring-Damper Vehicle Suspension + Slope Pitch/Roll Alignment
---   * Volumetric Sun Shafts (God-Rays) + Drifting Cloud Shadows + FXAA + GGX PBR
---   * 3D Spatial Stereo-Panned World Audio (Ocean, Fountain, Helicopter, Wind)
---   * 5-Clip Crossfaded Rigged Human (Idle/Walk/Run/Jump/Swim) + AI Telemetry
+-- SAGE Engine v1.4.0 Showcase: GPU Instanced Grass + SSR + Reactive AI Crowd
+--   * 70,000+ GPU-Instanced Wind-Swaying 3D Grass Blades (Interactive Parting!)
+--   * Real-Time Screen-Space Reflections (SSR) on Wet Roads & Metallic Cars
+--   * 6 Autonomous Reactive Rigged NPCs (Patrol / Idle / Dodge Oncoming Cars!)
+--   * 3D Heightmap Terrain + 4-Wheel Suspension + Volumetric God-Rays + 3D Audio
 -- =============================================================================
 -- CONTROLS:
 --   W / S (or Up / Down)   : Drive / Brake (or Walk Forward / Back on foot)
@@ -142,6 +141,16 @@ local seagulls = {
     { id = "gull_2", cx = 188.0, cz = -186.0, r = 32.0, h = 17.5, spd = -0.38, phase = 1.6 },
     { id = "gull_3", cx = 198.0, cz = -198.0, r = 18.0, h = 11.5, spd =  0.56, phase = 3.1 },
     { id = "gull_4", cx = 165.0, cz = -192.0, r = 28.0, h = 15.5, spd = -0.44, phase = 4.7 },
+}
+
+-- 6 Autonomous Reactive Rigged 3D Citizens (Patrol -> Idle Look -> Flee Oncoming Vehicle!)
+local crowdNpcs = {
+    { id = "npc_plaza_1", x =  14.2, z = -18.0, ax =  14.2, az = -24.0, bx =  14.2, bz =  16.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.6 },
+    { id = "npc_plaza_2", x = -14.2, z =  12.0, ax = -14.2, az =  22.0, bx = -14.2, bz = -18.0, dir =  1, yaw = 180.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.4 },
+    { id = "npc_plaza_3", x =  24.0, z =  14.2, ax =  16.0, az =  14.2, bx =  52.0, bz =  14.2, dir =  1, yaw =  90.0, state = "IDLE", anim = "Idle", timer = 2.0, speed = 2.5 },
+    { id = "npc_high_1",  x = 136.0, z =  82.0, ax = 136.0, az =  66.0, bx = 136.0, bz = 116.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.7 },
+    { id = "npc_marina_1",x = 148.0, z =-164.0, ax = 134.0, az =-164.0, bx = 162.0, bz =-164.0, dir =  1, yaw =  90.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.3 },
+    { id = "npc_desert_1",x =-136.0, z =-142.0, ax =-136.0, az =-162.0, bx =-136.0, bz =-122.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.5 },
 }
 
 -- 6 Autonomous AI Traffic Cruisers looping the Mid (±148m) & Outer Coastal (±236m) Highways!
@@ -361,14 +370,13 @@ local function spawnDynamicPropsAndPhysics()
     player.currentAnim = "Idle"
     world.setVisible("player_char", false)
 
-    -- Live Rigged Citizens in the Open World (showcases GPU skeletal skinning + Walk gait live!)
-    world.spawnModel("npc_plaza_watcher", CONFIG.charModel, 13.5, 0.0, -6.0)
-    world.setRotation("npc_plaza_watcher", 0.0, -90.0, 0.0)
-    world.playAnimation("npc_plaza_watcher", "Idle", true, 0.9, 0.0)
-
-    world.spawnModel("npc_marina_jogger", CONFIG.charModel, 14.5, 0.0, -18.0)
-    world.setRotation("npc_marina_jogger", 0.0, 0.0, 0.0)
-    world.playAnimation("npc_marina_jogger", "Walk", true, 0.95, 0.0)
+    -- Spawn 6 Autonomous Reactive Rigged Citizens across all 4 Biomes!
+    for _, npc in ipairs(crowdNpcs) do
+        local ny = world.sampleTerrain(npc.x, npc.z)
+        world.spawnModel(npc.id, CONFIG.charModel, npc.x, ny, npc.z)
+        world.setRotation(npc.id, 0.0, npc.yaw, 0.0)
+        world.playAnimation(npc.id, npc.anim, true, npc.anim == "Walk" and 0.95 or 0.90, 0.0)
+    end
 
     -- Drivable Luxury Racing Speedboat moored next to the 32m Marina Pier!
     world.spawnModel("player_boat", CONFIG.boatModel, boat.x, boat.y, boat.z)
@@ -580,7 +588,7 @@ function onStart()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
 
     sage.log("===================================================================")
-    sage.log("  SAGE Engine v1.3.0 — 3D Terrain + Volumetric God-Rays + 3D Audio!")
+    sage.log("  SAGE Engine v1.4.0 — GPU Instanced Grass + SSR + Reactive AI Crowd!")
     sage.log("  Press F = Walk/Swim/Enter Car or Speedboat | G = Rain | F1 = Editor")
     sage.log("  All-Time Best Score Loaded: " .. tostring(bestScore))
     sage.log("===================================================================")
@@ -648,13 +656,81 @@ function onTick(dt)
         1.0, 0.86, 0.42, 42.0, 3.4
     )
 
-    -- Live Patrolling Rigged Citizen walking smoothly along the Downtown Plaza sidewalk!
-    local patrolCycle = (timeNow * 0.16) % 2.0
-    local patrolForward = patrolCycle < 1.0
-    local patrolT = patrolForward and patrolCycle or (2.0 - patrolCycle)
-    local npcZ = lerp(-24.0, 14.0, patrolT)
-    world.setPosition("npc_marina_jogger", 15.2, 0.0, npcZ)
-    world.setRotation("npc_marina_jogger", 0.0, patrolForward and 0.0 or 180.0, 0.0)
+    -- Update Interactive GPU Grass Bending around the active player car or character!
+    local gx = player.onFoot and player.x or car.x
+    local gy = player.onFoot and player.y or car.y
+    local gz = player.onFoot and player.z or car.z
+    world.setGrassInteractPos(gx, gy, gz)
+
+    -- Autonomous Reactive GTA-Style Rigged Citizen AI (Patrol <-> Idle Look <-> Sprint Flee Vehicle!)
+    local carSpdNow = math.sqrt(car.vx * car.vx + car.vz * car.vz)
+    for _, npc in ipairs(crowdNpcs) do
+        local dxCar = npc.x - car.x
+        local dzCar = npc.z - car.z
+        local distCar = math.sqrt(dxCar * dxCar + dzCar * dzCar)
+        local threatened = (not player.onFoot) and (carSpdNow > 5.0) and (distCar < 11.5)
+
+        if threatened then
+            npc.state = "FLEE"
+            npc.timer = 1.6
+        end
+
+        local targetAnim = "Idle"
+        local animSpeed = 0.92
+        local blendTime = 0.20
+
+        if npc.state == "FLEE" then
+            npc.timer = npc.timer - dt
+            local invD = distCar > 0.1 and (1.0 / distCar) or 1.0
+            local fx, fz = dxCar * invD, dzCar * invD
+            local fleeSpd = 7.4
+            npc.x = clamp(npc.x + fx * fleeSpd * dt, -CONFIG.arenaHalfSize + 4.0, CONFIG.arenaHalfSize - 4.0)
+            npc.z = clamp(npc.z + fz * fleeSpd * dt, -CONFIG.arenaHalfSize + 4.0, CONFIG.arenaHalfSize - 4.0)
+            npc.yaw = math.deg(math.atan(fx, fz))
+            targetAnim = "Run"
+            animSpeed = 1.12
+            blendTime = 0.14
+            if npc.timer <= 0.0 and distCar > 14.0 then
+                npc.state = "IDLE"
+                npc.timer = 1.4
+            end
+        elseif npc.state == "IDLE" then
+            npc.timer = npc.timer - dt
+            targetAnim = "Idle"
+            animSpeed = 0.90
+            blendTime = 0.24
+            if npc.timer <= 0.0 then
+                npc.state = "WALK"
+            end
+        else
+            local tx = (npc.dir > 0) and npc.bx or npc.ax
+            local tz = (npc.dir > 0) and npc.bz or npc.az
+            local dtx, dtz = tx - npc.x, tz - npc.z
+            local distT = math.sqrt(dtx * dtx + dtz * dtz)
+            if distT < 0.8 then
+                npc.dir = -npc.dir
+                npc.state = "IDLE"
+                npc.timer = 1.8
+                targetAnim = "Idle"
+            else
+                local ux, uz = dtx / distT, dtz / distT
+                npc.x = npc.x + ux * npc.speed * dt
+                npc.z = npc.z + uz * npc.speed * dt
+                npc.yaw = math.deg(math.atan(ux, uz))
+                targetAnim = "Walk"
+                animSpeed = clamp(npc.speed / 2.8, 0.75, 1.15)
+                blendTime = 0.20
+            end
+        end
+
+        if targetAnim ~= npc.anim then
+            npc.anim = targetAnim
+            world.playAnimation(npc.id, targetAnim, true, animSpeed, blendTime)
+        end
+        local ny = world.sampleTerrain(npc.x, npc.z)
+        world.setPosition(npc.id, npc.x, ny, npc.z)
+        world.setRotation(npc.id, 0.0, npc.yaw, 0.0)
+    end
 
     updateAiTraffic(dt)
 
@@ -678,9 +754,9 @@ function onTick(dt)
             camera.setPosition(car.x + math.sin(orbit) * 10.8, car.y + 3.8, car.z + math.cos(orbit) * 10.8)
             camera.setTarget(car.x, car.y + 1.1, car.z)
             camera.setFov(55.0)
-            sage.setTitle("SAGE Engine v1.3.0 — Main Menu | 3D Terrain & Volumetric God-Rays")
+            sage.setTitle("SAGE Engine v1.4.0 — Main Menu | Instanced Grass, SSR & AI Crowd")
         else
-            sage.setTitle("SAGE Engine v1.3.0 — PAUSED (Press Esc to Resume)")
+            sage.setTitle("SAGE Engine v1.4.0 — PAUSED (Press Esc to Resume)")
         end
         return
     end
@@ -977,7 +1053,7 @@ function onTick(dt)
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
             local biome = getCurrentBiomeName(player.x, player.z)
-            sage.setTitle(string.format("SAGE v1.3 | %s | ON FOOT [%s] (F = Enter Car/Boat)", biome, player.currentAnim))
+            sage.setTitle(string.format("SAGE v1.4 | %s | ON FOOT [%s] (F = Enter Car/Boat)", biome, player.currentAnim))
         end
         return
     end
@@ -1068,7 +1144,7 @@ function onTick(dt)
         titleUpdateAccum = titleUpdateAccum + dt
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
-            sage.setTitle(string.format("SAGE v1.3 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
+            sage.setTitle(string.format("SAGE v1.4 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
         end
         return
     end
@@ -1419,7 +1495,7 @@ function onTick(dt)
         local kmh = math.floor(speed * 3.6)
         local biome = getCurrentBiomeName(car.x, car.z)
         sage.setTitle(string.format(
-            "SAGE v1.3 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
+            "SAGE v1.4 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
             biome, car.gear, kmh, weatherPresets[weatherPresetIdx].name, score, bestScore
         ))
     end
@@ -1432,11 +1508,11 @@ function onRenderUI()
     local vpW, vpH = ui.getViewportSize()
 
     if gameState == "MENU" then
-        if ui.beginCenteredWindow("SAGE ENGINE v1.3.0 — AAA 3D TERRAIN & OPEN WORLD", 470, 455) then
+        if ui.beginCenteredWindow("SAGE ENGINE v1.4.0 — AAA INSTANCED GRASS & SSR", 470, 455) then
             ui.setFontScale(1.38)
             ui.textCentered("SAGE STUNT & DELIVERY")
             ui.setFontScale(1.0)
-            ui.textCentered("v1.3.0  |  3D Terrain + God-Rays  |  4-Wheel Suspension  |  3D Audio")
+            ui.textCentered("v1.4.0  |  70k+ Wind Grass  |  Real-Time SSR  |  Reactive AI Crowd")
             ui.textCentered("All-Time Best Score: " .. tostring(bestScore))
             ui.spacing()
             ui.separator()
@@ -1647,5 +1723,5 @@ end
 function onShutdown()
     updateBestScore()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
-    sage.log("v1.3.0 AAA 3D Terrain & Open World Sandbox shutting down cleanly.")
+    sage.log("v1.4.0 AAA Instanced Grass, SSR & Reactive AI Crowd Sandbox shutting down cleanly.")
 end

@@ -129,6 +129,10 @@ struct SkySettings {
     bool godRaysEnabled = true;
     float godRayIntensity = 0.42f;
     bool cloudShadowsEnabled = true;
+    bool ssrEnabled = true;
+    float ssrIntensity = 0.62f;
+    bool grassEnabled = true;
+    Vec3 grassInteractPos{0.0f, 0.0f, 0.0f};
     float exposure = 1.08f;
     float rainIntensity = 0.0f;
     float wetness = 0.0f;

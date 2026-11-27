@@ -22,6 +22,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [014](014-gltf-gpu-skeletal-skinning-and-human-rig.md) | glTF 2.0 GPU Skeletal Skinning (`JOINTS_0`/`WEIGHTS_0`) & Seamless Rigged Human Pipeline | Milestone `v1.1.2` Implementation |
 | [015](015-v12-skeletal-blending-fxaa-and-footsteps.md) | Skeletal Crossfade Blending, 8-Phase Biomechanical Gait, FXAA 3.11 & Surface Footstep Synth | Milestone `v1.2.0` Implementation |
 | [016](016-v13-3d-terrain-godrays-spatial-audio-and-ai-learning.md) | 3D Heightmap Terrain, Jolt HeightField, 4-Wheel Suspension, Volumetric God-Rays, Spatial 3D Audio & AI Self-Learning Telemetry | Milestone `v1.3.0` Implementation |
+| [017](017-v14-instanced-grass-ssr-frustum-culling-and-crowd-ai.md) | GPU-Instanced Interactive 3D Grass, Alpha-Packed Screen-Space Reflections (SSR), Frustum Culling, Preloading & Reactive Crowd AI | Milestone `v1.4.0` Implementation |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:

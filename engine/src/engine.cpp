@@ -135,7 +135,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v1.3.0 — 3D Heightmap Terrain + Volumetric God-Rays + Spatial 3D Audio + AI Telemetry\n";
+    std::cout << "  SAGE Engine v1.4.0 — GPU Instanced Grass + Screen-Space Reflections + Frustum Culling + Preload\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -218,6 +218,10 @@ bool Engine::initialize() {
     };
 
     m_lua.initialize(resolvedResources, m_world, m_physics, m_audio, m_input, std::move(callbacks));
+    if (m_renderer) {
+        // Pre-warm all scene & Lua .glb models, 3D terrain & instanced grass BEFORE Frame 1 (eliminates v1.3 226ms hitch!)
+        m_renderer->preloadModels(m_world);
+    }
     return true;
 }
 
@@ -256,6 +260,8 @@ void Engine::render(double elapsedSeconds) {
     stats.gpuRenderer = m_renderer->info().gpuRenderer;
     stats.assetsDir = (m_projectRoot / "assets").string();
     stats.loadedModels = m_renderer->loadedModelCount();
+    stats.grassClumps = m_renderer->grassInstanceCount();
+    stats.culledEntities = m_renderer->lastCulledCount();
     stats.luaResources = m_lua.activeResourceCount();
     stats.freeFlyMode = m_freeFlyMode;
 
@@ -263,6 +269,9 @@ void Engine::render(double elapsedSeconds) {
     actions.onHotReload = [this]() {
         m_scriptTitle.clear();
         m_lua.reloadAll();
+        if (m_renderer) {
+            m_renderer->preloadModels(m_world);
+        }
     };
     actions.onToggleFreeFly = [this]() {
         m_freeFlyMode = !m_freeFlyMode;
@@ -279,7 +288,7 @@ void Engine::render(double elapsedSeconds) {
     };
     actions.onSaveScene = [this]() -> bool {
         const fs::path exportPath = m_projectRoot / "scenes" / "exported_scene.json";
-        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.3.0 Exported World");
+        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.4.0 Exported World");
     };
     actions.onRenderCustomUi = [this]() {
         m_lua.renderUI();
@@ -304,7 +313,7 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     const SkySettings& sky = m_world.sky();
 
     nlohmann::json j;
-    j["engineVersion"] = "1.3.0";
+    j["engineVersion"] = "1.4.0";
     j["smokeTest"] = (m_config.maxFrames > 0);
     j["gpu"] = {
         {"renderer", gpu.gpuRenderer},
@@ -321,6 +330,8 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     j["world"] = {
         {"entities", m_world.entityCount()},
         {"loadedModels", m_renderer ? m_renderer->loadedModelCount() : 0},
+        {"grassClumps", m_renderer ? m_renderer->grassInstanceCount() : 0},
+        {"lastCulledEntities", m_renderer ? m_renderer->lastCulledCount() : 0},
         {"joltBodies", m_physics.bodyCount()},
         {"dynamicBodies", m_physics.dynamicBodyCount()},
         {"pointLights", m_world.pointLights().size()},
@@ -329,6 +340,8 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     };
     j["features"] = {
         {"terrain3D", m_world.terrain().enabled},
+        {"grassInstanced", sky.grassEnabled},
+        {"ssr", sky.ssrEnabled},
         {"godRays", sky.godRaysEnabled},
         {"cloudShadows", sky.cloudShadowsEnabled},
         {"fxaa", sky.fxaaEnabled},
@@ -452,11 +465,13 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v1.3.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v1.4.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()
-                      << " .glb model(s), " << m_physics.bodyCount()
+                      << " .glb model(s), " << m_renderer->grassInstanceCount()
+                      << " grass clumps, " << m_renderer->lastCulledCount()
+                      << " culled, " << m_physics.bodyCount()
                       << " Jolt bodies, " << m_world.pointLights().size()
                       << " dynamic light(s)).\n";
             break;

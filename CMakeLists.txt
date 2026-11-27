@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(SAGEEngine
-    VERSION 1.3.0
+    VERSION 1.4.0
     DESCRIPTION "SAGE — Scriptable AI Game Engine"
     LANGUAGES C CXX
 )

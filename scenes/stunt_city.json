@@ -1,5 +1,5 @@
 {
-  "name": "SAGE v1.3.0 \u2014 3D Heightmap Terrain, Volumetric God-Rays, 4-Wheel Suspension, Spatial 3D Audio & GPU Skinning",
+  "name": "SAGE v1.4.0 \u2014 GPU Instanced Grass, Screen-Space Reflections, Reactive AI Crowd, 3D Terrain & Volumetric God-Rays",
   "version": 2,
   "sky": {
     "timeOfDay": 17.4,

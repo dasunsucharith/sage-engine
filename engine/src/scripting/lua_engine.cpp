@@ -228,6 +228,24 @@ struct LuaEngine::Impl {
                 world->terrain().enabled = enabled;
             }
         });
+        worldTbl.set_function("setSSR", [this](bool enabled, sol::optional<float> intensity) {
+            if (world) {
+                world->sky().ssrEnabled = enabled;
+                if (intensity.has_value()) {
+                    world->sky().ssrIntensity = std::clamp(*intensity, 0.0f, 1.5f);
+                }
+            }
+        });
+        worldTbl.set_function("setGrassEnabled", [this](bool enabled) {
+            if (world) {
+                world->sky().grassEnabled = enabled;
+            }
+        });
+        worldTbl.set_function("setGrassInteractPos", [this](float x, float y, float z) {
+            if (world) {
+                world->sky().grassInteractPos = {x, y, z};
+            }
+        });
         worldTbl.set_function("sampleTerrain", [this](float x, float z)
             -> std::tuple<float, float, float, float, int> {
             if (!world) {

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "project": "SAGE Engine (Scriptable AI Game Engine)",
   "vision": "Build an open-source, AI-native C++20 + Lua AAA open-world game engine that rivals and surpasses modern AAA engines (like RAGE / GTA VI) while continuously learning from every release, render inspection, and hardware telemetry run.",
-  "currentVersion": "1.3.0",
+  "currentVersion": "1.4.0",
   "verifiedEngineeringLessons": [
     {
       "id": "L001",
@@ -39,16 +39,18 @@
       "version": "1.3.0",
       "domain": "Open-World Terrain & Suspension",
       "lesson": "Combine procedural FBM rolling hills & surrounding mountain ranges with an analytical road/plaza/lagoon flattening mask, auto-ground off-road scene models in SceneLoader so zero trees/buildings clip or float, mirror the heightmap into a Jolt HeightFieldShape, and sample 4 wheel contact points (FL/FR/RL/RR) for realistic AAA vehicle pitch, roll, and spring-damper suspension."
+    },
+    {
+      "id": "L007",
+      "version": "1.4.0",
+      "domain": "GPU Instancing, SSR & Frame Pacing",
+      "lesson": "Pre-warming all .glb models, terrain, and GPU foliage buffers before Frame 1 plus 6-plane Gribb-Hartmann camera frustum culling slashed RTX 5050 cold-start avgFrameMs by 42.1% (49.8ms -> 28.8ms) even while adding 57,290 wind-swaying 3D grass blades (1 glDrawArraysInstanced call with player/vehicle parting) and zero-extra-RT 12-step Screen-Space Reflections packed into RGBA16F FragColor.a."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [
     {
-      "targetVersion": "1.4.0",
-      "focus": "Deferred/Clustered PBR + Cascaded 3-Split Shadows + Screen-Space Reflections (SSR) + Grass/Foliage GPU Instancing (100k+ swaying blades)"
-    },
-    {
       "targetVersion": "1.5.0",
-      "focus": "AI-Driven NPC Behavior Trees, Dynamic Crowd & Traffic Navigation Splines, Ragdoll/Active-Physics Character Blend (Euphoria-style), and Modular Weapon/Interaction Framework"
+      "focus": "GPU-Instanced Prop Batching (trees/lamps/rocks), Active-Physics Ragdoll Blending (Euphoria-style), Spline Traffic & Pedestrian Networks, and Modular Combat/Interaction Framework"
     },
     {
       "targetVersion": "1.6.0",
@@ -80,6 +82,25 @@
       "coldStart12FrameAvgMs": 49.8,
       "coldStartPeakMs": 226.7,
       "nextOptimizationHint": "Frame-1 cold-start spike (226.7ms) comes from synchronous lazy loading of 31 .glb models on first render; v1.4.0 should pre-warm/async-load models and batch repeated props (trees/lamps/rocks) via GPU instancing.",
+      "smokeTestPassed": true
+    },
+    {
+      "version": "1.4.0",
+      "gpu": "NVIDIA GeForce RTX 5050 Laptop GPU",
+      "entities": 378,
+      "glbModels": 31,
+      "terrainTriangles": 31824,
+      "grassClumps": 28645,
+      "grassBlades": 57290,
+      "frustumCulledEntities": 162,
+      "ssrEnabled": true,
+      "joltBodies": 230,
+      "dynamicBodies": 37,
+      "pointLights": 33,
+      "coldStart12FrameAvgMs": 28.83,
+      "coldStartPeakMs": 190.89,
+      "speedupVsPrevVersion": "-42.1% avgFrameMs, -15.8% peakFrameMs while adding 57.3k grass blades + SSR + 6 reactive NPCs",
+      "nextOptimizationHint": "Remaining 190.9ms Frame-1 spike is NVIDIA driver first-frame shader/FBO pipeline warmup; v1.5.0 should issue a 1x1 dummy warmup pass during preload and GPU-instance repeated static props (trees/lamps/rocks) across both shadow and main passes.",
       "smokeTestPassed": true
     }
   ]

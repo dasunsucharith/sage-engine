@@ -17,6 +17,8 @@ struct EditorStats {
     std::string gpuRenderer;
     std::string assetsDir;
     std::size_t loadedModels = 0;
+    std::size_t grassClumps = 0;
+    std::size_t culledEntities = 0;
     std::size_t luaResources = 0;
     bool freeFlyMode = false;
 };
