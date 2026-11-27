@@ -22,6 +22,9 @@
 local CONFIG = {
     carModel      = "assets/models/aventador_svj.glb",
     crateModel    = "assets/models/crate.glb",
+    coneModel     = "assets/models/traffic_cone.glb",
+    ballModel     = "assets/models/stunt_ball.glb",
+    droneModel    = "assets/models/hover_drone.glb",
     carTint       = { 1.0, 1.0, 1.0 },
     maxSpeed      = 32.0,   -- Base top speed (~115 km/h in city scale)
     boostSpeed    = 46.0,   -- Nitro top speed (~165 km/h)
@@ -108,6 +111,7 @@ local keyLatch = { T = false, C = false, X = false, B = false, R = false }
 
 local crates = {}
 local nextCrateSeq = 0
+local nextBallSeq = 0
 local impactSoundCooldown = 0.0
 
 local activeDeliveryIdx = 1
@@ -186,6 +190,11 @@ local function setupJoltPhysicsWorld()
         physics.addStaticBox(b.id, b.x, 12.0, b.z, b.w * 0.5, 12.0, b.h * 0.5)
     end
 
+    -- 3b. Real Jolt Convex-Hull 3D Stunt Ramp colliders (so balls & crates roll up and launch off ramps!)
+    for i, r in ipairs(ramps) do
+        physics.addStaticRamp("col_ramp_" .. i, r.x, 0.0, r.z, r.width, r.height, r.length, r.yaw)
+    end
+
     -- 4. Kinematic Jolt hull for the Lamborghini Aventador SVJ (transfers true collision momentum!)
     physics.addKinematicBox("player_car", car.x, car.y + 0.65, car.z, 1.05, 0.62, 2.25)
 
@@ -195,6 +204,26 @@ local function setupJoltPhysicsWorld()
     spawnCratePyramid(  0.0, -26.0,   0.0)
     spawnCratePyramid( 26.0,   0.0,  90.0)
     spawnCratePyramid(-26.0,   0.0,  90.0)
+
+    -- 6. Three Giant Rocket-League-Style Jolt Physics Stunt Balls (spheres!)
+    nextBallSeq = 0
+    for _, bp in ipairs({ { 0.0, 3.0, 6.0 }, { 22.0, 3.0, 22.0 }, { -22.0, 3.0, -22.0 } }) do
+        nextBallSeq = nextBallSeq + 1
+        local id = "stunt_ball_" .. nextBallSeq
+        world.spawnModel(id, CONFIG.ballModel, bp[1], bp[2], bp[3])
+        physics.addDynamicSphere(id, bp[1], bp[2], bp[3], 1.25, 32.0, 0.72, 0.35)
+    end
+
+    -- 7. Eight Knockable Jolt Physics Capsule Traffic Cones lining the stunt avenues!
+    local coneSpots = {
+        { -3.8,  8.0 }, {  3.8,  8.0 }, { -3.8, -8.0 }, {  3.8, -8.0 },
+        {  8.0,  3.8 }, {  8.0, -3.8 }, { -8.0,  3.8 }, { -8.0, -3.8 },
+    }
+    for i, cp in ipairs(coneSpots) do
+        local id = "cone_" .. i
+        world.spawnModel(id, CONFIG.coneModel, cp[1], 0.50, cp[2])
+        physics.addDynamicCapsule(id, cp[1], 0.50, cp[2], 0.24, 0.26, 6.0, 0.28, 0.65)
+    end
 end
 
 local function spawnDynamicVisuals()
@@ -238,6 +267,12 @@ local function spawnDynamicVisuals()
     world.setScale("delivery_ring", 6.5, 4.4, 6.5)
     world.setColor("delivery_ring", 1.0, 0.82, 0.14)
     world.setEmissive("delivery_ring", true)
+
+    -- Two Animated Blender Hover Drones patrolling overhead!
+    world.spawnModel("drone_1", CONFIG.droneModel, 12.0, 7.5, 0.0)
+    world.playAnimation("drone_1", "", true, 1.2)
+    world.spawnModel("drone_2", CONFIG.droneModel, -12.0, 9.5, 0.0)
+    world.playAnimation("drone_2", "", true, 1.5)
 end
 
 -- -----------------------------------------------------------------------------
@@ -579,6 +614,15 @@ function onTick(dt)
     world.setPosition("player_car", car.x, car.y, car.z)
     world.setRotation("player_car", car.pitch, car.yaw, car.roll)
 
+    -- Orbit the 2 animated Blender hover drones smoothly around the central plaza!
+    local d1a = timeNow * 0.45
+    world.setPosition("drone_1", math.cos(d1a) * 14.0, 7.2, math.sin(d1a) * 14.0)
+    world.setRotation("drone_1", 0.0, math.deg(-d1a), 0.0)
+
+    local d2a = -timeNow * 0.35 + 1.8
+    world.setPosition("drone_2", math.cos(d2a) * 24.0, 10.5, math.sin(d2a) * 24.0)
+    world.setRotation("drone_2", 0.0, math.deg(-d2a + math.pi), 0.0)
+
     if car.isBoosting then
         local flicker = 1.65 + 0.55 * math.sin(timeNow * 48.0)
         world.setVisible("car_flame", true)
@@ -666,6 +710,32 @@ function onTick(dt)
             car.gear, kmh, math.floor(car.boostEnergy), deliveriesDone, score, tag
         ))
     end
+end
+
+function onRenderUI()
+    local speed = math.sqrt(car.vx * car.vx + car.vz * car.vz)
+    local kmh = math.floor(speed * 3.6)
+    local spot = deliverySpots[activeDeliveryIdx]
+
+    if ui.beginWindow("Aventador SVJ Cockpit HUD", 985, 515, 280, 190, true) then
+        ui.text(string.format("Speed: %d km/h  |  Gear: G%d", kmh, car.gear))
+        ui.progressBar(car.rpm, string.format("V12 RPM %d%%", math.floor(car.rpm * 100)))
+        ui.progressBar(car.boostEnergy / 100.0, string.format("NITRO %d%%", math.floor(car.boostEnergy)))
+        ui.separator()
+        ui.text("Drop-off: " .. spot.label)
+        ui.text(string.format("Score: %d | Deliveries: %d | Jumps: %d", score, deliveriesDone, stuntJumps))
+        if ui.button("Drop Stunt Ball") then
+            nextBallSeq = nextBallSeq + 1
+            local id = "stunt_ball_" .. nextBallSeq
+            local rad = degToRad(car.yaw)
+            local bx = clamp(car.x + math.sin(rad) * 10.0, -38.0, 38.0)
+            local bz = clamp(car.z + math.cos(rad) * 10.0, -38.0, 38.0)
+            world.spawnModel(id, CONFIG.ballModel, bx, 5.0, bz)
+            physics.addDynamicSphere(id, bx, 5.0, bz, 1.25, 32.0, 0.72, 0.35)
+            audio.playChime()
+        end
+    end
+    ui.endWindow()
 end
 
 function onShutdown()

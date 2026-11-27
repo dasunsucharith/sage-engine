@@ -43,6 +43,12 @@ PFNGLENABLEVERTEXATTRIBARRAYPROC enableVertexAttribArray = nullptr;
 PFNGLACTIVETEXTUREPROC activeTexture = nullptr;
 PFNGLGENERATEMIPMAPPROC generateMipmap = nullptr;
 
+PFNGLGENFRAMEBUFFERSPROC genFramebuffers = nullptr;
+PFNGLBINDFRAMEBUFFERPROC bindFramebuffer = nullptr;
+PFNGLFRAMEBUFFERTEXTURE2DPROC framebufferTexture2D = nullptr;
+PFNGLCHECKFRAMEBUFFERSTATUSPROC checkFramebufferStatus = nullptr;
+PFNGLDELETEFRAMEBUFFERSPROC deleteFramebuffers = nullptr;
+
 namespace {
 
 template <typename FnPtr>
@@ -98,6 +104,12 @@ bool loadFunctions() {
 
     ok &= loadOne(activeTexture, "glActiveTexture");
     ok &= loadOne(generateMipmap, "glGenerateMipmap");
+
+    ok &= loadOne(genFramebuffers, "glGenFramebuffers");
+    ok &= loadOne(bindFramebuffer, "glBindFramebuffer");
+    ok &= loadOne(framebufferTexture2D, "glFramebufferTexture2D");
+    ok &= loadOne(checkFramebufferStatus, "glCheckFramebufferStatus");
+    ok &= loadOne(deleteFramebuffers, "glDeleteFramebuffers");
 
     return ok;
 }

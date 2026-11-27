@@ -111,7 +111,7 @@ void EditorUI::render(
         ImGui::SetNextWindowPos(ImVec2(14.0f, 14.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(320.0f, 0.0f), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("SAGE Engine v0.4 — Live Inspector (F1)", &m_visible)) {
+        if (ImGui::Begin("SAGE Engine v0.5 — Live Inspector (F1)", &m_visible)) {
             ImGui::Text("FPS: %.0f (%.2f ms)", stats.fps, stats.frameMs);
             ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 36.0f));
             ImGui::TextDisabled("GPU: %s", stats.gpuRenderer.c_str());
@@ -146,6 +146,7 @@ void EditorUI::render(
                 if (ImGui::SmallButton("Sunset")) world.setTimeOfDay(17.5f);
                 ImGui::SameLine();
                 if (ImGui::SmallButton("Night")) world.setTimeOfDay(22.5f);
+                ImGui::Checkbox("Real-Time Soft Shadows (2048px PCF)", &world.sky().shadowsEnabled);
             }
 
             // --- Jolt Physics Controls ---
@@ -217,6 +218,11 @@ void EditorUI::render(
             ImGui::TextWrapped("Controls: WASD Drive | Space Drift | Shift Nitro | C Cam | Right-Mouse Orbit | X Shockwave | B Drop Crates | T Sky");
         }
         ImGui::End();
+    }
+
+    // Allow Lua resources to draw custom game HUDs/menus (onRenderUI) even when inspector is hidden!
+    if (actions.onRenderCustomUi) {
+        actions.onRenderCustomUi();
     }
 
     ImGui::Render();

@@ -132,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v0.4.0 (Editor + Physics + Audio)\n";
+    std::cout << "  SAGE Engine v0.5.0 (Shadows + glTF Anim + Jolt + Audio + UI)\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -234,6 +234,7 @@ void Engine::fixedTick(double dt) {
         m_lua.tick(dt);
     }
     m_physics.step(static_cast<float>(dt), m_world);
+    m_world.updateAnimations(static_cast<float>(dt));
 }
 
 void Engine::render(double elapsedSeconds) {
@@ -267,6 +268,9 @@ void Engine::render(double elapsedSeconds) {
             : m_world.camera().target;
         m_physics.applyExplosion(carPos, 24.0f, 360.0f);
         m_audio.playExplosion();
+    };
+    actions.onRenderCustomUi = [this]() {
+        m_lua.renderUI();
     };
 
     m_editor.render(m_world, m_physics, m_audio, stats, actions);

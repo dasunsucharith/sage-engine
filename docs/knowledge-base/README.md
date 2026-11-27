@@ -12,6 +12,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [004](004-3d-world-gltf-and-lighting.md) | 3D World, glTF 2.0 (`.glb`) Models, Lighting & Blender Workflow | Milestone `v0.3 — 3D World` |
 | [005](005-jolt-physics-imgui-and-audio.md) | Jolt Physics, Dear ImGui Live Editor & miniaudio Synth | Milestone `v0.4 — Editor, Physics & Audio` |
 | [006](006-cascaded-shadow-maps-and-soft-shadows.md) | Real-Time Cascaded Shadow Maps (CSM) & PCF Soft Shadows | Daily Research Proposal (`v0.5`) |
+| [007](007-gltf-animations-shadows-and-lua-hud.md) | Real-Time Soft Shadows, glTF 2.0 Keyframe Animations & Lua Game HUDs | Milestone `v0.5` Implementation |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:

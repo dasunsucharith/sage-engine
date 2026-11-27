@@ -52,8 +52,38 @@ using GLsizeiptr = std::ptrdiff_t;
 #ifndef GL_TEXTURE0
 #define GL_TEXTURE0 0x84C0
 #endif
+#ifndef GL_TEXTURE1
+#define GL_TEXTURE1 0x84C1
+#endif
 #ifndef GL_CLAMP_TO_EDGE
 #define GL_CLAMP_TO_EDGE 0x812F
+#endif
+#ifndef GL_CLAMP_TO_BORDER
+#define GL_CLAMP_TO_BORDER 0x812D
+#endif
+#ifndef GL_TEXTURE_BORDER_COLOR
+#define GL_TEXTURE_BORDER_COLOR 0x1004
+#endif
+#ifndef GL_DEPTH_COMPONENT24
+#define GL_DEPTH_COMPONENT24 0x81A6
+#endif
+#ifndef GL_TEXTURE_COMPARE_MODE
+#define GL_TEXTURE_COMPARE_MODE 0x884C
+#endif
+#ifndef GL_TEXTURE_COMPARE_FUNC
+#define GL_TEXTURE_COMPARE_FUNC 0x884D
+#endif
+#ifndef GL_COMPARE_REF_TO_TEXTURE
+#define GL_COMPARE_REF_TO_TEXTURE 0x884E
+#endif
+#ifndef GL_FRAMEBUFFER
+#define GL_FRAMEBUFFER 0x8D40
+#endif
+#ifndef GL_DEPTH_ATTACHMENT
+#define GL_DEPTH_ATTACHMENT 0x8D00
+#endif
+#ifndef GL_FRAMEBUFFER_COMPLETE
+#define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #endif
 
 namespace sage::gl {
@@ -95,6 +125,12 @@ using PFNGLENABLEVERTEXATTRIBARRAYPROC = void(APIENTRYP)(GLuint index);
 using PFNGLACTIVETEXTUREPROC = void(APIENTRYP)(GLenum texture);
 using PFNGLGENERATEMIPMAPPROC = void(APIENTRYP)(GLenum target);
 
+using PFNGLGENFRAMEBUFFERSPROC = void(APIENTRYP)(GLsizei n, GLuint* framebuffers);
+using PFNGLBINDFRAMEBUFFERPROC = void(APIENTRYP)(GLenum target, GLuint framebuffer);
+using PFNGLFRAMEBUFFERTEXTURE2DPROC = void(APIENTRYP)(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+using PFNGLCHECKFRAMEBUFFERSTATUSPROC = GLenum(APIENTRYP)(GLenum target);
+using PFNGLDELETEFRAMEBUFFERSPROC = void(APIENTRYP)(GLsizei n, const GLuint* framebuffers);
+
 extern PFNGLCREATESHADERPROC createShader;
 extern PFNGLSHADERSOURCEPROC shaderSource;
 extern PFNGLCOMPILESHADERPROC compileShader;
@@ -131,6 +167,12 @@ extern PFNGLENABLEVERTEXATTRIBARRAYPROC enableVertexAttribArray;
 
 extern PFNGLACTIVETEXTUREPROC activeTexture;
 extern PFNGLGENERATEMIPMAPPROC generateMipmap;
+
+extern PFNGLGENFRAMEBUFFERSPROC genFramebuffers;
+extern PFNGLBINDFRAMEBUFFERPROC bindFramebuffer;
+extern PFNGLFRAMEBUFFERTEXTURE2DPROC framebufferTexture2D;
+extern PFNGLCHECKFRAMEBUFFERSTATUSPROC checkFramebufferStatus;
+extern PFNGLDELETEFRAMEBUFFERSPROC deleteFramebuffers;
 
 // Loads all required OpenGL 3.3 Core functions from the current GL context.
 bool loadFunctions();

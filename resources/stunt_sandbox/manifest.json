@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE v0.4 Showcase — Lamborghini Aventador SVJ with Jolt 3D rigid-body crate pyramids, miniaudio V12 synth, 3 camera angles, and Dear ImGui live editor.",
+  "description": "SAGE v0.5 Showcase — Aventador SVJ with Real-Time Soft Shadows, Animated Blender glTF Models, Jolt Spheres/Capsules/Ramps, V12 Audio, and Lua Cockpit HUD.",
   "scripts": [
     "main.lua"
   ]

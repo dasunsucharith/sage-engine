@@ -34,16 +34,38 @@ namespace sage {
 namespace {
 
 constexpr float kPi = 3.14159265358979323846f;
+constexpr int kShadowMapSize = 2048;
 
 // -----------------------------------------------------------------------------
-// Sky Gradient + Solar Disk Fullscreen Pass
+// Pass 0: Directional Shadow Map Depth Pass
+// -----------------------------------------------------------------------------
+constexpr const char* kShadowVertexShader = R"GLSL(
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+uniform mat4 uModel;
+uniform mat4 uLightViewProj;
+
+void main() {
+    gl_Position = uLightViewProj * uModel * vec4(aPos, 1.0);
+}
+)GLSL";
+
+constexpr const char* kShadowFragmentShader = R"GLSL(
+#version 330 core
+void main() {
+    // Hardware writes gl_FragDepth automatically
+}
+)GLSL";
+
+// -----------------------------------------------------------------------------
+// Pass 1: Sky Gradient + Solar Disk Fullscreen Pass
 // -----------------------------------------------------------------------------
 constexpr const char* kSkyVertexShader = R"GLSL(
 #version 330 core
 out vec2 vNdc;
 
 void main() {
-    // Fullscreen triangle covering [-1, 1] without any VBO
     vec2 positions[3] = vec2[3](
         vec2(-1.0, -1.0),
         vec2( 3.0, -1.0),
@@ -87,7 +109,6 @@ void main() {
         sky = mix(uSkyHorizon, uGroundAmbient, clamp(-rayDir.y * 4.0, 0.0, 1.0));
     }
 
-    // Soft solar halo + crisp sun disk
     float sunDot = max(dot(rayDir, normalize(uSunDir)), 0.0);
     sky += uSunColor * pow(sunDot, 24.0) * 0.45;
     sky += uSunColor * smoothstep(0.9985, 0.9996, sunDot) * 2.5;
@@ -98,7 +119,7 @@ void main() {
 )GLSL";
 
 // -----------------------------------------------------------------------------
-// 3D Lit Mesh Shader (Directional Sun + Hemisphere Sky + Specular + Fog + ACES)
+// Pass 2: 3D Lit Mesh Shader + Hardware 3x3 PCF Soft Shadows + Normal Offset Bias
 // -----------------------------------------------------------------------------
 constexpr const char* kLitVertexShader = R"GLSL(
 #version 330 core
@@ -137,6 +158,11 @@ uniform sampler2D uAlbedoTex;
 uniform float uPulse;
 uniform float uTime;
 
+uniform int uShadowsEnabled;
+uniform mat4 uLightViewProj;
+uniform sampler2DShadow uShadowMap;
+uniform float uShadowTexelSize;
+
 uniform vec3 uCameraPos;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
@@ -158,6 +184,37 @@ vec3 acesToneMap(vec3 x) {
     return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
+float computeShadowVisibility(vec3 worldPos, vec3 N, vec3 L) {
+    if (uShadowsEnabled == 0) {
+        return 1.0;
+    }
+
+    // Frostbite-style normal-offset bias eliminates flat-surface acne without detaching tires
+    float ndotl = max(dot(N, L), 0.0);
+    float normalOffset = (0.06 + 0.14 * (1.0 - ndotl));
+    vec4 lightClip = uLightViewProj * vec4(worldPos + N * normalOffset, 1.0);
+    vec3 proj = lightClip.xyz / lightClip.w;
+    proj = proj * 0.5 + 0.5;
+
+    if (proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
+        return 1.0;
+    }
+
+    // Soft fade near shadow map edge so there is never a hard cutoff square
+    vec2 edgeDist = min(proj.xy, 1.0 - proj.xy);
+    float edgeFade = smoothstep(0.0, 0.08, min(edgeDist.x, edgeDist.y));
+
+    float visibility = 0.0;
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            vec2 offset = vec2(float(x), float(y)) * uShadowTexelSize * 1.35;
+            visibility += texture(uShadowMap, vec3(proj.xy + offset, proj.z - 0.0006));
+        }
+    }
+    visibility /= 9.0;
+    return mix(1.0, visibility, edgeFade);
+}
+
 void main() {
     vec3 albedo = uBaseColor;
     if (uHasTexture == 1) {
@@ -170,24 +227,22 @@ void main() {
     vec3 V = normalize(uCameraPos - vWorldPos);
     vec3 H = normalize(L + V);
 
-    // Directional sunlight + subtle wrap diffuse for crisp 3D readability
+    float shadowVis = computeShadowVisibility(vWorldPos, N, L);
+
     float ndotl = max(dot(N, L), 0.0);
     float wrapDiffuse = max((dot(N, L) + 0.18) / 1.18, 0.0);
-    vec3 directDiffuse = albedo * (1.0 - 0.5 * uMetallic) * uSunColor * mix(ndotl, wrapDiffuse, 0.25) * 1.35;
+    vec3 directDiffuse = albedo * (1.0 - 0.5 * uMetallic) * uSunColor * mix(ndotl, wrapDiffuse, 0.25) * 1.38 * shadowVis;
 
-    // Hemisphere ambient (sky overhead + warm/cool ground bounce underneath)
     float hemiT = N.y * 0.5 + 0.5;
     vec3 skyFill = mix(uSkyHorizon, uSkyZenith, 0.35);
     vec3 hemiAmbient = mix(uGroundAmbient, skyFill, hemiT) * albedo * (uAmbientIntensity * 1.35);
 
-    // Specular highlight (Blinn-Phong scaled by roughness & metallic)
     float rough = clamp(uRoughness, 0.08, 1.0);
     float shininess = mix(96.0, 8.0, rough);
     float specStrength = mix(0.22, 0.85, uMetallic) * (1.0 - rough * 0.65);
     vec3 specTint = mix(vec3(1.0), albedo, uMetallic);
-    vec3 specular = specTint * uSunColor * pow(max(dot(N, H), 0.0), shininess) * specStrength * step(0.001, ndotl);
+    vec3 specular = specTint * uSunColor * pow(max(dot(N, H), 0.0), shininess) * specStrength * step(0.001, ndotl) * shadowVis;
 
-    // Subtle Fresnel sky reflection rim on glossy/metallic surfaces (cars!)
     float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * (1.0 - rough) * 0.28;
     vec3 rim = skyFill * fresnel;
 
@@ -199,7 +254,6 @@ void main() {
 
     vec3 color = hemiAmbient + directDiffuse + specular + rim + emissiveTerm;
 
-    // Atmospheric distance fog blending smoothly toward horizon
     float dist = length(uCameraPos - vWorldPos);
     float fogFactor = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1.0), 0.0, 1.0);
     color = mix(color, uSkyHorizon, fogFactor * fogFactor * 0.85);
@@ -281,14 +335,46 @@ struct GpuSubMesh {
     }
 };
 
+// glTF 2.0 Scene Graph Node + Keyframe Animation Data
+struct ModelNode {
+    int parentIdx = -1;
+    bool hasMatrix = false;
+    glm::mat4 staticMatrix{1.0f};
+    glm::vec3 translation{0.0f};
+    glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 scale{1.0f};
+    std::vector<std::size_t> subMeshIndices;
+};
+
+enum class AnimPath { Translation, Rotation, Scale };
+
+struct AnimChannel {
+    int nodeIdx = -1;
+    AnimPath path = AnimPath::Translation;
+    std::vector<float> times;
+    std::vector<glm::vec4> values;
+};
+
+struct AnimClip {
+    std::string name;
+    float duration = 0.0f;
+    std::vector<AnimChannel> channels;
+};
+
 struct GpuModel {
     std::vector<GpuSubMesh> subMeshes;
+    std::vector<ModelNode> nodes;
+    std::vector<AnimClip> animations;
+    bool hasAnimations = false;
 
     void destroy() {
         for (auto& sm : subMeshes) {
             sm.destroy();
         }
         subMeshes.clear();
+        nodes.clear();
+        animations.clear();
+        hasAnimations = false;
     }
 };
 
@@ -437,8 +523,40 @@ GpuSubMesh buildUnitPlaneMesh() {
     return mesh;
 }
 
+GpuSubMesh buildUnitSphereMesh() {
+    std::vector<Vertex3D> verts;
+    std::vector<std::uint32_t> idx;
+
+    constexpr int kRings = 16;
+    constexpr int kSectors = 24;
+    for (int r = 0; r <= kRings; ++r) {
+        const float v = static_cast<float>(r) / kRings;
+        const float phi = v * kPi;
+        for (int s = 0; s <= kSectors; ++s) {
+            const float u = static_cast<float>(s) / kSectors;
+            const float theta = u * 2.0f * kPi;
+            const float nx = std::sin(phi) * std::cos(theta);
+            const float ny = std::cos(phi);
+            const float nz = std::sin(phi) * std::sin(theta);
+            verts.push_back({nx * 0.5f, ny * 0.5f, nz * 0.5f, nx, ny, nz, u, v});
+        }
+    }
+    for (int r = 0; r < kRings; ++r) {
+        for (int s = 0; s < kSectors; ++s) {
+            const auto i0 = static_cast<std::uint32_t>(r * (kSectors + 1) + s);
+            const auto i1 = i0 + 1;
+            const auto i2 = static_cast<std::uint32_t>((r + 1) * (kSectors + 1) + s);
+            const auto i3 = i2 + 1;
+            idx.insert(idx.end(), {i0, i2, i1, i1, i2, i3});
+        }
+    }
+
+    GpuSubMesh mesh;
+    mesh.upload(verts, idx);
+    return mesh;
+}
+
 GpuSubMesh buildUnitArrowMesh() {
-    // 3D extruded pointer arrow facing +Z
     std::vector<Vertex3D> verts;
     std::vector<std::uint32_t> idx;
 
@@ -470,15 +588,12 @@ GpuSubMesh buildUnitArrowMesh() {
 }
 
 GpuSubMesh buildUnitRingMesh() {
-    // 3D hollow beacon cylinder/ring (radius 0.5, vertical height 1.0)
     std::vector<Vertex3D> verts;
     std::vector<std::uint32_t> idx;
 
     constexpr int kSegments = 32;
     constexpr float kOuterR = 0.50f;
     constexpr float kInnerR = 0.42f;
-    constexpr float kY0 = 0.0f;
-    constexpr float kY1 = 1.0f;
 
     auto addQuad = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, glm::vec3 n) {
         const auto base = static_cast<std::uint32_t>(verts.size());
@@ -496,15 +611,15 @@ GpuSubMesh buildUnitRingMesh() {
         const float c1 = std::cos(a1), s1 = std::sin(a1);
         const glm::vec3 nOut = glm::normalize(glm::vec3(c0 + c1, 0.0f, s0 + s1));
 
-        const glm::vec3 o0b(c0 * kOuterR, kY0, s0 * kOuterR);
-        const glm::vec3 o1b(c1 * kOuterR, kY0, s1 * kOuterR);
-        const glm::vec3 o1t(c1 * kOuterR, kY1, s1 * kOuterR);
-        const glm::vec3 o0t(c0 * kOuterR, kY1, s0 * kOuterR);
+        const glm::vec3 o0b(c0 * kOuterR, 0.0f, s0 * kOuterR);
+        const glm::vec3 o1b(c1 * kOuterR, 0.0f, s1 * kOuterR);
+        const glm::vec3 o1t(c1 * kOuterR, 1.0f, s1 * kOuterR);
+        const glm::vec3 o0t(c0 * kOuterR, 1.0f, s0 * kOuterR);
 
-        const glm::vec3 i0b(c0 * kInnerR, kY0, s0 * kInnerR);
-        const glm::vec3 i1b(c1 * kInnerR, kY0, s1 * kInnerR);
-        const glm::vec3 i1t(c1 * kInnerR, kY1, s1 * kInnerR);
-        const glm::vec3 i0t(c0 * kInnerR, kY1, s0 * kInnerR);
+        const glm::vec3 i0b(c0 * kInnerR, 0.0f, s0 * kInnerR);
+        const glm::vec3 i1b(c1 * kInnerR, 0.0f, s1 * kInnerR);
+        const glm::vec3 i1t(c1 * kInnerR, 1.0f, s1 * kInnerR);
+        const glm::vec3 i0t(c0 * kInnerR, 1.0f, s0 * kInnerR);
 
         addQuad(o0b, o1b, o1t, o0t, nOut);
         addQuad(i1b, i0b, i0t, i1t, -nOut);
@@ -514,6 +629,136 @@ GpuSubMesh buildUnitRingMesh() {
     GpuSubMesh mesh;
     mesh.upload(verts, idx);
     return mesh;
+}
+
+glm::mat4 buildEntityMatrix(const Entity& e) {
+    glm::mat4 model(1.0f);
+    model = glm::translate(model, glm::vec3(e.position.x, e.position.y, e.position.z));
+    if (e.useQuaternion) {
+        const glm::quat q(e.rotationQuat.w, e.rotationQuat.x, e.rotationQuat.y, e.rotationQuat.z);
+        model *= glm::mat4_cast(glm::normalize(q));
+    } else {
+        model = glm::rotate(model, glm::radians(e.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::rotate(model, glm::radians(e.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        model = glm::rotate(model, glm::radians(e.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+    }
+    model = glm::scale(model, glm::vec3(e.scale.x, e.scale.y, e.scale.z));
+    return model;
+}
+
+void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std::vector<glm::mat4>& outWorld) {
+    const std::size_t n = model.nodes.size();
+    outWorld.assign(n, glm::mat4(1.0f));
+    if (n == 0) {
+        return;
+    }
+
+    std::vector<glm::vec3> T(n);
+    std::vector<glm::quat> R(n);
+    std::vector<glm::vec3> S(n);
+    std::vector<bool> animatedFlag(n, false);
+
+    for (std::size_t i = 0; i < n; ++i) {
+        T[i] = model.nodes[i].translation;
+        R[i] = model.nodes[i].rotation;
+        S[i] = model.nodes[i].scale;
+    }
+
+    // If activeAnimation is empty, evaluate all clips (handles Blender multi-object scene animations
+    // where root + sub-rotors export as separate glTF animation tracks). Otherwise play the named clip.
+    std::vector<const AnimClip*> clipsToEval;
+    if (!model.animations.empty() && entity.activeAnimation != "none") {
+        if (!entity.activeAnimation.empty()) {
+            for (const auto& c : model.animations) {
+                if (c.name == entity.activeAnimation) {
+                    clipsToEval.push_back(&c);
+                    break;
+                }
+            }
+        }
+        if (clipsToEval.empty()) {
+            for (const auto& c : model.animations) {
+                clipsToEval.push_back(&c);
+            }
+        }
+    }
+
+    for (const AnimClip* clip : clipsToEval) {
+        if (!clip || clip->duration <= 0.0001f) {
+            continue;
+        }
+        float t = entity.animTime;
+        if (entity.animLoop) {
+            t = std::fmod(t, clip->duration);
+            if (t < 0.0f) t += clip->duration;
+        } else {
+            t = std::clamp(t, 0.0f, clip->duration);
+        }
+
+        for (const auto& ch : clip->channels) {
+            if (ch.nodeIdx < 0 || static_cast<std::size_t>(ch.nodeIdx) >= n || ch.times.empty()) {
+                continue;
+            }
+            animatedFlag[ch.nodeIdx] = true;
+
+            std::size_t i0 = 0;
+            std::size_t i1 = 0;
+            float alpha = 0.0f;
+            if (t <= ch.times.front()) {
+                i0 = i1 = 0;
+            } else if (t >= ch.times.back()) {
+                i0 = i1 = ch.times.size() - 1;
+            } else {
+                const auto it = std::upper_bound(ch.times.begin(), ch.times.end(), t);
+                i1 = static_cast<std::size_t>(it - ch.times.begin());
+                i0 = i1 > 0 ? i1 - 1 : 0;
+                const float span = ch.times[i1] - ch.times[i0];
+                alpha = span > 0.00001f ? (t - ch.times[i0]) / span : 0.0f;
+            }
+
+            const glm::vec4& v0 = ch.values[i0];
+            const glm::vec4& v1 = ch.values[i1];
+            if (ch.path == AnimPath::Translation) {
+                T[ch.nodeIdx] = glm::mix(glm::vec3(v0), glm::vec3(v1), alpha);
+            } else if (ch.path == AnimPath::Scale) {
+                S[ch.nodeIdx] = glm::mix(glm::vec3(v0), glm::vec3(v1), alpha);
+            } else if (ch.path == AnimPath::Rotation) {
+                const glm::quat q0 = glm::normalize(glm::quat(v0.w, v0.x, v0.y, v0.z));
+                const glm::quat q1 = glm::normalize(glm::quat(v1.w, v1.x, v1.y, v1.z));
+                R[ch.nodeIdx] = glm::slerp(q0, q1, alpha);
+            }
+        }
+    }
+
+    std::vector<glm::mat4> local(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        if (model.nodes[i].hasMatrix && !animatedFlag[i]) {
+            local[i] = model.nodes[i].staticMatrix;
+        } else {
+            local[i] = glm::translate(glm::mat4(1.0f), T[i])
+                     * glm::mat4_cast(R[i])
+                     * glm::scale(glm::mat4(1.0f), S[i]);
+        }
+    }
+
+    std::vector<bool> computed(n, false);
+    auto computeWorld = [&](auto&& self, std::size_t idx) -> const glm::mat4& {
+        if (computed[idx]) {
+            return outWorld[idx];
+        }
+        const int parent = model.nodes[idx].parentIdx;
+        if (parent >= 0 && static_cast<std::size_t>(parent) < n) {
+            outWorld[idx] = self(self, static_cast<std::size_t>(parent)) * local[idx];
+        } else {
+            outWorld[idx] = local[idx];
+        }
+        computed[idx] = true;
+        return outWorld[idx];
+    };
+
+    for (std::size_t i = 0; i < n; ++i) {
+        computeWorld(computeWorld, i);
+    }
 }
 
 class OpenGLRenderer final : public Renderer {
@@ -527,21 +772,54 @@ public:
             return false;
         }
 
-        m_info.backendName = "OpenGL 3.3 Core (3D Lit + glTF 2.0)";
+        m_info.backendName = "OpenGL 3.3 Core (3D Lit + Soft Shadows + glTF Anim)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
 
+        m_shadowProgram = linkProgram(kShadowVertexShader, kShadowFragmentShader, "ShadowPass");
         m_skyProgram = linkProgram(kSkyVertexShader, kSkyFragmentShader, "SkyPass");
         m_litProgram = linkProgram(kLitVertexShader, kLitFragmentShader, "Lit3DPass");
-        if (!m_skyProgram || !m_litProgram) {
+        if (!m_shadowProgram || !m_skyProgram || !m_litProgram) {
             shutdown();
             return false;
         }
 
         gl::genVertexArrays(1, &m_skyVao);
 
-        // Cache sky uniform locations
+        // Create 2048x2048 hardware-PCF shadow map FBO
+        gl::genFramebuffers(1, &m_shadowFbo);
+        glGenTextures(1, &m_shadowTex);
+        glBindTexture(GL_TEXTURE_2D, m_shadowTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, kShadowMapSize, kShadowMapSize, 0,
+                     GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        constexpr float kBorder[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, kBorder);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+
+        gl::bindFramebuffer(GL_FRAMEBUFFER, m_shadowFbo);
+        gl::framebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_shadowTex, 0);
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+        if (gl::checkFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "[SAGE][OpenGL] Warning: Shadow map framebuffer incomplete — shadows disabled.\n";
+            gl::deleteFramebuffers(1, &m_shadowFbo);
+            glDeleteTextures(1, &m_shadowTex);
+            m_shadowFbo = 0;
+            m_shadowTex = 0;
+        }
+        gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        // Cache uniform locations
+        m_shadowModel = gl::getUniformLocation(m_shadowProgram, "uModel");
+        m_shadowLightVP = gl::getUniformLocation(m_shadowProgram, "uLightViewProj");
+
         m_skyInvViewProj = gl::getUniformLocation(m_skyProgram, "uInvViewProj");
         m_skyCameraPos = gl::getUniformLocation(m_skyProgram, "uCameraPos");
         m_skySunDir = gl::getUniformLocation(m_skyProgram, "uSunDir");
@@ -550,7 +828,6 @@ public:
         m_skyHorizon = gl::getUniformLocation(m_skyProgram, "uSkyHorizon");
         m_skyGround = gl::getUniformLocation(m_skyProgram, "uGroundAmbient");
 
-        // Cache 3D lit uniform locations
         m_uModel = gl::getUniformLocation(m_litProgram, "uModel");
         m_uViewProj = gl::getUniformLocation(m_litProgram, "uViewProj");
         m_uBaseColor = gl::getUniformLocation(m_litProgram, "uBaseColor");
@@ -561,6 +838,10 @@ public:
         m_uAlbedoTex = gl::getUniformLocation(m_litProgram, "uAlbedoTex");
         m_uPulse = gl::getUniformLocation(m_litProgram, "uPulse");
         m_uTime = gl::getUniformLocation(m_litProgram, "uTime");
+        m_uShadowsEnabled = gl::getUniformLocation(m_litProgram, "uShadowsEnabled");
+        m_uLightViewProj = gl::getUniformLocation(m_litProgram, "uLightViewProj");
+        m_uShadowMap = gl::getUniformLocation(m_litProgram, "uShadowMap");
+        m_uShadowTexelSize = gl::getUniformLocation(m_litProgram, "uShadowTexelSize");
         m_uCameraPos = gl::getUniformLocation(m_litProgram, "uCameraPos");
         m_uSunDir = gl::getUniformLocation(m_litProgram, "uSunDir");
         m_uSunColor = gl::getUniformLocation(m_litProgram, "uSunColor");
@@ -573,6 +854,7 @@ public:
 
         m_boxMesh = buildUnitCubeMesh();
         m_planeMesh = buildUnitPlaneMesh();
+        m_sphereMesh = buildUnitSphereMesh();
         m_arrowMesh = buildUnitArrowMesh();
         m_ringMesh = buildUnitRingMesh();
 
@@ -593,12 +875,25 @@ public:
 
         m_boxMesh.destroy();
         m_planeMesh.destroy();
+        m_sphereMesh.destroy();
         m_arrowMesh.destroy();
         m_ringMesh.destroy();
 
+        if (m_shadowTex) {
+            glDeleteTextures(1, &m_shadowTex);
+            m_shadowTex = 0;
+        }
+        if (m_shadowFbo) {
+            gl::deleteFramebuffers(1, &m_shadowFbo);
+            m_shadowFbo = 0;
+        }
         if (m_skyVao) {
             gl::deleteVertexArrays(1, &m_skyVao);
             m_skyVao = 0;
+        }
+        if (m_shadowProgram) {
+            gl::deleteProgram(m_shadowProgram);
+            m_shadowProgram = 0;
         }
         if (m_skyProgram) {
             gl::deleteProgram(m_skyProgram);
@@ -651,6 +946,81 @@ public:
         const glm::mat4 viewProj = proj * view;
         const glm::mat4 invViewProj = glm::inverse(viewProj);
 
+        // --- Pass 0: Directional Shadow Map with Texel-Grid Snapping ---
+        const bool useShadows = sky.shadowsEnabled && (m_shadowFbo != 0);
+        glm::mat4 lightViewProj(1.0f);
+
+        if (useShadows) {
+            const glm::vec3 sunDir = glm::normalize(glm::vec3(sky.sunDirection.x, sky.sunDirection.y, sky.sunDirection.z));
+            constexpr float kShadowRadius = 56.0f;
+            const glm::vec3 focusPoint = glm::vec3(camTarget.x, 0.0f, camTarget.z);
+
+            const glm::vec3 upAxis = std::abs(sunDir.y) > 0.98f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+            glm::mat4 lightView = glm::lookAt(focusPoint + sunDir * 85.0f, focusPoint, upAxis);
+
+            // Snap orthographic bounds to shadow-map texel grid to eliminate shadow edge shimmer!
+            const float texelWorld = (kShadowRadius * 2.0f) / static_cast<float>(kShadowMapSize);
+            const glm::vec4 originLS = lightView * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+            const float snapX = std::floor(originLS.x / texelWorld) * texelWorld - originLS.x;
+            const float snapY = std::floor(originLS.y / texelWorld) * texelWorld - originLS.y;
+            lightView[3][0] += snapX;
+            lightView[3][1] += snapY;
+
+            const glm::mat4 lightProj = glm::ortho(
+                -kShadowRadius, kShadowRadius,
+                -kShadowRadius, kShadowRadius,
+                5.0f, 195.0f);
+            lightViewProj = lightProj * lightView;
+
+            gl::bindFramebuffer(GL_FRAMEBUFFER, m_shadowFbo);
+            glViewport(0, 0, kShadowMapSize, kShadowMapSize);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_POLYGON_OFFSET_FILL);
+            glPolygonOffset(2.0f, 4.0f);
+
+            gl::useProgram(m_shadowProgram);
+            gl::uniformMatrix4fv(m_shadowLightVP, 1, GL_FALSE, glm::value_ptr(lightViewProj));
+
+            for (const Entity& e : world.entities()) {
+                if (!e.visible || e.shape == EntityShape::Plane || e.shape == EntityShape::Ring) {
+                    continue;
+                }
+                const glm::mat4 entityMat = buildEntityMatrix(e);
+                if (e.shape == EntityShape::Model) {
+                    const GpuModel* gpuModel = getOrLoadModel(e.modelPath);
+                    if (!gpuModel) continue;
+                    if (gpuModel->hasAnimations) {
+                        evaluateModelNodeMatrices(*gpuModel, e, m_nodeWorldScratch);
+                        for (std::size_t ni = 0; ni < gpuModel->nodes.size(); ++ni) {
+                            if (gpuModel->nodes[ni].subMeshIndices.empty()) continue;
+                            const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
+                            gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(fullMat));
+                            for (const std::size_t smIdx : gpuModel->nodes[ni].subMeshIndices) {
+                                gl::bindVertexArray(gpuModel->subMeshes[smIdx].vao);
+                                glDrawElements(GL_TRIANGLES, gpuModel->subMeshes[smIdx].indexCount, GL_UNSIGNED_INT, nullptr);
+                            }
+                        }
+                    } else {
+                        gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
+                        for (const GpuSubMesh& sm : gpuModel->subMeshes) {
+                            gl::bindVertexArray(sm.vao);
+                            glDrawElements(GL_TRIANGLES, sm.indexCount, GL_UNSIGNED_INT, nullptr);
+                        }
+                    }
+                } else {
+                    const GpuSubMesh* prim = getPrimitiveMesh(e.shape);
+                    gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
+                    gl::bindVertexArray(prim->vao);
+                    glDrawElements(GL_TRIANGLES, prim->indexCount, GL_UNSIGNED_INT, nullptr);
+                }
+            }
+
+            glDisable(GL_POLYGON_OFFSET_FILL);
+            gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, m_viewportWidth, m_viewportHeight);
+        }
+
         // --- Pass 1: Procedural Sky Gradient & Sun Disk ---
         glDisable(GL_DEPTH_TEST);
         glDepthMask(GL_FALSE);
@@ -668,7 +1038,7 @@ public:
         glDepthMask(GL_TRUE);
         glEnable(GL_DEPTH_TEST);
 
-        // --- Pass 2: 3D Lit Entities & glTF 2.0 (.glb) Models ---
+        // --- Pass 2: 3D Lit Entities, Animated glTF 2.0 Models & Soft Shadows ---
         gl::useProgram(m_litProgram);
         gl::uniformMatrix4fv(m_uViewProj, 1, GL_FALSE, glm::value_ptr(viewProj));
         gl::uniform3f(m_uCameraPos, camPos.x, camPos.y, camPos.z);
@@ -683,57 +1053,61 @@ public:
         gl::uniform1f(m_uTime, timeSeconds);
         gl::uniform1i(m_uAlbedoTex, 0);
 
+        gl::uniform1i(m_uShadowsEnabled, useShadows ? 1 : 0);
+        gl::uniformMatrix4fv(m_uLightViewProj, 1, GL_FALSE, glm::value_ptr(lightViewProj));
+        gl::uniform1i(m_uShadowMap, 1);
+        gl::uniform1f(m_uShadowTexelSize, 1.0f / static_cast<float>(kShadowMapSize));
+        if (useShadows) {
+            gl::activeTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, m_shadowTex);
+        }
+
         for (const Entity& e : world.entities()) {
             if (!e.visible) {
                 continue;
             }
 
-            glm::mat4 model(1.0f);
-            model = glm::translate(model, glm::vec3(e.position.x, e.position.y, e.position.z));
-            if (e.useQuaternion) {
-                const glm::quat q(e.rotationQuat.w, e.rotationQuat.x, e.rotationQuat.y, e.rotationQuat.z);
-                model *= glm::mat4_cast(glm::normalize(q));
-            } else {
-                model = glm::rotate(model, glm::radians(e.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-                model = glm::rotate(model, glm::radians(e.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-                model = glm::rotate(model, glm::radians(e.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
-            }
-            model = glm::scale(model, glm::vec3(e.scale.x, e.scale.y, e.scale.z));
-            gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(model));
+            const glm::mat4 entityMat = buildEntityMatrix(e);
 
             if (e.shape == EntityShape::Model) {
                 const GpuModel* gpuModel = getOrLoadModel(e.modelPath);
                 if (!gpuModel) {
                     continue;
                 }
-                for (const GpuSubMesh& sm : gpuModel->subMeshes) {
-                    const glm::vec3 tinted = sm.baseColor * glm::vec3(e.color.r, e.color.g, e.color.b);
-                    const glm::vec3 emissive = e.emissive ? tinted * 0.9f : sm.emissive;
-                    drawSubMesh(sm, tinted, emissive, sm.metallic, sm.roughness, 0.0f);
+                if (gpuModel->hasAnimations) {
+                    evaluateModelNodeMatrices(*gpuModel, e, m_nodeWorldScratch);
+                    for (std::size_t ni = 0; ni < gpuModel->nodes.size(); ++ni) {
+                        if (gpuModel->nodes[ni].subMeshIndices.empty()) continue;
+                        const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
+                        gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(fullMat));
+                        for (const std::size_t smIdx : gpuModel->nodes[ni].subMeshIndices) {
+                            const GpuSubMesh& sm = gpuModel->subMeshes[smIdx];
+                            const glm::vec3 tinted = sm.baseColor * glm::vec3(e.color.r, e.color.g, e.color.b);
+                            const glm::vec3 emissive = e.emissive ? tinted * 0.9f : sm.emissive;
+                            drawSubMesh(sm, tinted, emissive, sm.metallic, sm.roughness, 0.0f);
+                        }
+                    }
+                } else {
+                    gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(entityMat));
+                    for (const GpuSubMesh& sm : gpuModel->subMeshes) {
+                        const glm::vec3 tinted = sm.baseColor * glm::vec3(e.color.r, e.color.g, e.color.b);
+                        const glm::vec3 emissive = e.emissive ? tinted * 0.9f : sm.emissive;
+                        drawSubMesh(sm, tinted, emissive, sm.metallic, sm.roughness, 0.0f);
+                    }
                 }
                 continue;
             }
 
-            const GpuSubMesh* prim = &m_boxMesh;
-            float pulse = 0.0f;
-            float roughness = 0.65f;
-            if (e.shape == EntityShape::Plane) {
-                prim = &m_planeMesh;
-                roughness = 0.88f;
-            } else if (e.shape == EntityShape::Triangle) {
-                prim = &m_arrowMesh;
-                roughness = 0.35f;
-            } else if (e.shape == EntityShape::Ring) {
-                prim = &m_ringMesh;
-                pulse = 1.0f;
-                roughness = 0.25f;
-            }
+            gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(entityMat));
+            const GpuSubMesh* prim = getPrimitiveMesh(e.shape);
+            float pulse = (e.shape == EntityShape::Ring) ? 1.0f : 0.0f;
+            float roughness = (e.shape == EntityShape::Plane) ? 0.88f : 0.55f;
 
             const glm::vec3 baseCol(e.color.r, e.color.g, e.color.b);
             const glm::vec3 emissiveCol = (e.emissive || e.shape == EntityShape::Ring)
                 ? baseCol * 1.1f
                 : glm::vec3(0.0f);
-            drawSubMesh(*prim, baseCol, emissiveCol, 0.08f, roughness, pulse);
+            drawSubMesh(*prim, baseCol, emissiveCol, 0.10f, roughness, pulse);
         }
 
         gl::bindVertexArray(0);
@@ -750,6 +1124,17 @@ public:
     }
 
 private:
+    const GpuSubMesh* getPrimitiveMesh(EntityShape shape) const {
+        switch (shape) {
+            case EntityShape::Plane: return &m_planeMesh;
+            case EntityShape::Sphere: return &m_sphereMesh;
+            case EntityShape::Triangle: return &m_arrowMesh;
+            case EntityShape::Ring: return &m_ringMesh;
+            case EntityShape::Box:
+            default: return &m_boxMesh;
+        }
+    }
+
     void drawSubMesh(
         const GpuSubMesh& sm,
         const glm::vec3& baseColor,
@@ -827,9 +1212,10 @@ private:
 
         GpuModel gpuModel;
         const std::filesystem::path modelDir = fullPath.parent_path();
+        gpuModel.hasAnimations = (data->animations_count > 0);
 
-        auto processMesh = [&](const cgltf_mesh* mesh, const glm::mat4& worldTransform) {
-            const glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(worldTransform)));
+        auto uploadMeshPrimitives = [&](const cgltf_mesh* mesh, const glm::mat4& bakeTransform, std::vector<std::size_t>* outIndices) {
+            const glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(bakeTransform)));
 
             for (cgltf_size pIdx = 0; pIdx < mesh->primitives_count; ++pIdx) {
                 const cgltf_primitive& prim = mesh->primitives[pIdx];
@@ -840,14 +1226,12 @@ private:
                 const cgltf_accessor* posAcc = nullptr;
                 const cgltf_accessor* normAcc = nullptr;
                 const cgltf_accessor* uvAcc = nullptr;
-
                 for (cgltf_size a = 0; a < prim.attributes_count; ++a) {
                     const cgltf_attribute& attr = prim.attributes[a];
                     if (attr.type == cgltf_attribute_type_position) posAcc = attr.data;
                     else if (attr.type == cgltf_attribute_type_normal) normAcc = attr.data;
                     else if (attr.type == cgltf_attribute_type_texcoord && attr.index == 0) uvAcc = attr.data;
                 }
-
                 if (!posAcc || posAcc->count == 0) {
                     continue;
                 }
@@ -857,19 +1241,13 @@ private:
                     float pos[3] = {0, 0, 0};
                     float norm[3] = {0, 1, 0};
                     float uv[2] = {0, 0};
-
                     cgltf_accessor_read_float(posAcc, v, pos, 3);
                     if (normAcc) cgltf_accessor_read_float(normAcc, v, norm, 3);
                     if (uvAcc) cgltf_accessor_read_float(uvAcc, v, uv, 2);
 
-                    const glm::vec4 wp = worldTransform * glm::vec4(pos[0], pos[1], pos[2], 1.0f);
+                    const glm::vec4 wp = bakeTransform * glm::vec4(pos[0], pos[1], pos[2], 1.0f);
                     glm::vec3 wn = normalMat * glm::vec3(norm[0], norm[1], norm[2]);
-                    if (glm::length(wn) > 0.0001f) {
-                        wn = glm::normalize(wn);
-                    } else {
-                        wn = glm::vec3(0.0f, 1.0f, 0.0f);
-                    }
-
+                    wn = glm::length(wn) > 0.0001f ? glm::normalize(wn) : glm::vec3(0.0f, 1.0f, 0.0f);
                     vertices[v] = {wp.x, wp.y, wp.z, wn.x, wn.y, wn.z, uv[0], uv[1]};
                 }
 
@@ -886,16 +1264,14 @@ private:
                     }
                 }
 
-                // Auto-compute flat normals if the glTF omitted NORMAL attributes
                 if (!normAcc && indices.size() >= 3) {
                     for (std::size_t i = 0; i + 2 < indices.size(); i += 3) {
                         auto& v0 = vertices[indices[i]];
                         auto& v1 = vertices[indices[i + 1]];
                         auto& v2 = vertices[indices[i + 2]];
-                        const glm::vec3 a(v0.px, v0.py, v0.pz);
-                        const glm::vec3 b(v1.px, v1.py, v1.pz);
-                        const glm::vec3 c(v2.px, v2.py, v2.pz);
-                        glm::vec3 n = glm::cross(b - a, c - a);
+                        glm::vec3 n = glm::cross(
+                            glm::vec3(v1.px - v0.px, v1.py - v0.py, v1.pz - v0.pz),
+                            glm::vec3(v2.px - v0.px, v2.py - v0.py, v2.pz - v0.pz));
                         if (glm::length(n) > 0.0001f) {
                             n = glm::normalize(n);
                             v0.nx = v1.nx = v2.nx = n.x;
@@ -907,48 +1283,108 @@ private:
 
                 GpuSubMesh sm;
                 sm.upload(vertices, indices);
-
                 if (prim.material) {
                     const cgltf_material* mat = prim.material;
                     if (mat->has_pbr_metallic_roughness) {
                         const auto& pbr = mat->pbr_metallic_roughness;
-                        sm.baseColor = {
-                            pbr.base_color_factor[0],
-                            pbr.base_color_factor[1],
-                            pbr.base_color_factor[2],
-                        };
+                        sm.baseColor = {pbr.base_color_factor[0], pbr.base_color_factor[1], pbr.base_color_factor[2]};
                         sm.metallic = pbr.metallic_factor;
                         sm.roughness = pbr.roughness_factor;
                         if (pbr.base_color_texture.texture && pbr.base_color_texture.texture->image) {
                             sm.albedoTex = loadGltfImageTexture(pbr.base_color_texture.texture->image, modelDir);
                         }
                     }
-                    sm.emissive = {
-                        mat->emissive_factor[0],
-                        mat->emissive_factor[1],
-                        mat->emissive_factor[2],
-                    };
+                    sm.emissive = {mat->emissive_factor[0], mat->emissive_factor[1], mat->emissive_factor[2]};
                 }
 
+                const std::size_t newIdx = gpuModel.subMeshes.size();
                 gpuModel.subMeshes.push_back(sm);
+                if (outIndices) {
+                    outIndices->push_back(newIdx);
+                }
             }
         };
 
-        bool processedAnyNode = false;
-        for (cgltf_size n = 0; n < data->nodes_count; ++n) {
-            const cgltf_node* node = &data->nodes[n];
-            if (!node->mesh) {
-                continue;
+        if (gpuModel.hasAnimations && data->nodes_count > 0) {
+            // Preserve live node hierarchy & load all animation clips
+            gpuModel.nodes.resize(data->nodes_count);
+            for (cgltf_size n = 0; n < data->nodes_count; ++n) {
+                const cgltf_node* src = &data->nodes[n];
+                ModelNode& dst = gpuModel.nodes[n];
+                dst.parentIdx = src->parent ? static_cast<int>(src->parent - data->nodes) : -1;
+                if (src->has_matrix) {
+                    dst.hasMatrix = true;
+                    dst.staticMatrix = glm::make_mat4(src->matrix);
+                }
+                if (src->has_translation) {
+                    dst.translation = {src->translation[0], src->translation[1], src->translation[2]};
+                }
+                if (src->has_rotation) {
+                    dst.rotation = glm::quat(src->rotation[3], src->rotation[0], src->rotation[1], src->rotation[2]);
+                }
+                if (src->has_scale) {
+                    dst.scale = {src->scale[0], src->scale[1], src->scale[2]};
+                }
+                if (src->mesh) {
+                    uploadMeshPrimitives(src->mesh, glm::mat4(1.0f), &dst.subMeshIndices);
+                }
             }
-            float rawMat[16];
-            cgltf_node_transform_world(node, rawMat);
-            const glm::mat4 worldMat = glm::make_mat4(rawMat);
-            processMesh(node->mesh, worldMat);
-            processedAnyNode = true;
-        }
-        if (!processedAnyNode) {
-            for (cgltf_size m = 0; m < data->meshes_count; ++m) {
-                processMesh(&data->meshes[m], glm::mat4(1.0f));
+
+            for (cgltf_size a = 0; a < data->animations_count; ++a) {
+                const cgltf_animation& srcAnim = data->animations[a];
+                AnimClip clip;
+                clip.name = srcAnim.name ? srcAnim.name : ("Clip_" + std::to_string(a));
+
+                for (cgltf_size c = 0; c < srcAnim.channels_count; ++c) {
+                    const cgltf_animation_channel& srcCh = srcAnim.channels[c];
+                    if (!srcCh.target_node || !srcCh.sampler || !srcCh.sampler->input || !srcCh.sampler->output) {
+                        continue;
+                    }
+                    AnimChannel ch;
+                    ch.nodeIdx = static_cast<int>(srcCh.target_node - data->nodes);
+                    if (srcCh.target_path == cgltf_animation_path_type_translation) ch.path = AnimPath::Translation;
+                    else if (srcCh.target_path == cgltf_animation_path_type_rotation) ch.path = AnimPath::Rotation;
+                    else if (srcCh.target_path == cgltf_animation_path_type_scale) ch.path = AnimPath::Scale;
+                    else continue;
+
+                    const cgltf_accessor* inAcc = srcCh.sampler->input;
+                    const cgltf_accessor* outAcc = srcCh.sampler->output;
+                    const cgltf_size count = std::min(inAcc->count, outAcc->count);
+                    ch.times.resize(count);
+                    ch.values.resize(count);
+
+                    const int comps = (ch.path == AnimPath::Rotation) ? 4 : 3;
+                    for (cgltf_size k = 0; k < count; ++k) {
+                        float tm = 0.0f;
+                        float vals[4] = {0, 0, 0, 1};
+                        cgltf_accessor_read_float(inAcc, k, &tm, 1);
+                        cgltf_accessor_read_float(outAcc, k, vals, comps);
+                        ch.times[k] = tm;
+                        ch.values[k] = {vals[0], vals[1], vals[2], vals[3]};
+                        clip.duration = std::max(clip.duration, tm);
+                    }
+                    clip.channels.push_back(std::move(ch));
+                }
+
+                if (!clip.channels.empty()) {
+                    gpuModel.animations.push_back(std::move(clip));
+                }
+            }
+        } else {
+            // Static model: bake node world matrices once for ultra-fast drawing
+            bool processedAny = false;
+            for (cgltf_size n = 0; n < data->nodes_count; ++n) {
+                const cgltf_node* node = &data->nodes[n];
+                if (!node->mesh) continue;
+                float rawMat[16];
+                cgltf_node_transform_world(node, rawMat);
+                uploadMeshPrimitives(node->mesh, glm::make_mat4(rawMat), nullptr);
+                processedAny = true;
+            }
+            if (!processedAny) {
+                for (cgltf_size m = 0; m < data->meshes_count; ++m) {
+                    uploadMeshPrimitives(&data->meshes[m], glm::mat4(1.0f), nullptr);
+                }
             }
         }
 
@@ -961,13 +1397,21 @@ private:
         }
 
         std::cout << "[SAGE][Model] Loaded \"" << rawPath << "\" ("
-                  << gpuModel.subMeshes.size() << " submesh(es))\n";
+                  << gpuModel.subMeshes.size() << " submesh(es)"
+                  << (gpuModel.hasAnimations ? (", " + std::to_string(gpuModel.animations.size()) + " anim clip(s)") : "")
+                  << ")\n";
         auto [it, inserted] = m_modelCache.emplace(rawPath, std::move(gpuModel));
         return &it->second;
     }
 
     RendererInfo m_info;
     std::filesystem::path m_assetRoot;
+
+    GLuint m_shadowProgram = 0;
+    GLuint m_shadowFbo = 0;
+    GLuint m_shadowTex = 0;
+    GLint m_shadowModel = -1;
+    GLint m_shadowLightVP = -1;
 
     GLuint m_skyProgram = 0;
     GLuint m_skyVao = 0;
@@ -990,6 +1434,10 @@ private:
     GLint m_uAlbedoTex = -1;
     GLint m_uPulse = -1;
     GLint m_uTime = -1;
+    GLint m_uShadowsEnabled = -1;
+    GLint m_uLightViewProj = -1;
+    GLint m_uShadowMap = -1;
+    GLint m_uShadowTexelSize = -1;
     GLint m_uCameraPos = -1;
     GLint m_uSunDir = -1;
     GLint m_uSunColor = -1;
@@ -1002,11 +1450,13 @@ private:
 
     GpuSubMesh m_boxMesh;
     GpuSubMesh m_planeMesh;
+    GpuSubMesh m_sphereMesh;
     GpuSubMesh m_arrowMesh;
     GpuSubMesh m_ringMesh;
 
     std::unordered_map<std::string, GpuModel> m_modelCache;
     std::unordered_set<std::string> m_failedModels;
+    std::vector<glm::mat4> m_nodeWorldScratch;
 
     int m_viewportWidth = 1280;
     int m_viewportHeight = 720;

@@ -12,6 +12,9 @@
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
@@ -267,6 +270,59 @@ bool PhysicsWorld::addStaticBox(const std::string& entityId, Vec3 pos, Vec3 half
     return true;
 }
 
+bool PhysicsWorld::addStaticRamp(
+    const std::string& entityId,
+    Vec3 pos,
+    float width,
+    float height,
+    float length,
+    float yawDeg) {
+    if (!m_impl->initialized) {
+        return false;
+    }
+    m_impl->removeExisting(entityId);
+
+    const float hx = std::max(width * 0.5f, 0.1f);
+    const float hz = std::max(length * 0.5f, 0.1f);
+    const float h = std::max(height, 0.1f);
+
+    // 6-vertex 3D ramp rising from -Z (y=0) to +Z (y=h)
+    JPH::Array<JPH::Vec3> points;
+    points.push_back(JPH::Vec3(-hx, 0.0f, -hz));
+    points.push_back(JPH::Vec3( hx, 0.0f, -hz));
+    points.push_back(JPH::Vec3(-hx, 0.0f,  hz));
+    points.push_back(JPH::Vec3( hx, 0.0f,  hz));
+    points.push_back(JPH::Vec3(-hx, h,     hz));
+    points.push_back(JPH::Vec3( hx, h,     hz));
+
+    JPH::ConvexHullShapeSettings hullSettings(points, 0.02f);
+    const auto shapeResult = hullSettings.Create();
+    if (shapeResult.HasError()) {
+        std::cerr << "[SAGE][Jolt] Failed to build ramp hull for \"" << entityId
+                  << "\": " << shapeResult.GetError() << "\n";
+        return false;
+    }
+
+    JPH::BodyCreationSettings settings(
+        shapeResult.Get(),
+        JPH::RVec3(pos.x, pos.y, pos.z),
+        eulerDegToJoltQuat({0.0f, yawDeg, 0.0f}),
+        JPH::EMotionType::Static,
+        Layers::NON_MOVING);
+    settings.mFriction = 0.65f;
+    settings.mRestitution = 0.2f;
+
+    auto& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID bid = bi.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+    if (bid.IsInvalid()) {
+        return false;
+    }
+
+    m_impl->bodiesByEntity[entityId] = {bid, false};
+    m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
+    return true;
+}
+
 bool PhysicsWorld::addDynamicBox(
     const std::string& entityId,
     Vec3 pos,
@@ -297,6 +353,79 @@ bool PhysicsWorld::addDynamicBox(
     settings.mFriction = std::clamp(friction, 0.0f, 2.0f);
     settings.mLinearDamping = 0.12f;
     settings.mAngularDamping = 0.18f;
+
+    auto& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID bid = bi.CreateAndAddBody(settings, JPH::EActivation::Activate);
+    if (bid.IsInvalid()) {
+        return false;
+    }
+
+    m_impl->bodiesByEntity[entityId] = {bid, true};
+    m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
+    return true;
+}
+
+bool PhysicsWorld::addDynamicSphere(
+    const std::string& entityId,
+    Vec3 pos,
+    float radius,
+    float mass,
+    float restitution,
+    float friction) {
+    if (!m_impl->initialized) {
+        return false;
+    }
+    m_impl->removeExisting(entityId);
+
+    JPH::BodyCreationSettings settings(
+        new JPH::SphereShape(std::max(radius, 0.08f)),
+        JPH::RVec3(pos.x, pos.y, pos.z),
+        JPH::Quat::sIdentity(),
+        JPH::EMotionType::Dynamic,
+        Layers::MOVING);
+    settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+    settings.mMassPropertiesOverride.mMass = std::max(mass, 0.5f);
+    settings.mRestitution = std::clamp(restitution, 0.0f, 0.96f);
+    settings.mFriction = std::clamp(friction, 0.0f, 2.0f);
+    settings.mLinearDamping = 0.06f;
+    settings.mAngularDamping = 0.08f;
+
+    auto& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID bid = bi.CreateAndAddBody(settings, JPH::EActivation::Activate);
+    if (bid.IsInvalid()) {
+        return false;
+    }
+
+    m_impl->bodiesByEntity[entityId] = {bid, true};
+    m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
+    return true;
+}
+
+bool PhysicsWorld::addDynamicCapsule(
+    const std::string& entityId,
+    Vec3 pos,
+    float radius,
+    float halfHeight,
+    float mass,
+    float restitution,
+    float friction) {
+    if (!m_impl->initialized) {
+        return false;
+    }
+    m_impl->removeExisting(entityId);
+
+    JPH::BodyCreationSettings settings(
+        new JPH::CapsuleShape(std::max(halfHeight, 0.05f), std::max(radius, 0.08f)),
+        JPH::RVec3(pos.x, pos.y, pos.z),
+        JPH::Quat::sIdentity(),
+        JPH::EMotionType::Dynamic,
+        Layers::MOVING);
+    settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+    settings.mMassPropertiesOverride.mMass = std::max(mass, 0.5f);
+    settings.mRestitution = std::clamp(restitution, 0.0f, 0.95f);
+    settings.mFriction = std::clamp(friction, 0.0f, 2.0f);
+    settings.mLinearDamping = 0.14f;
+    settings.mAngularDamping = 0.20f;
 
     auto& bi = m_impl->physicsSystem->GetBodyInterface();
     const JPH::BodyID bid = bi.CreateAndAddBody(settings, JPH::EActivation::Activate);

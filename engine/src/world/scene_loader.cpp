@@ -115,6 +115,8 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
                 EntityShape shape = EntityShape::Box;
                 if (type == "primitive_plane") {
                     shape = EntityShape::Plane;
+                } else if (type == "primitive_sphere") {
+                    shape = EntityShape::Sphere;
                 } else if (type == "primitive_ring") {
                     shape = EntityShape::Ring;
                 } else if (type == "primitive_triangle") {

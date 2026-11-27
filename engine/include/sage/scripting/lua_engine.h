@@ -39,6 +39,7 @@ public:
 
     bool reloadAll();
     void tick(double dt);
+    void renderUI();
     bool checkHotReload();
     void shutdown();
 

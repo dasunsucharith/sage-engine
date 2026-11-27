@@ -158,6 +158,41 @@ bool World::setVisible(const std::string& id, bool visible) {
     return false;
 }
 
+bool World::playAnimation(const std::string& id, const std::string& clipName, bool loop, float speed) {
+    if (Entity* e = findEntity(id)) {
+        e->activeAnimation = clipName;
+        e->animLoop = loop;
+        e->animSpeed = speed;
+        e->animPlaying = true;
+        return true;
+    }
+    return false;
+}
+
+bool World::stopAnimation(const std::string& id) {
+    if (Entity* e = findEntity(id)) {
+        e->animPlaying = false;
+        return true;
+    }
+    return false;
+}
+
+bool World::setAnimationSpeed(const std::string& id, float speed) {
+    if (Entity* e = findEntity(id)) {
+        e->animSpeed = speed;
+        return true;
+    }
+    return false;
+}
+
+void World::updateAnimations(float dt) {
+    for (Entity& e : m_entities) {
+        if (e.shape == EntityShape::Model && e.animPlaying) {
+            e.animTime += dt * e.animSpeed;
+        }
+    }
+}
+
 bool World::hasEntity(const std::string& id) const {
     return m_indexById.contains(id);
 }

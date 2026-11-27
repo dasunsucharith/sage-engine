@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (`v0.4.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **3D glTF 2.0 (`.glb`)**, **Jolt Physics 5.7**, **miniaudio 0.11**, **Dear ImGui 1.92**, and **Live Hot-Reload**.
+> **Status:** Live (`v0.5.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **3D Soft Shadows & Animated glTF 2.0 (`.glb`)**, **Jolt Physics 5.7**, **miniaudio 0.11**, **Dear ImGui 1.92**, and **Lua Game HUDs (`ui.*`)**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -33,6 +33,7 @@ Every resource script in `resources/<name>/main.lua` can define these automatic 
 ```lua
 function onStart()       -- Called once after the JSON scene loads (and on every hot-reload)
 function onTick(dt)      -- Called at a deterministic 60 Hz (dt = seconds per tick)
+function onRenderUI()    -- Optional: called every frame to draw custom game HUDs via ui.*
 function onShutdown()    -- Called when the resource stops or before hot-reload
 ```
 
@@ -64,6 +65,7 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.spawnModel(id, path, x, y, z)` | Loads & caches a `.glb` / `.gltf` 3D model from `assets/models/` and returns `id`. |
 | `world.spawnBox(id, x, y, z)` | Spawns a 3D unit cube entity and returns `id`. |
 | `world.spawnPlane(id, x, y, z)` | Spawns a 3D horizontal plane entity and returns `id`. |
+| `world.spawnSphere(id, x, y, z)` | Spawns a 3D UV-sphere entity and returns `id`. |
 | `world.spawnTriangle(id, x, y, z)` | Spawns a 3D extruded pointer chevron (points along `+Z` at `yaw = 0`). |
 | `world.spawnRing(id, x, y, z)` | Spawns a glowing 3D pulsing checkpoint beacon ring. |
 | `world.setPosition(id, x, y, z)` | Moves an entity in 3D space. |
@@ -74,6 +76,9 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setEmissive(id, enabled)` | Enables or disables glowing emissive shading on an entity. |
 | `world.setVisible(id, visible)` | Shows or hides an entity without destroying it. |
 | `world.setTimeOfDay(hours)` | Dynamically updates sun angle, sky gradient, ambient fill, and horizon fog (`0.0`–`24.0`). |
+| `world.playAnimation(id [, clipName, loop, speed])` | Plays a glTF 2.0 keyframe animation clip on a `.glb` model (`""` plays clip 0). |
+| `world.stopAnimation(id)` | Pauses glTF animation playback on an entity. |
+| `world.setAnimationSpeed(id, speed)` | Adjusts glTF animation playback speed multiplier. |
 | `world.destroy(id)` | Removes an entity from the world. |
 | `world.clear()` | Removes all entities from the world. |
 
@@ -88,7 +93,10 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | Function | Description |
 | :--- | :--- |
 | `physics.addStaticBox(id, px, py, pz, hx, hy, hz)` | Registers an immovable 3D box collider (ground, walls, buildings) with half-extents `(hx, hy, hz)`. |
-| `physics.addDynamicBox(id, px, py, pz, hx, hy, hz [, mass, restitution, friction])` | Attaches a full 3D tumbling rigid body to `id`; automatically syncs 3D position & quaternion back to `world` every 60 Hz step. |
+| `physics.addStaticRamp(id, px, py, pz, w, h, l, yawDeg)` | Registers a 3D convex-hull ramp wedge collider so physics objects can roll up and launch off ramps. |
+| `physics.addDynamicBox(id, px, py, pz, hx, hy, hz [, mass, restitution, friction])` | Attaches a full 3D tumbling box rigid body to `id`. |
+| `physics.addDynamicSphere(id, px, py, pz, radius [, mass, restitution, friction])` | Attaches a rolling, bouncing 3D sphere rigid body to `id`. |
+| `physics.addDynamicCapsule(id, px, py, pz, radius, halfHeight [, mass, restitution, friction])` | Attaches a 3D capsule rigid body (cones, barrels, characters) to `id`. |
 | `physics.addKinematicBox(id, px, py, pz, hx, hy, hz)` | Registers a script-driven moving collider (e.g., player vehicle hull) that physically transfers momentum to dynamic bodies on collision. |
 | `physics.moveKinematic(id, px, py, pz, pitch, yaw, roll, dt)` | Moves a kinematic body cleanly over `dt` seconds so Jolt computes exact impact velocity. |
 | `physics.applyImpulse(id, ix, iy, iz)` | Applies an instant linear impulse (N·s) to a dynamic rigid body. |
@@ -105,3 +113,13 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `audio.playChime()` | Plays an ascending harmonic reward chord (deliveries & stunt jumps). |
 | `audio.playExplosion()` | Plays a sub-bass shockwave boom SFX. |
 | `audio.setVolume(vol01)` | Sets master audio volume (`0.0`–`1.0`). |
+
+### `ui` *(Lua-Driven Game HUDs & Menus — call inside `onRenderUI()`)*
+| Function | Description |
+| :--- | :--- |
+| `ui.beginWindow(title, x, y, w, h [, overlay])` | Opens an in-game HUD/menu window and returns `true` if visible. |
+| `ui.endWindow()` | Closes the current HUD window (always pair with `ui.beginWindow`). |
+| `ui.text(message)` | Draws a line of HUD text. |
+| `ui.progressBar(fraction01 [, label])` | Draws a progress bar (RPM, Nitro, Health, Loading). |
+| `ui.button(label)` | Draws a clickable button and returns `true` on click. |
+| `ui.separator()` | Draws a horizontal divider line. |

@@ -24,6 +24,7 @@ struct EditorActions {
     std::function<void()> onHotReload;
     std::function<void()> onToggleFreeFly;
     std::function<void()> onTriggerShockwave;
+    std::function<void()> onRenderCustomUi; // Called inside ImGui frame for Lua ui.* HUDs!
 };
 
 // Live in-game Dear ImGui viewport HUD & Scene Inspector (toggle with F1).

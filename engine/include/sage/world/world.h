@@ -28,24 +28,32 @@ struct Color3 {
 enum class EntityShape {
     Box,
     Plane,
+    Sphere,
     Triangle,
     Ring,
     Model
 };
 
-// Scene entity rendered in 3D perspective (primitive or .glb/.gltf model).
+// Scene entity rendered in 3D perspective (primitive or animated .glb/.gltf model).
 struct Entity {
     std::string id;
     EntityShape shape = EntityShape::Box;
-    std::string modelPath;           // Used when shape == EntityShape::Model
-    Vec3 position{0.0f, 0.0f, 0.0f}; // World meters (+Y up)
-    Vec3 rotation{0.0f, 0.0f, 0.0f}; // pitch (X), yaw (Y), roll (Z) in degrees
-    Quat rotationQuat{};             // Used when useQuaternion == true (Jolt Physics 3D bodies)
+    std::string modelPath;
+    Vec3 position{0.0f, 0.0f, 0.0f};
+    Vec3 rotation{0.0f, 0.0f, 0.0f};
+    Quat rotationQuat{};
     bool useQuaternion = false;
     Vec3 scale{1.0f, 1.0f, 1.0f};
-    Color3 color{1.0f, 1.0f, 1.0f};  // Albedo for primitives; tint multiplier for .glb models
+    Color3 color{1.0f, 1.0f, 1.0f};
     bool emissive = false;
     bool visible = true;
+
+    // glTF 2.0 animation playback state
+    std::string activeAnimation; // Empty = auto-play clip 0 if model contains animations
+    float animTime = 0.0f;
+    float animSpeed = 1.0f;
+    bool animPlaying = true;
+    bool animLoop = true;
 };
 
 struct SkySettings {
@@ -58,6 +66,7 @@ struct SkySettings {
     float ambientIntensity = 0.36f;
     float fogStart = 75.0f;
     float fogEnd = 240.0f;
+    bool shadowsEnabled = true;
 };
 
 struct CameraState {
@@ -90,6 +99,11 @@ public:
     bool setColor(const std::string& id, float r, float g, float b);
     bool setEmissive(const std::string& id, bool emissive);
     bool setVisible(const std::string& id, bool visible);
+
+    bool playAnimation(const std::string& id, const std::string& clipName = "", bool loop = true, float speed = 1.0f);
+    bool stopAnimation(const std::string& id);
+    bool setAnimationSpeed(const std::string& id, float speed);
+    void updateAnimations(float dt);
 
     bool hasEntity(const std::string& id) const;
     Vec3 getPosition(const std::string& id) const;

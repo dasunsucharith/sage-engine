@@ -7,6 +7,7 @@
 
 #include <nlohmann/json.hpp>
 #include <sol/sol.hpp>
+#include <imgui.h>
 
 #include <algorithm>
 #include <cctype>
@@ -41,6 +42,7 @@ struct LoadedResource {
     sol::environment env;
     sol::protected_function onStart;
     sol::protected_function onTick;
+    sol::protected_function onRenderUI;
     sol::protected_function onShutdown;
     bool active = false;
 };
@@ -111,6 +113,9 @@ struct LuaEngine::Impl {
         worldTbl.set_function("spawnPlane", [this](const std::string& id, float x, float y, float z) -> std::string {
             return world ? world->spawnEntity(id, EntityShape::Plane, {x, y, z}) : "";
         });
+        worldTbl.set_function("spawnSphere", [this](const std::string& id, float x, float y, float z) -> std::string {
+            return world ? world->spawnEntity(id, EntityShape::Sphere, {x, y, z}) : "";
+        });
         worldTbl.set_function("spawnTriangle", [this](const std::string& id, float x, float y, float z) -> std::string {
             return world ? world->spawnEntity(id, EntityShape::Triangle, {x, y, z}) : "";
         });
@@ -150,6 +155,19 @@ struct LuaEngine::Impl {
                 world->setTimeOfDay(hours);
             }
         });
+        worldTbl.set_function("playAnimation", [this](
+            const std::string& id,
+            sol::optional<std::string> clipName,
+            sol::optional<bool> loop,
+            sol::optional<float> speed) -> bool {
+            return world ? world->playAnimation(id, clipName.value_or(""), loop.value_or(true), speed.value_or(1.0f)) : false;
+        });
+        worldTbl.set_function("stopAnimation", [this](const std::string& id) -> bool {
+            return world ? world->stopAnimation(id) : false;
+        });
+        worldTbl.set_function("setAnimationSpeed", [this](const std::string& id, float speed) -> bool {
+            return world ? world->setAnimationSpeed(id, speed) : false;
+        });
         worldTbl.set_function("destroy", [this](const std::string& id) -> bool {
             return world ? world->destroy(id) : false;
         });
@@ -188,12 +206,30 @@ struct LuaEngine::Impl {
         physTbl.set_function("addStaticBox", [this](const std::string& id, float px, float py, float pz, float hx, float hy, float hz) -> bool {
             return physics ? physics->addStaticBox(id, {px, py, pz}, {hx, hy, hz}) : false;
         });
+        physTbl.set_function("addStaticRamp", [this](
+            const std::string& id, float px, float py, float pz, float w, float h, float l, float yawDeg) -> bool {
+            return physics ? physics->addStaticRamp(id, {px, py, pz}, w, h, l, yawDeg) : false;
+        });
         physTbl.set_function("addDynamicBox", [this](
             const std::string& id, float px, float py, float pz, float hx, float hy, float hz,
             sol::optional<float> mass, sol::optional<float> restitution, sol::optional<float> friction) -> bool {
             return physics ? physics->addDynamicBox(
                 id, {px, py, pz}, {hx, hy, hz},
                 mass.value_or(25.0f), restitution.value_or(0.28f), friction.value_or(0.65f)) : false;
+        });
+        physTbl.set_function("addDynamicSphere", [this](
+            const std::string& id, float px, float py, float pz, float radius,
+            sol::optional<float> mass, sol::optional<float> restitution, sol::optional<float> friction) -> bool {
+            return physics ? physics->addDynamicSphere(
+                id, {px, py, pz}, radius,
+                mass.value_or(30.0f), restitution.value_or(0.55f), friction.value_or(0.45f)) : false;
+        });
+        physTbl.set_function("addDynamicCapsule", [this](
+            const std::string& id, float px, float py, float pz, float radius, float halfHeight,
+            sol::optional<float> mass, sol::optional<float> restitution, sol::optional<float> friction) -> bool {
+            return physics ? physics->addDynamicCapsule(
+                id, {px, py, pz}, radius, halfHeight,
+                mass.value_or(10.0f), restitution.value_or(0.25f), friction.value_or(0.65f)) : false;
         });
         physTbl.set_function("addKinematicBox", [this](const std::string& id, float px, float py, float pz, float hx, float hy, float hz) -> bool {
             return physics ? physics->addKinematicBox(id, {px, py, pz}, {hx, hy, hz}) : false;
@@ -251,6 +287,39 @@ struct LuaEngine::Impl {
             if (audio) {
                 audio->setMasterVolume(vol);
             }
+        });
+
+        // --- ui.* namespace (Lua-driven Dear ImGui Game HUDs & Menus!) ---
+        sol::table uiTbl = state.create_named_table("ui");
+        uiTbl.set_function("beginWindow", [](
+            const std::string& title, float x, float y, float w, float h, sol::optional<bool> overlay) -> bool {
+            ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Always);
+            if (w > 0.0f || h > 0.0f) {
+                ImGui::SetNextWindowSize(ImVec2(w, h), ImGuiCond_Always);
+            }
+            ImGuiWindowFlags flags = ImGuiWindowFlags_NoSavedSettings;
+            if (overlay.value_or(true)) {
+                flags |= ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
+            }
+            return ImGui::Begin(title.c_str(), nullptr, flags);
+        });
+        uiTbl.set_function("endWindow", []() {
+            ImGui::End();
+        });
+        uiTbl.set_function("text", [](const std::string& msg) {
+            ImGui::TextUnformatted(msg.c_str());
+        });
+        uiTbl.set_function("progressBar", [](float fraction, sol::optional<std::string> overlay) {
+            ImGui::ProgressBar(
+                std::clamp(fraction, 0.0f, 1.0f),
+                ImVec2(-1.0f, 0.0f),
+                overlay.has_value() ? overlay->c_str() : nullptr);
+        });
+        uiTbl.set_function("button", [](const std::string& label) -> bool {
+            return ImGui::Button(label.c_str());
+        });
+        uiTbl.set_function("separator", []() {
+            ImGui::Separator();
         });
     }
 
@@ -390,6 +459,7 @@ struct LuaEngine::Impl {
 
         res.onStart = res.env["onStart"];
         res.onTick = res.env["onTick"];
+        res.onRenderUI = res.env["onRenderUI"];
         res.onShutdown = res.env["onShutdown"];
         res.active = true;
 
@@ -501,6 +571,21 @@ void LuaEngine::tick(double dt) {
                       << err.what() << "\n"
                       << "[SAGE][Lua] Resource \"" << res.name
                       << "\" paused — fix the script and save (or press F5) to recover live!\n";
+            res.active = false;
+        }
+    }
+}
+
+void LuaEngine::renderUI() {
+    for (auto& res : m_impl->resources) {
+        if (!res.active || !res.onRenderUI.valid()) {
+            continue;
+        }
+        sol::protected_function_result result = res.onRenderUI();
+        if (!result.valid()) {
+            const sol::error err = result;
+            std::cerr << "[SAGE][Lua] Runtime error in " << res.name << "::onRenderUI():\n  "
+                      << err.what() << "\n";
             res.active = false;
         }
     }

@@ -48,7 +48,8 @@ We follow the **Table Tennis Rule** (learned from RAGE's history): prove every c
 - [x] **v0.2 — Lua Brain:** Embedded Lua VM (`sol2`), FiveM-style `resources/` loader, and live hot-reloading.
 - [x] **v0.3 — 3D World:** Free-fly 3D camera, `.glb`/`.gltf` model loader, PBR lighting, and JSON scene loader.
 - [x] **v0.4 — Editor & Physics:** Live `Dear ImGui` viewport/inspector + `Jolt Physics` (gravity, collisions, drivable car) + 3D audio (`miniaudio`).
-- [ ] **v0.5+ — RAGE-Scale Tech:** Deferred G-Buffer renderer, Cascaded Shadow Maps, open-world chunk streaming, active ragdolls, and Vulkan/DX12 backend.
+- [x] **v0.5 — General-Purpose 3D Expansion:** Real-time soft Shadow Maps (2048px PCF), native glTF 2.0 keyframe animations, Jolt spheres/capsules/convex ramps, Blender animated asset kit, and Lua `ui.*` game HUDs.
+- [ ] **v0.6+ — RAGE-Scale Tech:** Deferred G-Buffer PBR, Multi-Cascade CSM, Jolt 4-Wheel Raycast Suspension & CharacterVirtual, open-world chunk streaming, and Vulkan/DX12 backend.
 
 ---
 
