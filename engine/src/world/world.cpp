@@ -35,6 +35,103 @@ float evaluateOceanWaveOffset(float x, float z, float t) {
     return w1 + w2 + w3 + w4;
 }
 
+float smoothstepf(float e0, float e1, float x) {
+    const float t = std::clamp((x - e0) / std::max(e1 - e0, 1e-5f), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+float hash21Terrain(float x, float z) {
+    const float h = std::sin(x * 127.1f + z * 311.7f) * 43758.5453123f;
+    return h - std::floor(h);
+}
+
+float valueNoise2D(float x, float z) {
+    const float ix = std::floor(x);
+    const float iz = std::floor(z);
+    const float fx = x - ix;
+    const float fz = z - iz;
+    const float ux = fx * fx * (3.0f - 2.0f * fx);
+    const float uz = fz * fz * (3.0f - 2.0f * fz);
+    const float a = hash21Terrain(ix, iz);
+    const float b = hash21Terrain(ix + 1.0f, iz);
+    const float c = hash21Terrain(ix, iz + 1.0f);
+    const float d = hash21Terrain(ix + 1.0f, iz + 1.0f);
+    return (a + (b - a) * ux) + ((c + (d - c) * ux) - (a + (b - a) * ux)) * uz;
+}
+
+float fbmTerrain(float x, float z) {
+    float sum = 0.0f;
+    float amp = 0.52f;
+    float freq = 1.0f;
+    for (int i = 0; i < 4; ++i) {
+        sum += amp * valueNoise2D(x * freq, z * freq);
+        freq *= 2.04f;
+        amp *= 0.48f;
+    }
+    return sum;
+}
+
+// Deterministic 3D open-world heightmap: flat on all highways, ring roads, Downtown Plaza & Marina Lagoon,
+// rolling drivable hills in Alpine Highlands & Red Rock Desert, and panoramic mountain ranges framing the island!
+float evaluateTerrainHeightRaw(float x, float z, const TerrainSettings& cfg) {
+    if (!cfg.enabled) {
+        return 0.0f;
+    }
+
+    const float ax = std::abs(x);
+    const float az = std::abs(z);
+    const float cheb = std::max(ax, az);
+
+    // 1. Keep Downtown Core, all Highway corridors, Ring Roads (±64, ±148, ±236) & Marina Lagoon cleanly flat!
+    float roadMask = 1.0f;
+    roadMask *= smoothstepf(12.0f, 24.0f, ax);
+    roadMask *= smoothstepf(12.0f, 24.0f, az);
+    roadMask *= smoothstepf(11.0f, 22.0f, std::abs(cheb - 64.0f));
+    roadMask *= smoothstepf(12.0f, 25.0f, std::abs(cheb - 148.0f));
+    roadMask *= smoothstepf(13.0f, 26.0f, std::abs(cheb - 236.0f));
+
+    // Keep Downtown Metro Plaza & Stadium zone flat for clean urban streets
+    const float urbanMask = smoothstepf(58.0f, 88.0f, cheb);
+    // Keep entire Palm Coast Marina Lagoon & Beach Pier zone flat & open to the ocean horizon!
+    const float lagoonFlatX = smoothstepf(120.0f, 150.0f, x);
+    const float lagoonFlatZ = smoothstepf(-120.0f, -150.0f, z);
+    const float lagoonMask = 1.0f - lagoonFlatX * lagoonFlatZ;
+
+    // 2. Rolling Drivable Interior Biome Hills (Alpine Highlands NE + Red Rock Desert SW!)
+    const float nBroad = fbmTerrain(x * 0.011f + 4.3f, z * 0.011f + 1.9f);
+    const float nRidge = 1.0f - std::abs(fbmTerrain(x * 0.018f - 2.1f, z * 0.018f + 6.4f) * 2.0f - 1.0f);
+
+    float interiorH = 0.0f;
+    if (x > 0.0f && z > 0.0f) {
+        // NE Pine Highlands: smooth rolling emerald alpine hills up to ~11m!
+        const float neBlend = smoothstepf(16.0f, 55.0f, x) * smoothstepf(16.0f, 55.0f, z);
+        interiorH = (nBroad * 9.5f + nRidge * 4.5f) * neBlend * roadMask * urbanMask;
+    } else if (x < 0.0f && z < 0.0f) {
+        // SW Red Rock Desert: sculpted canyon dunes & terraced red-rock mesas up to ~10m!
+        const float swBlend = smoothstepf(16.0f, 55.0f, -x) * smoothstepf(16.0f, 55.0f, -z);
+        const float rawMesa = nBroad * 10.5f + nRidge * 3.5f;
+        // Subtle mesa terrace stepping for authentic Red Rock canyon silhouette!
+        const float terraced = rawMesa + std::sin(rawMesa * 1.4f) * 0.35f;
+        interiorH = std::max(0.0f, terraced) * swBlend * roadMask * urbanMask;
+    } else if (x < 0.0f && z > 0.0f) {
+        // NW Outer Metro Parkland gentle green hills outside core
+        const float nwBlend = smoothstepf(155.0f, 200.0f, cheb);
+        interiorH = nBroad * 6.5f * nwBlend * roadMask;
+    }
+
+    // 3. Panoramic Surrounding Mountain Ring outside the 560m island (cheb > 258m -> 440m), leaving SE Marina Bay open!
+    float outerRing = smoothstepf(256.0f, 345.0f, cheb);
+    const float outerFalloff = 1.0f - smoothstepf(415.0f, cfg.halfSize, cheb);
+    // Open ocean view in SE quadrant (x > 95 and z < -95)
+    const float bayOpen = 1.0f - smoothstepf(85.0f, 155.0f, x) * smoothstepf(-85.0f, -155.0f, z);
+    const float mtnShape = (0.35f + 0.65f * nBroad) * 0.60f + (nRidge * nRidge) * 0.55f;
+    // Taller snow-capped Alpine peaks in NE & North, terraced canyon ridges in SW/West!
+    const float peakScale = (z > 0.0f) ? cfg.maxHeight : (cfg.maxHeight * 0.78f);
+    const float mountainH = outerRing * outerFalloff * bayOpen * mtnShape * peakScale;
+
+    return std::max(interiorH, mountainH) * lagoonMask;
+}
+
 } // namespace
 
 Entity* World::findEntity(const std::string& id) {
@@ -368,6 +465,31 @@ WaterSampleResult World::sampleWater(float x, float z, float timeSeconds) const 
         }
     }
     return best;
+}
+
+TerrainSample World::sampleTerrain(float x, float z) const {
+    TerrainSample s{};
+    if (x < 0.0f && z >= 0.0f) s.biomeId = 0;       // Downtown Metro
+    else if (x >= 0.0f && z >= 0.0f) s.biomeId = 1; // Alpine Highlands
+    else if (x >= 0.0f && z < 0.0f) s.biomeId = 2;  // Palm Coast Marina
+    else s.biomeId = 3;                             // Red Rock Desert
+
+    if (!m_terrain.enabled) {
+        return s;
+    }
+
+    s.height = evaluateTerrainHeightRaw(x, z, m_terrain);
+    constexpr float kEps = 1.25f;
+    const float hL = evaluateTerrainHeightRaw(x - kEps, z, m_terrain);
+    const float hR = evaluateTerrainHeightRaw(x + kEps, z, m_terrain);
+    const float hD = evaluateTerrainHeightRaw(x, z - kEps, m_terrain);
+    const float hU = evaluateTerrainHeightRaw(x, z + kEps, m_terrain);
+    const float nx = hL - hR;
+    const float ny = 2.0f * kEps;
+    const float nz = hD - hU;
+    const float invLen = 1.0f / std::max(std::sqrt(nx * nx + ny * ny + nz * nz), 1e-5f);
+    s.normal = {nx * invLen, ny * invLen, nz * invLen};
+    return s;
 }
 
 bool World::hasEntity(const std::string& id) const {

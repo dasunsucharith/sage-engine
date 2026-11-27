@@ -4,7 +4,7 @@
 
 int main(int argc, char* argv[]) {
     sage::EngineConfig config;
-    config.appName = "SAGE Engine v1.2.0 — Skeletal Rigging & GGX PBR Open World";
+    config.appName = "SAGE Engine v1.3.0 — AAA 3D Terrain, Volumetric God-Rays & Spatial Audio";
     config.windowWidth = 1280;
     config.windowHeight = 720;
 

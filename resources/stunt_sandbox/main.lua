@@ -1,9 +1,10 @@
 -- =============================================================================
--- SAGE Engine v1.2.0 Showcase: GPU Skeletal Skinning + Crossfade Blending + FXAA
---   * Biomechanical 5-Clip Rigged Human: Idle, Walk, Run, Jump, Swim!
---   * Real-Time Skeletal Crossfade Blending & Surface-Aware Procedural Footsteps
---   * 3 Land Vehicles (Aventador SVJ, Cyberpunk Superbike, Sports Coupe) + Speedboat
---   * Cook-Torrance GGX PBR, FXAA 3.11, Aerial Scattering, Depth SSAO & 33 Models
+-- SAGE Engine v1.3.0 Showcase: AAA 3D Heightmap Terrain + 4-Wheel Suspension
+--   * Rolling 3D Alpine Hills, Red Rock Mesas & Snow-Capped Mountain Ranges
+--   * 4-Wheel Spring-Damper Vehicle Suspension + Slope Pitch/Roll Alignment
+--   * Volumetric Sun Shafts (God-Rays) + Drifting Cloud Shadows + FXAA + GGX PBR
+--   * 3D Spatial Stereo-Panned World Audio (Ocean, Fountain, Helicopter, Wind)
+--   * 5-Clip Crossfaded Rigged Human (Idle/Walk/Run/Jump/Swim) + AI Telemetry
 -- =============================================================================
 -- CONTROLS:
 --   W / S (or Up / Down)   : Drive / Brake (or Walk Forward / Back on foot)
@@ -106,6 +107,9 @@ local car = {
     fxAccum = 0.0,
     gear = 1,
     rpm = 0.12,
+    suspOffset = 0.0,
+    suspVel = 0.0,
+    terrainRoll = 0.0,
 }
 
 local player = {
@@ -576,10 +580,16 @@ function onStart()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
 
     sage.log("===================================================================")
-    sage.log("  SAGE Engine v1.2.0 — GPU Skeletal Skinning + Crossfade + FXAA + GGX PBR!")
-    sage.log("  Press F = Walk/Swim/Enter Car or Marina Speedboat! | G = Rain | F1 = Editor")
+    sage.log("  SAGE Engine v1.3.0 — 3D Terrain + Volumetric God-Rays + 3D Audio!")
+    sage.log("  Press F = Walk/Swim/Enter Car or Speedboat | G = Rain | F1 = Editor")
     sage.log("  All-Time Best Score Loaded: " .. tostring(bestScore))
     sage.log("===================================================================")
+
+    -- Register 4 Live 3D Spatial Ambient Audio Emitters across the 560m Open World!
+    audio.setSpatialEmitter(0, 0, 192.0,  0.5, -192.0, 115.0, 0.85) -- Palm Marina Ocean Surf
+    audio.setSpatialEmitter(1, 1,   0.0,  2.0,    0.0,  46.0, 0.65) -- Downtown Plaza Fountain
+    audio.setSpatialEmitter(2, 2, 145.0, 32.0,    0.0, 145.0, 0.85) -- Patrol Helicopter Overhead
+    audio.setSpatialEmitter(3, 3, 195.0, 12.0,  195.0, 130.0, 0.72) -- Alpine Highlands Mountain Wind
 end
 
 function onTick(dt)
@@ -598,9 +608,13 @@ function onTick(dt)
     local ha = timeNow * 0.14
     local hx = math.cos(ha) * 145.0
     local hz = math.sin(ha) * 145.0
+    local hy = 32.0 + math.sin(timeNow * 0.8) * 2.5
     heliPos.x, heliPos.z = hx, hz
-    world.setPosition("patrol_heli", hx, 32.0 + math.sin(timeNow * 0.8) * 2.5, hz)
+    world.setPosition("patrol_heli", hx, hy, hz)
     world.setRotation("patrol_heli", 6.0, math.deg(-ha), -10.0)
+    -- Live 3D spatial helicopter rotor emitter pans across stereo speakers as it flies overhead!
+    audio.setSpatialEmitter(2, 2, hx, hy, hz, 145.0, 0.85)
+    audio.setListener(cam.x, cam.y, cam.z, cam.tx - cam.x, cam.tz - cam.z)
 
     for _, g in ipairs(seagulls) do
         local ga = timeNow * g.spd + g.phase
@@ -664,9 +678,9 @@ function onTick(dt)
             camera.setPosition(car.x + math.sin(orbit) * 10.8, car.y + 3.8, car.z + math.cos(orbit) * 10.8)
             camera.setTarget(car.x, car.y + 1.1, car.z)
             camera.setFov(55.0)
-            sage.setTitle("SAGE Engine v1.2.0 — Main Menu | Skeletal Rigging & GGX PBR")
+            sage.setTitle("SAGE Engine v1.3.0 — Main Menu | 3D Terrain & Volumetric God-Rays")
         else
-            sage.setTitle("SAGE Engine v1.2.0 — PAUSED (Press Esc to Resume)")
+            sage.setTitle("SAGE Engine v1.3.0 — PAUSED (Press Esc to Resume)")
         end
         return
     end
@@ -811,11 +825,13 @@ function onTick(dt)
         player.x = clamp(player.x + player.vx * dt, -CONFIG.arenaHalfSize, CONFIG.arenaHalfSize)
         player.z = clamp(player.z + player.vz * dt, -CONFIG.arenaHalfSize, CONFIG.arenaHalfSize)
 
-        -- Surface + Water Check (Driver can swim smoothly in the Lagoon!)
+        -- Surface + 3D Heightmap Terrain + Water Check (Hero climbs hills & swims in the Lagoon!)
         local onSurf, surfY, rampH = physics.sampleRampSurface(player.x, player.z)
+        local terrainY = world.sampleTerrain(player.x, player.z)
         local overDeck = onSurf and (rampH <= 0.01) and (surfY > 0.10) and (player.y >= surfY - 0.55)
         local inW, waveY, seaY, wDepth = world.sampleWater(player.x, player.z)
-        local groundY = (inW and not overDeck) and seaY or surfY
+        local dryY = math.max(surfY, terrainY)
+        local groundY = (inW and not overDeck) and seaY or dryY
 
         -- Determine acoustic ground surface for procedural footstep synth (0=Asphalt, 1=Grass/Sand, 2=Wood Pier, 3=Water)
         local footSurface = 0
@@ -961,7 +977,7 @@ function onTick(dt)
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
             local biome = getCurrentBiomeName(player.x, player.z)
-            sage.setTitle(string.format("SAGE v1.2 | %s | ON FOOT [%s] (F = Enter Car/Boat)", biome, player.currentAnim))
+            sage.setTitle(string.format("SAGE v1.3 | %s | ON FOOT [%s] (F = Enter Car/Boat)", biome, player.currentAnim))
         end
         return
     end
@@ -1052,7 +1068,7 @@ function onTick(dt)
         titleUpdateAccum = titleUpdateAccum + dt
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
-            sage.setTitle(string.format("SAGE v1.2 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
+            sage.setTitle(string.format("SAGE v1.3 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
         end
         return
     end
@@ -1136,22 +1152,45 @@ function onTick(dt)
     car.x = car.x + car.vx * dt
     car.z = car.z + car.vz * dt
 
-    -- Unified Surface Elevation (12 Stunt Ramps + 32m Drivable Pier) + Realistic Water Physics!
+    -- Unified 4-Wheel Surface Elevation (3D Heightmap Terrain + 12 Stunt Ramps + Drivable Pier) + Water Physics!
+    local function sampleWheelGround(wx, wz)
+        local th = world.sampleTerrain(wx, wz)
+        local onS, sy = physics.sampleRampSurface(wx, wz)
+        if onS and sy > th then return sy end
+        return th
+    end
+
     local onSurface, surfY, rampHeight = physics.sampleRampSurface(car.x, car.z)
+    local terrainCenterY = world.sampleTerrain(car.x, car.z)
     local isElevatedDeck = onSurface and (rampHeight <= 0.01) and (surfY > 0.10)
     local isRamp = onSurface and (rampHeight > 0.05)
 
     local inWaterVol, waveSurfaceY, seabedY = world.sampleWater(car.x, car.z)
     local overPier = isElevatedDeck and (car.y >= surfY - 0.45)
-    local groundY = (inWaterVol and not overPier) and seabedY or surfY
+    local dryGroundY = math.max(surfY, terrainCenterY)
+    local groundY = (inWaterVol and not overPier) and seabedY or dryGroundY
+
+    -- True 4-Corner Wheel Contact Sampling (FL, FR, RL, RR) for Realistic Hill Pitch & Side-Slope Roll!
+    local wb, trk = 1.45, 0.95
+    local hFL = sampleWheelGround(car.x + fwdX * wb + leftX * trk, car.z + fwdZ * wb + leftZ * trk)
+    local hFR = sampleWheelGround(car.x + fwdX * wb - leftX * trk, car.z + fwdZ * wb - leftZ * trk)
+    local hRL = sampleWheelGround(car.x - fwdX * wb + leftX * trk, car.z - fwdZ * wb + leftZ * trk)
+    local hRR = sampleWheelGround(car.x - fwdX * wb - leftX * trk, car.z - fwdZ * wb - leftZ * trk)
+    local slopePitchDeg = -math.deg(math.atan(0.5 * (hFL + hFR) - 0.5 * (hRL + hRR), wb * 2.0))
+    local slopeRollDeg  = -math.deg(math.atan(0.5 * (hFL + hRL) - 0.5 * (hFR + hRR), trk * 2.0))
+    car.terrainRoll = lerp(car.terrainRoll, clamp(slopeRollDeg, -24.0, 24.0), 10.0 * dt)
+
+    -- Spring-Damper Vertical Suspension Oscillation (kSpring=95, kDamper=11 -> tactile landing & hill bounce!)
+    car.suspVel = car.suspVel + (-95.0 * car.suspOffset - 11.0 * car.suspVel) * dt
+    car.suspOffset = clamp(car.suspOffset + car.suspVel * dt, -0.22, 0.18)
 
     if car.grounded then
-        if isRamp and groundY > 0.05 then
+        if isRamp and surfY > terrainCenterY + 0.05 then
             local climbRate = (groundY - prevY) / math.max(dt, 0.001)
             car.y = groundY
             car.vy = math.max(climbRate, 0.0)
             car.pitch = lerp(car.pitch, -17.5, 14.0 * dt)
-            if groundY > rampHeight * 0.78 and math.abs(forwardVel) > 10.0 then
+            if surfY > rampHeight * 0.78 and math.abs(forwardVel) > 10.0 then
                 car.vy = math.max(car.vy, math.abs(forwardVel) * 0.44 + 4.8)
                 car.boostTimer = math.max(car.boostTimer, 0.55)
                 car.grounded = false
@@ -1161,12 +1200,16 @@ function onTick(dt)
             car.vy = 0.0
             car.pitch = lerp(car.pitch, accelPitchTarget, 9.0 * dt)
         else
-            if car.y > groundY + 0.18 then
+            local climbRate = (groundY - prevY) / math.max(dt, 0.001)
+            -- Cresting a steep Alpine hill at high speed launches the vehicle naturally into the air!
+            if car.y > groundY + 0.24 then
+                car.vy = clamp(car.vy, 0.0, 14.0)
                 car.grounded = false
             else
                 car.y = groundY
-                car.vy = 0.0
-                car.pitch = lerp(car.pitch, accelPitchTarget, 9.0 * dt)
+                car.vy = math.max(climbRate * 0.85, 0.0)
+                local targetPitch = clamp(slopePitchDeg + accelPitchTarget, -28.0, 26.0)
+                car.pitch = lerp(car.pitch, targetPitch, 11.0 * dt)
             end
         end
     end
@@ -1179,9 +1222,12 @@ function onTick(dt)
         car.pitch = lerp(car.pitch, clamp(-car.vy * 2.1, -26.0, 22.0), 6.0 * dt)
 
         if car.y <= groundY then
+            local landingImpact = math.abs(car.vy)
             car.y = groundY
             car.vy = 0.0
             car.grounded = true
+            -- Compress 4-wheel spring-damper suspension cleanly on landing!
+            car.suspVel = car.suspVel - clamp(landingImpact * 0.28, 0.0, 3.2)
             if car.airTime >= 0.42 and not (inWaterVol and not overPier) then
                 stuntJumps = stuntJumps + 1
                 local airBonus = math.floor(car.airTime * 150.0)
@@ -1272,7 +1318,7 @@ function onTick(dt)
 
     if not car.flooded then
         local bikeLean = vehicles[selectedVehicleIdx].isBike and (car.steerSmooth * speedNorm * 22.0) or 0.0
-        local targetRoll = clamp(lateralVel * 0.95 + car.steerSmooth * speedNorm * 2.5 - bikeLean, -24.0, 24.0)
+        local targetRoll = clamp(lateralVel * 0.95 + car.steerSmooth * speedNorm * 2.5 - bikeLean + car.terrainRoll, -28.0, 28.0)
         car.roll = lerp(car.roll, targetRoll, 9.0 * dt)
     end
 
@@ -1280,7 +1326,7 @@ function onTick(dt)
     checkPhysicsCrateSmashes(dt)
     updateDeliveryMission(dt, timeNow, car.x, car.y, car.z)
 
-    world.setPosition("player_car", car.x, car.y, car.z)
+    world.setPosition("player_car", car.x, car.y + car.suspOffset, car.z)
     world.setRotation("player_car", car.pitch, car.yaw, car.roll)
 
     if car.isBoosting then
@@ -1373,7 +1419,7 @@ function onTick(dt)
         local kmh = math.floor(speed * 3.6)
         local biome = getCurrentBiomeName(car.x, car.z)
         sage.setTitle(string.format(
-            "SAGE v1.2 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
+            "SAGE v1.3 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
             biome, car.gear, kmh, weatherPresets[weatherPresetIdx].name, score, bestScore
         ))
     end
@@ -1386,11 +1432,11 @@ function onRenderUI()
     local vpW, vpH = ui.getViewportSize()
 
     if gameState == "MENU" then
-        if ui.beginCenteredWindow("SAGE ENGINE v1.2.0 — SKELETAL RIGGING & GGX PBR", 470, 455) then
+        if ui.beginCenteredWindow("SAGE ENGINE v1.3.0 — AAA 3D TERRAIN & OPEN WORLD", 470, 455) then
             ui.setFontScale(1.38)
             ui.textCentered("SAGE STUNT & DELIVERY")
             ui.setFontScale(1.0)
-            ui.textCentered("v1.2.0  |  GPU Skinning + Crossfade  |  FXAA + GGX PBR  |  5-Clip Hero")
+            ui.textCentered("v1.3.0  |  3D Terrain + God-Rays  |  4-Wheel Suspension  |  3D Audio")
             ui.textCentered("All-Time Best Score: " .. tostring(bestScore))
             ui.spacing()
             ui.separator()
@@ -1601,5 +1647,5 @@ end
 function onShutdown()
     updateBestScore()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
-    sage.log("v1.2.0 Skeletal Rigging & GGX PBR Open World Sandbox shutting down cleanly.")
+    sage.log("v1.3.0 AAA 3D Terrain & Open World Sandbox shutting down cleanly.")
 end

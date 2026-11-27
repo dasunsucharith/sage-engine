@@ -82,6 +82,26 @@ struct AudioEngine::Impl {
     std::atomic<float> masterVolume{0.46f};
     std::atomic<bool> muted{false};
 
+    // 3D Spatial Audio Listener & 8 Lock-Free Ambient Emitters (v1.3.0)
+    static constexpr int kMaxSpatialEmitters = 8;
+    struct SpatialEmitterSlot {
+        std::atomic<bool> active{false};
+        std::atomic<int> type{0}; // 0=Ocean Surf, 1=Plaza Fountain, 2=Helicopter Rotor, 3=Wind/Breeze
+        std::atomic<float> x{0.0f}, y{0.0f}, z{0.0f};
+        std::atomic<float> radius{60.0f};
+        std::atomic<float> gain{0.0f};
+    };
+    std::atomic<float> listenerX{0.0f}, listenerY{2.0f}, listenerZ{0.0f};
+    std::atomic<float> listenerFwdX{0.0f}, listenerFwdZ{1.0f};
+    SpatialEmitterSlot spatialEmitters[kMaxSpatialEmitters]{};
+
+    // Spatial audio synth phases & filters (audio-thread only)
+    float surfPhase = 0.0f;
+    float rotorPhase = 0.0f;
+    SvfFilter surfFilter{};
+    SvfFilter fountainFilter{};
+    SvfFilter breezeFilter{};
+
     // One-shot trigger mailboxes
     std::atomic<float> triggerImpact{0.0f};
     std::atomic<float> triggerShiftPop{0.0f};
@@ -160,6 +180,41 @@ struct AudioEngine::Impl {
         const float gain = self->muted.load(std::memory_order_relaxed)
             ? 0.0f
             : self->masterVolume.load(std::memory_order_relaxed);
+
+        // Precompute equal-power stereo gains for the 4 spatial ambient voice types once per audio buffer!
+        const float lx = self->listenerX.load(std::memory_order_relaxed);
+        const float ly = self->listenerY.load(std::memory_order_relaxed);
+        const float lz = self->listenerZ.load(std::memory_order_relaxed);
+        float fx = self->listenerFwdX.load(std::memory_order_relaxed);
+        float fz = self->listenerFwdZ.load(std::memory_order_relaxed);
+        const float fLen = std::sqrt(fx * fx + fz * fz);
+        if (fLen > 0.001f) { fx /= fLen; fz /= fLen; } else { fx = 0.0f; fz = 1.0f; }
+        // Right-handed +Y up: right = cross(forward, up) = (-fz, 0, fx)
+        const float rx = -fz;
+        const float rz = fx;
+
+        float spatialGainL[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        float spatialGainR[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        for (int s = 0; s < kMaxSpatialEmitters; ++s) {
+            if (!self->spatialEmitters[s].active.load(std::memory_order_relaxed)) continue;
+            const int stype = std::clamp(self->spatialEmitters[s].type.load(std::memory_order_relaxed), 0, 3);
+            const float ex = self->spatialEmitters[s].x.load(std::memory_order_relaxed);
+            const float ey = self->spatialEmitters[s].y.load(std::memory_order_relaxed);
+            const float ez = self->spatialEmitters[s].z.load(std::memory_order_relaxed);
+            const float rad = std::max(self->spatialEmitters[s].radius.load(std::memory_order_relaxed), 4.0f);
+            const float egain = self->spatialEmitters[s].gain.load(std::memory_order_relaxed);
+            const float dx = ex - lx, dy = ey - ly, dz = ez - lz;
+            const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist < rad && egain > 0.001f) {
+                const float att = 1.0f - (dist / rad);
+                const float vol = att * att * egain;
+                const float invD = dist > 0.1f ? (1.0f / dist) : 0.0f;
+                const float pan = std::clamp((dx * rx + dz * rz) * invD, -1.0f, 1.0f);
+                const float panAngle = (pan * 0.5f + 0.5f) * (kPi * 0.5f);
+                spatialGainL[stype] += vol * std::cos(panAngle);
+                spatialGainR[stype] += vol * std::sin(panAngle);
+            }
+        }
 
         if (const float imp = self->triggerImpact.exchange(0.0f, std::memory_order_relaxed); imp > 0.01f) {
             self->impactEnv = std::max(self->impactEnv, std::clamp(imp, 0.2f, 1.0f));
@@ -376,9 +431,40 @@ struct AudioEngine::Impl {
                 self->footEnv *= std::exp(-decay * dt);
             }
 
+            // -----------------------------------------------------------------
+            // 6. 3D SPATIAL WORLD AMBIENT EMITTERS (Ocean, Fountain, Heli, Wind!)
+            // -----------------------------------------------------------------
+            float spL = 0.0f, spR = 0.0f;
+            if (spatialGainL[0] + spatialGainR[0] > 0.001f) {
+                self->surfPhase += 0.19f * dt;
+                if (self->surfPhase >= 1.0f) self->surfPhase -= 1.0f;
+                const float swell = 0.45f + 0.55f * (0.5f + 0.5f * std::sin(self->surfPhase * kTwoPi));
+                const float surf = self->surfFilter.processLowpass(white, 240.0f + swell * 480.0f, 0.8f, self->sampleRate) * swell * 0.36f;
+                spL += surf * spatialGainL[0];
+                spR += surf * spatialGainR[0];
+            }
+            if (spatialGainL[1] + spatialGainR[1] > 0.001f) {
+                const float fnt = self->fountainFilter.processBandpass(white, 2200.0f, 0.7f, self->sampleRate) * 0.24f;
+                spL += fnt * spatialGainL[1];
+                spR += fnt * spatialGainR[1];
+            }
+            if (spatialGainL[2] + spatialGainR[2] > 0.001f) {
+                self->rotorPhase += 13.5f * dt;
+                if (self->rotorPhase >= 1.0f) self->rotorPhase -= 1.0f;
+                const float chop = std::pow(0.5f + 0.5f * std::sin(self->rotorPhase * kTwoPi), 3.0f);
+                const float rotor = (std::sin(self->rotorPhase * kTwoPi * 2.0f) * 0.45f + self->lpNoise * 0.85f) * chop * 0.42f;
+                spL += rotor * spatialGainL[2];
+                spR += rotor * spatialGainR[2];
+            }
+            if (spatialGainL[3] + spatialGainR[3] > 0.001f) {
+                const float wind = self->breezeFilter.processBandpass(white, 380.0f, 1.4f, self->sampleRate) * 0.25f;
+                spL += wind * spatialGainL[3];
+                spR += wind * spatialGainR[3];
+            }
+
             const float sharedFx = popSig + boostRoar + turboWhine + driftSig + impactSig + chimeSig + expSig + footSig;
-            const float left  = std::tanh((engL + windBand * windVol + sharedFx) * gain);
-            const float right = std::tanh((engR + (windBand * 0.85f + self->lpNoise2 * 0.15f) * windVol + sharedFx) * gain);
+            const float left  = std::tanh((engL + windBand * windVol + sharedFx + spL) * gain);
+            const float right = std::tanh((engR + (windBand * 0.85f + self->lpNoise2 * 0.15f) * windVol + sharedFx + spR) * gain);
             out[i * 2 + 0] = left;
             out[i * 2 + 1] = right;
         }
@@ -461,6 +547,34 @@ void AudioEngine::playChime() {
 
 void AudioEngine::playExplosion() {
     m_impl->triggerExplosion.store(true, std::memory_order_relaxed);
+}
+
+void AudioEngine::setListener(float x, float y, float z, float fwdX, float fwdZ) {
+    m_impl->listenerX.store(x, std::memory_order_relaxed);
+    m_impl->listenerY.store(y, std::memory_order_relaxed);
+    m_impl->listenerZ.store(z, std::memory_order_relaxed);
+    m_impl->listenerFwdX.store(fwdX, std::memory_order_relaxed);
+    m_impl->listenerFwdZ.store(fwdZ, std::memory_order_relaxed);
+}
+
+void AudioEngine::setSpatialEmitter(int slot, int type, float x, float y, float z, float radius, float gain) {
+    if (slot < 0 || slot >= Impl::kMaxSpatialEmitters) {
+        return;
+    }
+    auto& e = m_impl->spatialEmitters[slot];
+    e.type.store(std::clamp(type, 0, 3), std::memory_order_relaxed);
+    e.x.store(x, std::memory_order_relaxed);
+    e.y.store(y, std::memory_order_relaxed);
+    e.z.store(z, std::memory_order_relaxed);
+    e.radius.store(std::max(radius, 4.0f), std::memory_order_relaxed);
+    e.gain.store(std::clamp(gain, 0.0f, 1.5f), std::memory_order_relaxed);
+    e.active.store(gain > 0.001f, std::memory_order_relaxed);
+}
+
+void AudioEngine::clearSpatialEmitters() {
+    for (int i = 0; i < Impl::kMaxSpatialEmitters; ++i) {
+        m_impl->spatialEmitters[i].active.store(false, std::memory_order_relaxed);
+    }
 }
 
 void AudioEngine::setMasterVolume(float volume01) {

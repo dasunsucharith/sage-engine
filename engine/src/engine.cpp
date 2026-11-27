@@ -2,8 +2,11 @@
 
 #include "sage/world/scene_loader.h"
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -132,7 +135,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v1.2.0 — GPU Skeletal Skinning + Crossfade Blending + FXAA + GGX PBR + SSAO\n";
+    std::cout << "  SAGE Engine v1.3.0 — 3D Heightmap Terrain + Volumetric God-Rays + Spatial 3D Audio + AI Telemetry\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -276,7 +279,7 @@ void Engine::render(double elapsedSeconds) {
     };
     actions.onSaveScene = [this]() -> bool {
         const fs::path exportPath = m_projectRoot / "scenes" / "exported_scene.json";
-        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.2.0 Exported World");
+        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.3.0 Exported World");
     };
     actions.onRenderCustomUi = [this]() {
         m_lua.renderUI();
@@ -284,6 +287,61 @@ void Engine::render(double elapsedSeconds) {
 
     m_editor.render(m_world, m_physics, m_audio, stats, actions);
     m_window.swapBuffers();
+}
+
+void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
+    if (m_projectRoot.empty() || totalFrames <= 0) {
+        return;
+    }
+    const fs::path logsDir = m_projectRoot / "logs";
+    std::error_code ec;
+    fs::create_directories(logsDir, ec);
+    const fs::path outPath = logsDir / "last_session_telemetry.json";
+
+    const double avgMs = m_frameMsAccum / static_cast<double>(totalFrames);
+    const double avgFps = avgMs > 0.01 ? (1000.0 / avgMs) : 0.0;
+    const RendererInfo gpu = m_renderer ? m_renderer->info() : RendererInfo{};
+    const SkySettings& sky = m_world.sky();
+
+    nlohmann::json j;
+    j["engineVersion"] = "1.3.0";
+    j["smokeTest"] = (m_config.maxFrames > 0);
+    j["gpu"] = {
+        {"renderer", gpu.gpuRenderer},
+        {"vendor", gpu.gpuVendor},
+        {"backend", gpu.backendName}
+    };
+    j["performance"] = {
+        {"totalFrames", totalFrames},
+        {"sessionSeconds", totalSeconds},
+        {"avgFrameMs", avgMs},
+        {"peakFrameMs", m_peakFrameMs},
+        {"avgFps", avgFps}
+    };
+    j["world"] = {
+        {"entities", m_world.entityCount()},
+        {"loadedModels", m_renderer ? m_renderer->loadedModelCount() : 0},
+        {"joltBodies", m_physics.bodyCount()},
+        {"dynamicBodies", m_physics.dynamicBodyCount()},
+        {"pointLights", m_world.pointLights().size()},
+        {"luaResources", m_lua.activeResourceCount()},
+        {"luaReloads", m_lua.reloadCount()}
+    };
+    j["features"] = {
+        {"terrain3D", m_world.terrain().enabled},
+        {"godRays", sky.godRaysEnabled},
+        {"cloudShadows", sky.cloudShadowsEnabled},
+        {"fxaa", sky.fxaaEnabled},
+        {"ssao", sky.ssaoEnabled},
+        {"bloom", sky.bloomEnabled},
+        {"shadows2Cascade", sky.shadowsEnabled}
+    };
+
+    std::ofstream out(outPath, std::ios::trunc);
+    if (out.is_open()) {
+        out << j.dump(2) << "\n";
+        std::cout << "[SAGE][AI-Telemetry] Saved session metrics -> " << outPath.string() << "\n";
+    }
 }
 
 void Engine::updateWindowTitle(double fps) {
@@ -324,6 +382,10 @@ int Engine::run() {
         const double frameDelta = std::min(currentTime - previousTime, kMaxFrameDelta);
         previousTime = currentTime;
         m_lastFrameMs = static_cast<float>(frameDelta * 1000.0);
+        m_frameMsAccum += static_cast<double>(m_lastFrameMs);
+        if (totalFrames > 1 && m_lastFrameMs > m_peakFrameMs) {
+            m_peakFrameMs = m_lastFrameMs;
+        }
 
         m_window.pollEvents(m_input);
 
@@ -390,7 +452,7 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v1.2.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v1.3.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()
@@ -401,6 +463,7 @@ int Engine::run() {
         }
     }
 
+    writeSessionTelemetry(totalFrames, Window::getTimeSeconds() - m_startTime);
     m_running = false;
     shutdown();
     std::cout << "[SAGE] Engine shut down cleanly.\n";

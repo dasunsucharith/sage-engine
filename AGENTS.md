@@ -38,6 +38,9 @@ Read [`docs/lua_api.md`](docs/lua_api.md) before writing Lua scripts to verify w
 
 ---
 
-## 4. Knowledge Base
+## 4. Knowledge Base & AI Self-Learning Protocol
 
-Before making big architectural decisions, read [`docs/knowledge-base/README.md`](docs/knowledge-base/README.md) to stay aligned with SAGE's RAGE-inspired design philosophy and current milestone.
+Before making big architectural decisions or starting a new engine version:
+1. **Read past engineering memory first:** Check [`docs/ai_learning_log.json`](docs/ai_learning_log.json), [`logs/last_session_telemetry.json`](logs/last_session_telemetry.json) (auto-generated on every engine run), and [`docs/knowledge-base/README.md`](docs/knowledge-base/README.md) so you build on proven patterns, target real measured hardware metrics, and never repeat a past mistake.
+2. **Verify visually & on real GPU hardware:** Always build and run `build/sage.exe --smoke-test` (and render multi-angle Blender previews whenever authoring hero 3D models/animations) before publishing a release.
+3. **Record what you learned:** After solving any tricky bug or shipping a milestone, append the concrete lesson & benchmark entry to [`docs/ai_learning_log.json`](docs/ai_learning_log.json) and write a Knowledge Base entry in [`docs/knowledge-base/`](docs/knowledge-base/) so every future AI session gets measurably better.

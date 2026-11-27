@@ -50,6 +50,7 @@ public:
     bool addStaticDeck(const std::string& entityId, Vec3 pos, Vec3 halfExtents, float yawDeg = 0.0f);
     bool addStaticCylinder(const std::string& entityId, Vec3 basePos, float radius, float height);
     bool addStaticRamp(const std::string& entityId, Vec3 pos, float width, float height, float length, float yawDeg);
+    bool buildTerrainCollider(const World& world);
 
     bool addDynamicBox(
         const std::string& entityId,

@@ -1,5 +1,5 @@
 {
-  "name": "SAGE v1.2.0 \u2014 GPU Skeletal Skinning + FXAA + GGX PBR 560m Open World (33 Models, 5-Clip Hero, Speedboat & SSAO)",
+  "name": "SAGE v1.3.0 \u2014 3D Heightmap Terrain, Volumetric God-Rays, 4-Wheel Suspension, Spatial 3D Audio & GPU Skinning",
   "version": 2,
   "sky": {
     "timeOfDay": 17.4,

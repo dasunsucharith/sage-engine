@@ -97,6 +97,20 @@ struct WaterSampleResult {
     float shoreDist = 0.0f;  // Horizontal distance inside the water boundary (meters)
 };
 
+// Synchronized CPU/GPU 3D Heightmap Terrain configuration & query result (v1.3.0)
+struct TerrainSettings {
+    bool enabled = true;
+    float halfSize = 440.0f;
+    float maxHeight = 46.0f;
+    int gridResolution = 160;
+};
+
+struct TerrainSample {
+    float height = 0.0f;
+    Vec3 normal{0.0f, 1.0f, 0.0f};
+    int biomeId = 0; // 0=Downtown, 1=Alpine Highlands, 2=Palm Coast, 3=Red Rock Desert
+};
+
 struct SkySettings {
     float timeOfDay = 17.5f;
     Vec3 sunDirection{0.48f, 0.42f, 0.77f};
@@ -112,6 +126,9 @@ struct SkySettings {
     float bloomIntensity = 0.55f;
     bool ssaoEnabled = true;
     bool fxaaEnabled = true;
+    bool godRaysEnabled = true;
+    float godRayIntensity = 0.42f;
+    bool cloudShadowsEnabled = true;
     float exposure = 1.08f;
     float rainIntensity = 0.0f;
     float wetness = 0.0f;
@@ -174,6 +191,11 @@ public:
     // Exact water volume + animated wave height query (matches GPU ocean vertex shader!)
     WaterSampleResult sampleWater(float x, float z, float timeSeconds) const;
 
+    // Synchronized 3D rolling heightmap terrain query (matches GPU 160x160 terrain mesh & Jolt HeightField!)
+    TerrainSample sampleTerrain(float x, float z) const;
+    TerrainSettings& terrain() { return m_terrain; }
+    const TerrainSettings& terrain() const { return m_terrain; }
+
     bool hasEntity(const std::string& id) const;
     Vec3 getPosition(const std::string& id) const;
     Entity* findEntity(const std::string& id);
@@ -202,6 +224,7 @@ private:
     std::uint32_t m_rngState = 0x5A6E0800u;
     CameraState m_camera{};
     SkySettings m_sky{};
+    TerrainSettings m_terrain{};
 };
 
 } // namespace sage

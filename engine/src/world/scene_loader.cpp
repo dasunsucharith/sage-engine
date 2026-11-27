@@ -108,11 +108,19 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
 
             const std::string id = e.value("id", "scene_entity_" + std::to_string(i));
             const std::string type = e.value("type", "primitive_box");
-            const Vec3 pos = readVec3(e, "position", {0.0f, 0.0f, 0.0f});
+            Vec3 pos = readVec3(e, "position", {0.0f, 0.0f, 0.0f});
             const Vec3 rot = readVec3(e, "rotation", {0.0f, 0.0f, 0.0f});
             const Vec3 scale = readVec3(e, "scale", {1.0f, 1.0f, 1.0f});
             const bool emissive = e.value("emissive", false);
             const bool visible = e.value("visible", true);
+
+            // Auto-ground off-road 3D models cleanly onto sculpted 3D terrain hills (zero buried trees or floating cabins!)
+            if (type == "model" && world.terrain().enabled && std::abs(pos.y) < 0.05f) {
+                const float th = world.sampleTerrain(pos.x, pos.z).height;
+                if (th > 0.05f) {
+                    pos.y += th;
+                }
+            }
 
             if (type == "model") {
                 const std::string modelPath = e.value("model", "");
@@ -198,6 +206,10 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
             world.setPointLight(lid, pos, col, radius, intensity);
             ++lightCount;
         }
+    }
+
+    if (physics && world.terrain().enabled) {
+        physics->buildTerrainCollider(world);
     }
 
     std::cout << "[SAGE][Scene] Loaded \"" << sceneName << "\" from " << scenePath.string()

@@ -245,6 +245,7 @@ uniform float uPulse;
 uniform float uTime;
 uniform int uIsGround;
 uniform float uWetness;
+uniform int uCloudShadowsEnabled;
 
 uniform int uShadowsEnabled;
 uniform mat4 uLightViewProj;
@@ -410,6 +411,41 @@ void main() {
             rough = mix(rough, 0.06, clamp(uWetness * 0.45 + puddle * 0.55, 0.0, 0.92));
             metal = mix(metal, 0.48, puddle * 0.78);
         }
+    } else if (uIsGround == 2) {
+        // Multi-Biome 3D Heightmap Terrain PBR Splatting (Alpine Grass, Red Rock Strata, Sand, Cliff Rock & Snow Peaks!)
+        float nMacro = groundNoise(vWorldPos.xz * 0.035);
+        float nMed   = groundNoise(vWorldPos.xz * 0.22);
+        float nFine  = groundNoise(vWorldPos.xz * 1.40);
+        float detail = (nMacro * 0.45 + nMed * 0.35 + nFine * 0.20) - 0.5;
+
+        float bx = smoothstep(-28.0, 28.0, vWorldPos.x);
+        float bz = smoothstep(-28.0, 28.0, vWorldPos.z);
+
+        vec3 alpineGrass = vec3(0.11, 0.26, 0.10) * (1.0 + detail * 0.32);
+        vec3 parkGrass   = vec3(0.14, 0.28, 0.13) * (1.0 + detail * 0.28);
+        vec3 coastSand   = vec3(0.56, 0.46, 0.28) * (1.0 + detail * 0.24);
+        float strata     = 0.86 + 0.14 * sin(vWorldPos.y * 2.1 + nMacro * 3.5);
+        vec3 desertRock  = vec3(0.52, 0.24, 0.13) * strata * (1.0 + detail * 0.26);
+
+        vec3 northCol = mix(parkGrass, alpineGrass, bx);
+        vec3 southCol = mix(desertRock, coastSand, bx);
+        vec3 baseBiome = mix(southCol, northCol, bz);
+
+        vec3 Ngeom = normalize(vWorldNormal);
+        float slope = 1.0 - clamp(Ngeom.y, 0.0, 1.0);
+        vec3 cliffGranite = mix(vec3(0.24, 0.22, 0.21), vec3(0.42, 0.21, 0.13), (1.0 - bx) * (1.0 - bz)) * (1.0 + detail * 0.35);
+        albedo = mix(baseBiome, cliffGranite, smoothstep(0.14, 0.38, slope));
+
+        // Crisp Snow Caps on High Alpine Mountain Peaks (vWorldPos.y > 17m in Northern Mountain Range!)
+        float snowMask = smoothstep(16.0, 25.0, vWorldPos.y + detail * 4.5) * smoothstep(-35.0, 35.0, vWorldPos.z) * smoothstep(0.42, 0.72, Ngeom.y);
+        albedo = mix(albedo, vec3(0.86, 0.90, 0.96), snowMask);
+
+        rough = clamp(mix(0.88, 0.62, snowMask) + detail * 0.12, 0.35, 0.96);
+        metal = 0.02;
+        if (uWetness > 0.01) {
+            albedo *= (1.0 - 0.28 * uWetness);
+            rough = mix(rough, 0.24, uWetness * 0.55);
+        }
     }
 
     vec3 N = normalize(vWorldNormal);
@@ -421,6 +457,14 @@ void main() {
     vec3 F0 = mix(vec3(0.04), albedo, metal);
 
     float shadowVis = computeShadowVisibility(vWorldPos, N, L);
+
+    // Drifting FBM Cloud Shadows across the 560m open world & 3D mountain ridges (v1.3.0)!
+    if (uCloudShadowsEnabled == 1) {
+        float c1 = groundNoise(vWorldPos.xz * 0.0085 + vec2(uTime * 0.022, uTime * 0.011));
+        float c2 = groundNoise(vWorldPos.xz * 0.019 - vec2(uTime * 0.014, -uTime * 0.008));
+        float cloudCover = smoothstep(0.48, 0.78, c1 * 0.65 + c2 * 0.35);
+        shadowVis *= mix(1.0, 0.76, cloudCover);
+    }
 
     // Direct Sun Radiance using true Cook-Torrance GGX PBR!
     vec3 directSun = evaluatePbrLight(N, V, L, uSunColor * 3.45, albedo, metal, rough, F0) * shadowVis;
@@ -666,6 +710,10 @@ uniform int uBloomEnabled;
 uniform float uBloomIntensity;
 uniform int uSsaoEnabled;
 uniform int uFxaaEnabled;
+uniform int uGodRaysEnabled;
+uniform float uGodRayIntensity;
+uniform vec2 uSunScreenPos;
+uniform vec3 uSunColorComp;
 uniform float uExposure;
 uniform vec2 uTexelSize;
 uniform float uNearPlane;
@@ -766,6 +814,24 @@ void main() {
     if (uBloomEnabled == 1) {
         vec3 bloom = texture(uBloomTex, vUV).rgb;
         hdr += bloom * uBloomIntensity;
+    }
+
+    // Screen-Space Volumetric Sun Shafts / Crepuscular God-Rays (v1.3.0)!
+    if (uGodRaysEnabled == 1 && uGodRayIntensity > 0.005) {
+        vec2 delta = (uSunScreenPos - vUV) * (1.0 / 10.0) * 0.85;
+        vec2 rayUV = vUV;
+        float illum = 0.0;
+        float decay = 1.0;
+        for (int i = 0; i < 10; ++i) {
+            rayUV += delta;
+            if (rayUV.x >= 0.0 && rayUV.x <= 1.0 && rayUV.y >= 0.0 && rayUV.y <= 1.0) {
+                float dSample = texture(uDepthTex, rayUV).r;
+                illum += step(0.9985, dSample) * decay;
+            }
+            decay *= 0.84;
+        }
+        float sunProximity = exp(-length(vUV - uSunScreenPos) * 2.1);
+        hdr += uSunColorComp * (illum / 10.0) * sunProximity * uGodRayIntensity;
     }
 
     hdr *= max(uExposure, 0.2);
@@ -1284,7 +1350,7 @@ public:
     bool initialize(int viewportWidth, int viewportHeight) override {
         if (!gl::loadFunctions()) return false;
 
-        m_info.backendName = "OpenGL 3.3 Core (v1.2.0: GPU Skeletal Skinning + Crossfade Blending + FXAA + GGX PBR + SSAO + 2-Cascade CSM)";
+        m_info.backendName = "OpenGL 3.3 Core (v1.3.0: 3D Heightmap Terrain + Volumetric God-Rays + GPU Skinning + FXAA + GGX PBR + SSAO)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
@@ -1369,6 +1435,7 @@ public:
         m_uTime = gl::getUniformLocation(m_litProgram, "uTime");
         m_uIsGround = gl::getUniformLocation(m_litProgram, "uIsGround");
         m_uWetness = gl::getUniformLocation(m_litProgram, "uWetness");
+        m_uCloudShadowsEnabled = gl::getUniformLocation(m_litProgram, "uCloudShadowsEnabled");
         m_uShadowsEnabled = gl::getUniformLocation(m_litProgram, "uShadowsEnabled");
         m_uLightViewProj = gl::getUniformLocation(m_litProgram, "uLightViewProj");
         m_uLightViewProjFar = gl::getUniformLocation(m_litProgram, "uLightViewProjFar");
@@ -1413,6 +1480,10 @@ public:
         m_compBloomIntensity = gl::getUniformLocation(m_compositeProgram, "uBloomIntensity");
         m_compSsaoEnabled = gl::getUniformLocation(m_compositeProgram, "uSsaoEnabled");
         m_compFxaaEnabled = gl::getUniformLocation(m_compositeProgram, "uFxaaEnabled");
+        m_compGodRaysEnabled = gl::getUniformLocation(m_compositeProgram, "uGodRaysEnabled");
+        m_compGodRayIntensity = gl::getUniformLocation(m_compositeProgram, "uGodRayIntensity");
+        m_compSunScreenPos = gl::getUniformLocation(m_compositeProgram, "uSunScreenPos");
+        m_compSunColor = gl::getUniformLocation(m_compositeProgram, "uSunColorComp");
         m_compExposure = gl::getUniformLocation(m_compositeProgram, "uExposure");
         m_compTexelSize = gl::getUniformLocation(m_compositeProgram, "uTexelSize");
         m_compNearPlane = gl::getUniformLocation(m_compositeProgram, "uNearPlane");
@@ -1509,6 +1580,8 @@ public:
         m_sphereMesh.destroy();
         m_arrowMesh.destroy();
         m_ringMesh.destroy();
+        m_terrainMesh.destroy();
+        m_terrainMeshBuilt = false;
 
         destroyPostBuffers();
         if (m_shadowTexFar) { glDeleteTextures(1, &m_shadowTexFar); m_shadowTexFar = 0; }
@@ -1565,6 +1638,10 @@ public:
         const glm::mat4 viewProj = proj * view;
         const glm::mat4 invViewProj = glm::inverse(viewProj);
 
+        if (world.terrain().enabled) {
+            ensureTerrainMesh(world);
+        }
+
         // --- Pass 0: Texel-Snapped 2-Cascade 2048x2048 Directional Shadow Maps (Near 32m + Far 135m!) ---
         const bool useShadows = sky.shadowsEnabled && (m_shadowFbo != 0) && (m_shadowFboFar != 0);
         glm::mat4 lightViewProj(1.0f);
@@ -1594,6 +1671,14 @@ public:
                 gl::useProgram(m_shadowProgram);
                 gl::uniformMatrix4fv(m_shadowLightVP, 1, GL_FALSE, glm::value_ptr(lvp));
                 gl::uniform1i(m_shadowHasSkin, 0);
+
+                // 3D Heightmap Terrain casts mountain & hill shadows across valleys!
+                if (world.terrain().enabled && m_terrainMesh.indexCount > 0) {
+                    const glm::mat4 idMat(1.0f);
+                    gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(idMat));
+                    gl::bindVertexArray(m_terrainMesh.vao);
+                    glDrawElements(GL_TRIANGLES, m_terrainMesh.indexCount, GL_UNSIGNED_INT, nullptr);
+                }
 
                 const float cullDistSq = (radius + 32.0f) * (radius + 32.0f);
                 for (const Entity& e : world.entities()) {
@@ -1701,6 +1786,7 @@ public:
         gl::uniform1f(m_uFogEnd, sky.fogEnd);
         gl::uniform1f(m_uTime, timeSeconds);
         gl::uniform1f(m_uWetness, std::clamp(sky.wetness, 0.0f, 1.0f));
+        gl::uniform1i(m_uCloudShadowsEnabled, sky.cloudShadowsEnabled ? 1 : 0);
         gl::uniform1i(m_uAlbedoTex, 0);
         gl::uniform1i(m_uNormalTex, 4);
         gl::uniform1i(m_uMetRoughTex, 5);
@@ -1755,6 +1841,15 @@ public:
         }
 
         m_waterEntitiesScratch.clear();
+
+        // Draw Synchronized 160x160 3D Multi-Biome Heightmap Terrain Mesh (Hills, Mesas & Snow-Capped Mountains!)
+        if (world.terrain().enabled && m_terrainMesh.indexCount > 0) {
+            const glm::mat4 idMat(1.0f);
+            gl::uniform1i(m_uHasSkin, 0);
+            gl::uniform1i(m_uIsGround, 2);
+            gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(idMat));
+            drawSubMesh(m_terrainMesh, glm::vec3(1.0f), glm::vec3(0.0f), 0.02f, 0.88f, 0.0f);
+        }
 
         for (const Entity& e : world.entities()) {
             if (!e.visible) continue;
@@ -1966,6 +2061,22 @@ public:
             gl::uniform1f(m_compBloomIntensity, sky.bloomIntensity);
             gl::uniform1i(m_compSsaoEnabled, sky.ssaoEnabled ? 1 : 0);
             gl::uniform1i(m_compFxaaEnabled, sky.fxaaEnabled ? 1 : 0);
+
+            // Project dynamic 3D sun into screen-space UV for Volumetric God-Rays!
+            const glm::vec3 sunWorldPos = camPos + glm::normalize(glm::vec3(sky.sunDirection.x, sky.sunDirection.y, sky.sunDirection.z)) * 450.0f;
+            const glm::vec4 sunClip = viewProj * glm::vec4(sunWorldPos, 1.0f);
+            const bool sunInFront = (sunClip.w > 0.01f) && (sky.sunDirection.y > 0.05f);
+            const glm::vec2 sunUv = sunInFront
+                ? (glm::vec2(sunClip.x, sunClip.y) / sunClip.w) * 0.5f + 0.5f
+                : glm::vec2(-10.0f, -10.0f);
+            const float sunVisFactor = sunInFront
+                ? std::clamp(1.0f - glm::length(sunUv - glm::vec2(0.5f)) * 0.65f, 0.0f, 1.0f)
+                : 0.0f;
+            gl::uniform1i(m_compGodRaysEnabled, (sky.godRaysEnabled && sunVisFactor > 0.02f) ? 1 : 0);
+            gl::uniform1f(m_compGodRayIntensity, sky.godRayIntensity * sunVisFactor);
+            gl::uniform2f(m_compSunScreenPos, sunUv.x, sunUv.y);
+            gl::uniform3f(m_compSunColor, sky.sunColor.r, sky.sunColor.g, sky.sunColor.b);
+
             gl::uniform1f(m_compExposure, sky.exposure);
             gl::uniform2f(m_compTexelSize, 1.0f / static_cast<float>(m_viewportWidth), 1.0f / static_cast<float>(m_viewportHeight));
             gl::uniform1f(m_compNearPlane, cam.nearPlane);
@@ -1984,6 +2095,71 @@ public:
 
 private:
     bool m_hdrProgramReady() const { return m_compositeProgram != 0; }
+
+    void ensureTerrainMesh(const World& world) {
+        const TerrainSettings& cfg = world.terrain();
+        if (m_terrainMeshBuilt &&
+            std::abs(m_terrainHalfSizeCached - cfg.halfSize) < 0.01f &&
+            std::abs(m_terrainMaxHeightCached - cfg.maxHeight) < 0.01f &&
+            m_terrainGridCached == cfg.gridResolution) {
+            return;
+        }
+        m_terrainMesh.destroy();
+
+        const int divs = std::clamp(cfg.gridResolution, 32, 220);
+        const int stride = divs + 1;
+        const float half = cfg.halfSize;
+        const float step = (half * 2.0f) / static_cast<float>(divs);
+
+        std::vector<Vertex3D> verts;
+        std::vector<float> rawH(static_cast<std::size_t>(stride * stride), 0.0f);
+        verts.reserve(static_cast<std::size_t>(stride * stride));
+
+        for (int iz = 0; iz <= divs; ++iz) {
+            const float z = -half + static_cast<float>(iz) * step;
+            const float v = static_cast<float>(iz) / static_cast<float>(divs);
+            for (int ix = 0; ix <= divs; ++ix) {
+                const float x = -half + static_cast<float>(ix) * step;
+                const float u = static_cast<float>(ix) / static_cast<float>(divs);
+                const TerrainSample s = world.sampleTerrain(x, z);
+                rawH[static_cast<std::size_t>(iz * stride + ix)] = s.height;
+                // Sink flat zones 0.22m below roads so zero Z-fighting ever occurs with flat ground/roads!
+                const float riseT = std::clamp(s.height / 0.45f, 0.0f, 1.0f);
+                const float smoothRise = riseT * riseT * (3.0f - 2.0f * riseT);
+                const float y = s.height - 0.22f * (1.0f - smoothRise);
+                verts.push_back({x, y, z, s.normal.x, s.normal.y, s.normal.z, u * 32.0f, v * 32.0f});
+            }
+        }
+
+        std::vector<std::uint32_t> idx;
+        idx.reserve(static_cast<std::size_t>(divs * divs * 6));
+        for (int iz = 0; iz < divs; ++iz) {
+            for (int ix = 0; ix < divs; ++ix) {
+                const std::size_t i0 = static_cast<std::size_t>(iz * stride + ix);
+                const std::size_t i1 = i0 + 1;
+                const std::size_t i2 = static_cast<std::size_t>((iz + 1) * stride + ix);
+                const std::size_t i3 = i2 + 1;
+                // Skip completely flat cells under highways, Downtown Plaza & Marina Lagoon!
+                if (rawH[i0] < 0.02f && rawH[i1] < 0.02f && rawH[i2] < 0.02f && rawH[i3] < 0.02f) {
+                    continue;
+                }
+                idx.insert(idx.end(), {
+                    static_cast<std::uint32_t>(i0), static_cast<std::uint32_t>(i2), static_cast<std::uint32_t>(i1),
+                    static_cast<std::uint32_t>(i1), static_cast<std::uint32_t>(i2), static_cast<std::uint32_t>(i3)
+                });
+            }
+        }
+
+        if (!idx.empty()) {
+            m_terrainMesh.upload(verts, idx);
+        }
+        m_terrainMeshBuilt = true;
+        m_terrainHalfSizeCached = cfg.halfSize;
+        m_terrainMaxHeightCached = cfg.maxHeight;
+        m_terrainGridCached = cfg.gridResolution;
+        std::cout << "[SAGE][Terrain] Built GPU 3D heightmap mesh (" << (idx.size() / 3)
+                  << " triangles, +/-" << half << "m, maxH=" << cfg.maxHeight << "m)\n";
+    }
 
     void uploadSkinPalette(const GpuSkin& skin, GLint uniformLoc) {
         const std::size_t count = std::min<std::size_t>(skin.jointNodeIndices.size(), static_cast<std::size_t>(kMaxSkinBones));
@@ -2305,7 +2481,7 @@ private:
     GLint m_uModel = -1, m_uViewProj = -1, m_uHasSkin = -1, m_uBoneMatrices = -1, m_uBaseColor = -1, m_uEmissive = -1;
     GLint m_uMetallic = -1, m_uRoughness = -1, m_uHasTexture = -1, m_uAlbedoTex = -1;
     GLint m_uHasNormalTex = -1, m_uNormalTex = -1, m_uHasMetRoughTex = -1, m_uMetRoughTex = -1;
-    GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1, m_uWetness = -1;
+    GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1, m_uWetness = -1, m_uCloudShadowsEnabled = -1;
     GLint m_uShadowsEnabled = -1, m_uLightViewProj = -1, m_uLightViewProjFar = -1, m_uShadowMap = -1, m_uShadowMapFar = -1, m_uShadowTexelSize = -1;
     GLint m_uCameraPos = -1, m_uSunDir = -1, m_uSunColor = -1;
     GLint m_uSkyZenith = -1, m_uSkyHorizon = -1, m_uGroundAmbient = -1, m_uAmbientIntensity = -1;
@@ -2321,9 +2497,15 @@ private:
     GLuint m_bloomExtractProgram = 0, m_bloomBlurProgram = 0, m_compositeProgram = 0;
     GLint m_bloomExtractTex = -1, m_bloomBlurImage = -1, m_bloomBlurDir = -1;
     GLint m_compHdrTex = -1, m_compBloomTex = -1, m_compDepthTex = -1, m_compBloomEnabled = -1, m_compBloomIntensity = -1;
-    GLint m_compSsaoEnabled = -1, m_compFxaaEnabled = -1, m_compExposure = -1, m_compTexelSize = -1, m_compNearPlane = -1, m_compFarPlane = -1;
+    GLint m_compSsaoEnabled = -1, m_compFxaaEnabled = -1, m_compGodRaysEnabled = -1, m_compGodRayIntensity = -1;
+    GLint m_compSunScreenPos = -1, m_compSunColor = -1;
+    GLint m_compExposure = -1, m_compTexelSize = -1, m_compNearPlane = -1, m_compFarPlane = -1;
 
-    GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh;
+    GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh, m_terrainMesh;
+    bool m_terrainMeshBuilt = false;
+    float m_terrainHalfSizeCached = 0.0f;
+    float m_terrainMaxHeightCached = 0.0f;
+    int m_terrainGridCached = 0;
     std::unordered_map<std::string, GpuModel> m_modelCache;
     std::unordered_set<std::string> m_failedModels;
     std::vector<glm::mat4> m_nodeWorldScratch;

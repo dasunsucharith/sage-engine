@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (**`v1.2.0`**) — **glTF 2.0 GPU Skeletal Skinning (`JOINTS_0`/`WEIGHTS_0`)**, **Real-Time Bone Crossfade Blending**, **FXAA 3.11 Edge Anti-Aliasing**, **Atmospheric Solar Haze & Rim Lighting**, **Cook-Torrance GGX PBR + Normal/MR Maps + Depth SSAO**, **2-Cascade PCF Soft Shadows (CSM)**, **Dynamic Rain & Wet Reflective Roads**, **Nearest-16 Dynamic Point Lights**, **3D Particles**, **Realistic Water Submersion & Jolt Buoyancy**, **HDR Bloom & Animated 3D Ocean Water**, **Live World Editor & Scene JSON Export (`F1`)**, **2D Minimap/Canvas API (`ui.draw*`)**, **Persistent Save Data**, **33 Blender `.glb` Models** (including 5-clip rigged Human & Drivable Speedboat), **Jolt Physics 5.7**, and **miniaudio 0.11** (4-profile vehicle combustion + surface-aware footsteps).
+> **Status:** Live (**`v1.3.0`**) — **Procedural 3D Heightmap Terrain (Alpine Hills, Red Rock Mesas & Snow Mountains) + Jolt 129×129 HeightField Physics**, **Volumetric Sun Shafts (God-Rays)**, **Drifting Cloud Shadows**, **3D Spatial Stereo Audio Emitters**, **Self-Learning AI Session Telemetry**, **glTF 2.0 GPU Skeletal Skinning (`JOINTS_0`/`WEIGHTS_0`) & Crossfade Blending**, **FXAA 3.11**, **Cook-Torrance GGX PBR + Depth SSAO**, **2-Cascade PCF Soft Shadows**, **Dynamic Rain & Wet Roads**, **Live World Editor (`F1`)**, **33 Blender `.glb` Models**, **Jolt Physics 5.7**, and **miniaudio 0.11**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -39,7 +39,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 
 ---
 
-## Implemented Namespaces (`v1.2.0`)
+## Implemented Namespaces (`v1.3.0`)
 
 ### `sage`
 | Function | Description |
@@ -83,6 +83,10 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setBloom(enabled [, intensity])` | Toggles real-time HDR `RGBA16F` Bloom post-processing and optionally sets bloom strength (`0.0`–`2.0`, default `0.55`). |
 | `world.setFXAA(enabled)` | Enables or disables GPU FXAA 3.11 edge-directed anti-aliasing in the HDR composite pass (`true` by default). |
 | `world.setSSAO(enabled)` | Enables or disables Screen-Space Depth Contact Ambient Occlusion (`true` by default). |
+| `world.setGodRays(enabled [, intensity])` | Toggles Screen-Space Volumetric Sun Shafts (Crepuscular God-Rays) and optionally sets intensity (`0.0`–`1.5`, default `0.42`). |
+| `world.setCloudShadows(enabled)` | Toggles drifting FBM cloud shadows cast across terrain, mountains, roads, and city blocks (`true` by default). |
+| `world.setTerrainEnabled(enabled)` | Enables or disables the synchronized 160×160 3D multi-biome heightmap terrain (`true` by default). |
+| `world.sampleTerrain(x, z)` | Samples the synchronized 3D heightmap terrain at `(x, z)` and returns `height, normalX, normalY, normalZ, biomeId` (exact match to GPU mesh & Jolt HeightField). |
 | `world.setWeather(rainIntensity [, wetness])` | Controls real-time 3D falling rain (`0.0`–`1.0`) and reflective wet-puddle road/terrain shading (`0.0`–`1.0`). |
 | `world.setPointLight(id, x, y, z, r, g, b [, radius, intensity])` | Creates or updates a real-time dynamic point light (up to 16 active) that illuminates 3D meshes, roads, and reflects off animated ocean waves. |
 | `world.removePointLight(id)` | Removes a dynamic point light by `id`. |
@@ -132,6 +136,8 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `audio.playChime()` | Plays an ascending harmonic reward chord (deliveries & stunt jumps). |
 | `audio.playExplosion()` | Plays a sub-bass shockwave boom SFX. |
 | `audio.setVolume(vol01)` | Sets master audio volume (`0.0`–`1.0`). |
+| `audio.setListener(x, y, z, fwdX, fwdZ)` | Updates the 3D spatial audio listener position & horizontal forward direction (typically your active camera) for equal-power stereo panning. |
+| `audio.setSpatialEmitter(slot, type, x, y, z [, radius, gain])` | Configures one of 8 live 3D spatial stereo-panned world emitters (`slot` `0`–`7`; `type`: `0` = Ocean Surf, `1` = Plaza Fountain, `2` = Helicopter Rotor, `3` = Alpine Wind/Breeze). |
 
 ### `ui` *(Lua-Driven Game Menus & HUDs — call inside `onRenderUI()`)*
 | Function | Description |

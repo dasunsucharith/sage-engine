@@ -15,6 +15,7 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/CylinderShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -452,6 +453,67 @@ bool PhysicsWorld::addStaticRamp(
     m_impl->bodiesByEntity[entityId] = {bid, false};
     m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
     m_impl->staticRamps.push_back({pos.x, pos.z, pos.y, width, height, length, yawDeg});
+    return true;
+}
+
+bool PhysicsWorld::buildTerrainCollider(const World& world) {
+    if (!m_impl->initialized || !world.terrain().enabled) {
+        return false;
+    }
+    const std::string entityId = "__sage_terrain_heightfield";
+    m_impl->removeExisting(entityId);
+
+    constexpr int kSampleCount = 129; // Must be 2^n + 1 or multiple of block size for Jolt HeightFieldShape
+    const float halfSize = world.terrain().halfSize;
+    const float cellSize = (halfSize * 2.0f) / static_cast<float>(kSampleCount - 1);
+
+    std::vector<float> samples(static_cast<std::size_t>(kSampleCount * kSampleCount), 0.0f);
+    for (int iz = 0; iz < kSampleCount; ++iz) {
+        const float z = -halfSize + static_cast<float>(iz) * cellSize;
+        for (int ix = 0; ix < kSampleCount; ++ix) {
+            const float x = -halfSize + static_cast<float>(ix) * cellSize;
+            const WaterSampleResult w = world.sampleWater(x, z, 0.0f);
+            if (w.inWater) {
+                // Leave carved water lagoon open so dynamic bodies sink to seabed and float via Archimedes buoyancy!
+                samples[static_cast<std::size_t>(iz * kSampleCount + ix)] = JPH::HeightFieldShapeConstants::cNoCollisionValue;
+            } else {
+                const float h = world.sampleTerrain(x, z).height;
+                // Only emit solid Jolt collision where terrain rises above flat roads (avoids double-floor collision!)
+                samples[static_cast<std::size_t>(iz * kSampleCount + ix)] =
+                    (h > 0.05f) ? h : JPH::HeightFieldShapeConstants::cNoCollisionValue;
+            }
+        }
+    }
+
+    JPH::HeightFieldShapeSettings hfSettings(
+        samples.data(),
+        JPH::Vec3(-halfSize, 0.0f, -halfSize),
+        JPH::Vec3(cellSize, 1.0f, cellSize),
+        static_cast<JPH::uint32>(kSampleCount));
+    const auto shapeResult = hfSettings.Create();
+    if (shapeResult.HasError()) {
+        std::cerr << "[SAGE][Jolt] HeightFieldShape failed: " << shapeResult.GetError() << "\n";
+        return false;
+    }
+
+    JPH::BodyCreationSettings bodySettings(
+        shapeResult.Get(),
+        JPH::RVec3::sZero(),
+        JPH::Quat::sIdentity(),
+        JPH::EMotionType::Static,
+        Layers::NON_MOVING);
+    bodySettings.mFriction = 0.78f;
+    bodySettings.mRestitution = 0.18f;
+
+    auto& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID bid = bi.CreateAndAddBody(bodySettings, JPH::EActivation::DontActivate);
+    if (bid.IsInvalid()) {
+        return false;
+    }
+
+    m_impl->bodiesByEntity[entityId] = {bid, false};
+    m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
+    std::cout << "[SAGE][Jolt] Built 129x129 3D Terrain HeightField collider (+/-" << halfSize << "m)\n";
     return true;
 }
 

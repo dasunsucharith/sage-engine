@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "project": "SAGE Engine (Scriptable AI Game Engine)",
+  "vision": "Build an open-source, AI-native C++20 + Lua AAA open-world game engine that rivals and surpasses modern AAA engines (like RAGE / GTA VI) while continuously learning from every release, render inspection, and hardware telemetry run.",
+  "currentVersion": "1.3.0",
+  "verifiedEngineeringLessons": [
+    {
+      "id": "L001",
+      "version": "0.7.0",
+      "domain": "Rendering",
+      "lesson": "Eliminate road/terrain Z-fighting by sinking buried collision slabs (visible=false), setting camera nearPlane >= 0.50m, layering road elevations cleanly, and sinking flat terrain grid cells 0.22m below flat road planes while skipping completely flat terrain quads."
+    },
+    {
+      "id": "L002",
+      "version": "0.8.0",
+      "domain": "Physics & Water",
+      "lesson": "CPU physics and GPU shaders must share exact analytical formulas: world.sampleWater() evaluates the exact same 4-wave displacement equation as kWaterVertexShader, and Jolt HeightFieldShape leaves water volumes as cNoCollisionValue so dynamic props sink cleanly to the seabed and float via Archimedes buoyancy."
+    },
+    {
+      "id": "L003",
+      "version": "1.1.1",
+      "domain": "glTF & Blender Animation",
+      "lesson": "Blender glTF 2.0 export evaluates the top-most (last created) NLA track as the resting bind pose. Always record the upright 'Idle' clip LAST and explicitly keyframe Hips location + rotation in every clip so horizontal poses like 'Swim' never bleed into standing poses."
+    },
+    {
+      "id": "L004",
+      "version": "1.1.2",
+      "domain": "3D Character Modeling",
+      "lesson": "Avoid Blender Metaballs for procedural characters (MetaElement capsule scale/quaternion quirks cause unpredictable spikes) and avoid loose disconnected tubes. Use clean manifold quad-topology Subdivision-Surface sculpting (bmesh anatomical lofting with seamless armhole/pelvis bridges), polar-aligned eyeballs recessed cleanly behind the brow, true linear PBR colors (sRGB^2.2), and visually verify multi-angle Cycles renders (front 3/4, head close-up, head side profile, walk & run poses) before exporting."
+    },
+    {
+      "id": "L005",
+      "version": "1.2.0",
+      "domain": "Skeletal Animation & Gait",
+      "lesson": "Always align Armature bone rolls predictably (align_roll((0,-1,0)) for limbs) and verify Foot bone dorsiflexion (+X toes up on heel-strike) vs plantarflexion (-X toes down on toe-off). Use periodic Catmull-Rom 8-phase gait curves with lateral hip weight-shift, pelvis/chest counter-rotation, and real-time bone-level TRS/quaternion slerp crossfade blending in C++ so transitions never snap."
+    },
+    {
+      "id": "L006",
+      "version": "1.3.0",
+      "domain": "Open-World Terrain & Suspension",
+      "lesson": "Combine procedural FBM rolling hills & surrounding mountain ranges with an analytical road/plaza/lagoon flattening mask, auto-ground off-road scene models in SceneLoader so zero trees/buildings clip or float, mirror the heightmap into a Jolt HeightFieldShape, and sample 4 wheel contact points (FL/FR/RL/RR) for realistic AAA vehicle pitch, roll, and spring-damper suspension."
+    }
+  ],
+  "aaaRoadmapToSurpassRAGE": [
+    {
+      "targetVersion": "1.4.0",
+      "focus": "Deferred/Clustered PBR + Cascaded 3-Split Shadows + Screen-Space Reflections (SSR) + Grass/Foliage GPU Instancing (100k+ swaying blades)"
+    },
+    {
+      "targetVersion": "1.5.0",
+      "focus": "AI-Driven NPC Behavior Trees, Dynamic Crowd & Traffic Navigation Splines, Ragdoll/Active-Physics Character Blend (Euphoria-style), and Modular Weapon/Interaction Framework"
+    },
+    {
+      "targetVersion": "1.6.0",
+      "focus": "Streaming Open-World Tile Chunks (Multi-Kilometer Seamless Worlds), Real-Time Volumetric Clouds, Day/Night Dynamic Global Illumination (LPV/DDGI), and Multiplayer Sync Foundation"
+    },
+    {
+      "targetVersion": "2.0.0",
+      "focus": "Modern Vulkan / DirectX 12 Hardware Ray-Traced Renderer Backend behind SAGE's clean Renderer interface + Full Node-Based Visual Shader & AI Scene Co-Pilot inside the Editor"
+    }
+  ],
+  "hardwareBenchmarks": [
+    {
+      "version": "1.2.0",
+      "gpu": "NVIDIA GeForce RTX 5050 Laptop GPU",
+      "entities": 374,
+      "glbModels": 31,
+      "joltBodies": 229,
+      "smokeTestPassed": true
+    },
+    {
+      "version": "1.3.0",
+      "gpu": "NVIDIA GeForce RTX 5050 Laptop GPU",
+      "entities": 374,
+      "glbModels": 31,
+      "terrainTriangles": 31824,
+      "joltBodies": 230,
+      "dynamicBodies": 37,
+      "pointLights": 33,
+      "coldStart12FrameAvgMs": 49.8,
+      "coldStartPeakMs": 226.7,
+      "nextOptimizationHint": "Frame-1 cold-start spike (226.7ms) comes from synchronous lazy loading of 31 .glb models on first render; v1.4.0 should pre-warm/async-load models and batch repeated props (trees/lamps/rocks) via GPU instancing.",
+      "smokeTestPassed": true
+    }
+  ]
+}

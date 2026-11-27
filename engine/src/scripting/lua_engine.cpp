@@ -210,6 +210,32 @@ struct LuaEngine::Impl {
                 world->sky().ssaoEnabled = enabled;
             }
         });
+        worldTbl.set_function("setGodRays", [this](bool enabled, sol::optional<float> intensity) {
+            if (world) {
+                world->sky().godRaysEnabled = enabled;
+                if (intensity.has_value()) {
+                    world->sky().godRayIntensity = std::clamp(*intensity, 0.0f, 1.5f);
+                }
+            }
+        });
+        worldTbl.set_function("setCloudShadows", [this](bool enabled) {
+            if (world) {
+                world->sky().cloudShadowsEnabled = enabled;
+            }
+        });
+        worldTbl.set_function("setTerrainEnabled", [this](bool enabled) {
+            if (world) {
+                world->terrain().enabled = enabled;
+            }
+        });
+        worldTbl.set_function("sampleTerrain", [this](float x, float z)
+            -> std::tuple<float, float, float, float, int> {
+            if (!world) {
+                return {0.0f, 0.0f, 1.0f, 0.0f, 0};
+            }
+            const TerrainSample s = world->sampleTerrain(x, z);
+            return {s.height, s.normal.x, s.normal.y, s.normal.z, s.biomeId};
+        });
         worldTbl.set_function("setWeather", [this](float rainIntensity, sol::optional<float> wetness) {
             if (world) {
                 const float r = std::clamp(rainIntensity, 0.0f, 1.0f);
@@ -421,6 +447,17 @@ struct LuaEngine::Impl {
         audioTbl.set_function("setVolume", [this](float vol) {
             if (audio) {
                 audio->setMasterVolume(vol);
+            }
+        });
+        audioTbl.set_function("setListener", [this](float x, float y, float z, float fwdX, float fwdZ) {
+            if (audio) {
+                audio->setListener(x, y, z, fwdX, fwdZ);
+            }
+        });
+        audioTbl.set_function("setSpatialEmitter", [this](
+            int slot, int type, float x, float y, float z, sol::optional<float> radius, sol::optional<float> gain) {
+            if (audio) {
+                audio->setSpatialEmitter(slot, type, x, y, z, radius.value_or(65.0f), gain.value_or(0.65f));
             }
         });
 

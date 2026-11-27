@@ -43,6 +43,7 @@ private:
     void render(double elapsedSeconds);
     void updateWindowTitle(double fps);
     bool checkSceneHotReload();
+    void writeSessionTelemetry(int totalFrames, double totalSeconds) const;
 
     std::filesystem::path resolveProjectPath(const std::filesystem::path& relativePath) const;
 
@@ -69,6 +70,8 @@ private:
 
     float m_smoothedFps = 60.0f;
     float m_lastFrameMs = 16.6f;
+    float m_peakFrameMs = 0.0f;
+    double m_frameMsAccum = 0.0;
 
     std::string m_scriptTitle;
     double m_startTime = 0.0;

@@ -29,6 +29,12 @@ public:
     void playChime();
     void playExplosion();
 
+    // 3D Spatial Audio Listener & Ambient Emitters (v1.3.0: up to 8 live stereo-panned emitters!)
+    // type: 0 = Ocean Surf, 1 = Plaza Fountain, 2 = Helicopter Rotor, 3 = Wind Turbine/Breeze
+    void setListener(float x, float y, float z, float fwdX, float fwdZ);
+    void setSpatialEmitter(int slot, int type, float x, float y, float z, float radius, float gain);
+    void clearSpatialEmitters();
+
     void setMasterVolume(float volume01);
     float masterVolume() const;
     void setMuted(bool muted);

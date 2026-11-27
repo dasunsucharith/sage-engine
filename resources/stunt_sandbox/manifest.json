@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE Engine v1.2.0 Showcase — GPU Skeletal Skinning, Real-Time Animation Crossfade Blending, Biomechanical 5-Clip Rigged Human (Idle/Walk/Run/Jump/Swim), FXAA 3.11, Surface-Aware Footstep Synth, GGX PBR, Depth SSAO & 33 Blender .glb Models.",
+  "description": "SAGE Engine v1.3.0 AAA Showcase — 3D Heightmap Terrain (Alpine Hills, Red Rock Mesas & Snow Mountains), Jolt HeightField Physics, 4-Wheel Spring-Damper Vehicle Suspension, Volumetric Sun Shafts (God-Rays), Drifting Cloud Shadows, 3D Spatial Stereo Audio, 5-Clip Crossfaded Rigged Human & Self-Learning AI Telemetry.",
   "scripts": [
     "main.lua"
   ]
