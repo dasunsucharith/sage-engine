@@ -1,5 +1,5 @@
 -- =============================================================================
--- SAGE Engine v0.6 Showcase: 4-Biome Open World Stunt & Delivery Sandbox
+-- SAGE Engine v0.7 Showcase: HDR 4-Biome Open World Stunt & Delivery Sandbox
 -- =============================================================================
 -- BIOMES TO EXPLORE (320m x 320m Open World):
 --   NW: Downtown Metro       | NE: Pine Highlands & Wind Ridge
@@ -109,7 +109,7 @@ local deliverySpots = {
     { x =    0.0, z = -120.0, label = "South Coast Highway" },
     { x = -120.0, z =    0.0, label = "West Canyon Highway" },
     { x =  -86.0, z =   46.0, label = "Metro Delivery Depot" },
-    { x =   78.0, z =  -82.0, label = "Lighthouse Overlook" },
+    { x =   62.0, z =  -88.0, label = "Palm Lagoon Pier" },
     { x =  -86.0, z =  -72.0, label = "Desert Wind Depot" },
     { x =   86.0, z =   72.0, label = "Alpine Forestry Depot" },
 }
@@ -209,18 +209,18 @@ local function spawnCratePyramid(cx, cz, yawDeg)
 end
 
 local function spawnDynamicPropsAndPhysics()
-    -- Dashed yellow road markings along both 300m grand expressways
+    -- Dashed yellow road markings cleanly layered above NS (0.04) and EW (0.07) asphalt (ZERO Z-fighting!)
     local dashId = 0
     for d = -144, 144, 10 do
         if math.abs(d) > 8 and math.abs(math.abs(d) - 28.0) > 6 and math.abs(math.abs(d) - 54.0) > 6 and math.abs(math.abs(d) - 120.0) > 7 then
             dashId = dashId + 1
             local idNS = "dash_ns_" .. dashId
-            world.spawnPlane(idNS, 0.0, 0.02, d)
+            world.spawnPlane(idNS, 0.0, 0.06, d)
             world.setScale(idNS, 0.35, 1.0, 4.2)
             world.setColor(idNS, 0.96, 0.78, 0.16)
 
             local idEW = "dash_ew_" .. dashId
-            world.spawnPlane(idEW, d, 0.02, 0.0)
+            world.spawnPlane(idEW, d, 0.09, 0.0)
             world.setScale(idEW, 4.2, 1.0, 0.35)
             world.setColor(idEW, 0.96, 0.78, 0.16)
         end
@@ -244,7 +244,7 @@ local function spawnDynamicPropsAndPhysics()
 
     -- Glowing 3D Delivery Beacon Ring
     local spot = deliverySpots[activeDeliveryIdx]
-    world.spawnRing("delivery_ring", spot.x, 0.05, spot.z)
+    world.spawnRing("delivery_ring", spot.x, 0.11, spot.z)
     world.setScale("delivery_ring", 7.0, 5.2, 7.0)
     world.setColor("delivery_ring", 1.0, 0.82, 0.14)
     world.setEmissive("delivery_ring", true)
@@ -346,7 +346,7 @@ local function updateDeliveryMission(dt, timeNow)
         deliveryTimer = 0.0
 
         local nextSpot = deliverySpots[activeDeliveryIdx]
-        world.setPosition("delivery_ring", nextSpot.x, 0.05, nextSpot.z)
+        world.setPosition("delivery_ring", nextSpot.x, 0.11, nextSpot.z)
         sage.log("Next drop-off -> " .. nextSpot.label)
     end
 end
@@ -361,8 +361,8 @@ function onStart()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
 
     sage.log("===================================================================")
-    sage.log("  SAGE Engine v0.6 — 4-Biome Open World Stunt & Delivery Sandbox")
-    sage.log("  Explore: Downtown Metro | Pine Highlands | Palm Coast | Desert")
+    sage.log("  SAGE Engine v0.7 — HDR 4-Biome Open World Stunt & Delivery Sandbox")
+    sage.log("  Features: HDR Bloom | 3D Animated Ocean | Sky Clouds | Jolt Physics")
     sage.log("  Click PLAY on the Main Menu to drive (Esc = Pause Menu, F1 = Editor)")
     sage.log("===================================================================")
 end
@@ -400,9 +400,9 @@ function onTick(dt)
             camera.setPosition(car.x + math.sin(orbit) * 10.5, car.y + 3.8, car.z + math.cos(orbit) * 10.5)
             camera.setTarget(car.x, car.y + 1.1, car.z)
             camera.setFov(55.0)
-            sage.setTitle("SAGE Engine v0.6 — Main Menu | 4-Biome Open World")
+            sage.setTitle("SAGE Engine v0.7 — Main Menu | HDR Open World")
         else
-            sage.setTitle("SAGE Engine v0.6 — PAUSED (Press Esc to Resume)")
+            sage.setTitle("SAGE Engine v0.7 — PAUSED (Press Esc to Resume)")
         end
         return
     end
@@ -662,7 +662,7 @@ function onTick(dt)
         local kmh = math.floor(speed * 3.6)
         local biome = getCurrentBiomeName(car.x, car.z)
         sage.setTitle(string.format(
-            "SAGE v0.6 | %s | G%d %d km/h | Score: %d | Esc = Menu | F1 = Editor",
+            "SAGE v0.7 | %s | G%d %d km/h | Score: %d | Esc = Menu | F1 = Editor",
             biome, car.gear, kmh, score
         ))
     end
@@ -676,11 +676,11 @@ function onRenderUI()
 
     -- 1. MAIN MENU (hides completely the moment you click PLAY!)
     if gameState == "MENU" then
-        if ui.beginCenteredWindow("SAGE ENGINE v0.6 — OPEN WORLD SANDBOX", 440, 390) then
+        if ui.beginCenteredWindow("SAGE ENGINE v0.7 — HDR OPEN WORLD SANDBOX", 440, 390) then
             ui.setFontScale(1.35)
             ui.textCentered("SAGE STUNT & DELIVERY")
             ui.setFontScale(1.0)
-            ui.textCentered("4-Biome 3D Open World  |  Jolt Physics  |  Soft Shadows")
+            ui.textCentered("HDR Bloom  |  3D Ocean Waves  |  4 Biomes  |  Jolt Physics")
             ui.spacing()
             ui.separator()
             ui.spacing()
@@ -793,5 +793,5 @@ end
 
 function onShutdown()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
-    sage.log("v0.6 Multi-Biome Sandbox shutting down cleanly.")
+    sage.log("v0.7 HDR Multi-Biome Sandbox shutting down cleanly.")
 end

@@ -1,11 +1,11 @@
 {
-  "name": "SAGE v0.6 \u2014 4-Biome Open World (Metro, Highlands, Palm Coast, Red Rock Desert)",
+  "name": "SAGE v0.7 \u2014 HDR Open World (4 Biomes, 3D Animated Ocean Water, Sky Clouds & Bloom)",
   "version": 2,
   "sky": {
     "timeOfDay": 17.4,
-    "ambientIntensity": 0.38,
-    "fogStart": 125.0,
-    "fogEnd": 420.0
+    "ambientIntensity": 0.4,
+    "fogStart": 140.0,
+    "fogEnd": 460.0
   },
   "camera": {
     "position": [
@@ -44,6 +44,7 @@
         0.14,
         0.16
       ],
+      "visible": false,
       "collider": {
         "type": "box",
         "halfExtents": [
@@ -57,114 +58,247 @@
       "id": "biome_downtown",
       "type": "primitive_plane",
       "position": [
-        -80.0,
-        -0.02,
-        80.0
+        -79.0,
+        0.0,
+        79.0
       ],
       "scale": [
-        160.0,
+        158.0,
         1.0,
-        160.0
+        158.0
       ],
       "color": [
-        0.17,
         0.18,
-        0.21
+        0.19,
+        0.23
       ]
     },
     {
       "id": "biome_highlands",
       "type": "primitive_plane",
       "position": [
-        80.0,
-        -0.02,
-        80.0
+        79.0,
+        0.0,
+        79.0
       ],
       "scale": [
-        160.0,
+        158.0,
         1.0,
-        160.0
+        158.0
       ],
       "color": [
-        0.14,
-        0.25,
-        0.15
-      ]
-    },
-    {
-      "id": "biome_beach",
-      "type": "primitive_plane",
-      "position": [
-        80.0,
-        -0.02,
-        -80.0
-      ],
-      "scale": [
-        160.0,
-        1.0,
-        160.0
-      ],
-      "color": [
-        0.76,
-        0.66,
-        0.44
-      ]
-    },
-    {
-      "id": "ocean_bay",
-      "type": "primitive_plane",
-      "position": [
-        125.0,
-        0.01,
-        -125.0
-      ],
-      "scale": [
-        86.0,
-        1.0,
-        86.0
-      ],
-      "color": [
-        0.07,
-        0.42,
-        0.56
-      ]
-    },
-    {
-      "id": "ocean_foam",
-      "type": "primitive_plane",
-      "position": [
-        108.0,
-        0.015,
-        -108.0
-      ],
-      "scale": [
-        56.0,
-        1.0,
-        56.0
-      ],
-      "color": [
-        0.14,
-        0.56,
-        0.68
+        0.15,
+        0.27,
+        0.16
       ]
     },
     {
       "id": "biome_desert",
       "type": "primitive_plane",
       "position": [
-        -80.0,
-        -0.02,
-        -80.0
+        -79.0,
+        0.0,
+        -79.0
       ],
       "scale": [
-        160.0,
+        158.0,
         1.0,
-        160.0
+        158.0
       ],
       "color": [
-        0.62,
-        0.36,
+        0.64,
+        0.37,
         0.21
+      ]
+    },
+    {
+      "id": "biome_beach_w",
+      "type": "primitive_plane",
+      "position": [
+        33.0,
+        0.0,
+        -79.0
+      ],
+      "scale": [
+        66.0,
+        1.0,
+        158.0
+      ],
+      "color": [
+        0.78,
+        0.68,
+        0.45
+      ]
+    },
+    {
+      "id": "biome_beach_e",
+      "type": "primitive_plane",
+      "position": [
+        134.0,
+        0.0,
+        -79.0
+      ],
+      "scale": [
+        48.0,
+        1.0,
+        158.0
+      ],
+      "color": [
+        0.78,
+        0.68,
+        0.45
+      ]
+    },
+    {
+      "id": "biome_beach_n",
+      "type": "primitive_plane",
+      "position": [
+        88.0,
+        0.0,
+        -33.0
+      ],
+      "scale": [
+        44.0,
+        1.0,
+        66.0
+      ],
+      "color": [
+        0.78,
+        0.68,
+        0.45
+      ]
+    },
+    {
+      "id": "biome_beach_s",
+      "type": "primitive_plane",
+      "position": [
+        88.0,
+        0.0,
+        -134.0
+      ],
+      "scale": [
+        44.0,
+        1.0,
+        48.0
+      ],
+      "color": [
+        0.78,
+        0.68,
+        0.45
+      ]
+    },
+    {
+      "id": "lagoon_seabed",
+      "type": "primitive_plane",
+      "position": [
+        88.0,
+        -1.15,
+        -88.0
+      ],
+      "scale": [
+        46.0,
+        1.0,
+        46.0
+      ],
+      "color": [
+        0.32,
+        0.35,
+        0.28
+      ]
+    },
+    {
+      "id": "palm_lagoon_water",
+      "type": "water",
+      "position": [
+        88.0,
+        -0.32,
+        -88.0
+      ],
+      "scale": [
+        44.0,
+        1.0,
+        44.0
+      ],
+      "color": [
+        0.06,
+        0.58,
+        0.7
+      ]
+    },
+    {
+      "id": "ocean_east",
+      "type": "water",
+      "position": [
+        278.0,
+        -0.4,
+        0.0
+      ],
+      "scale": [
+        240.0,
+        1.0,
+        796.0
+      ],
+      "color": [
+        0.04,
+        0.44,
+        0.62
+      ]
+    },
+    {
+      "id": "ocean_west",
+      "type": "water",
+      "position": [
+        -278.0,
+        -0.4,
+        0.0
+      ],
+      "scale": [
+        240.0,
+        1.0,
+        796.0
+      ],
+      "color": [
+        0.04,
+        0.44,
+        0.62
+      ]
+    },
+    {
+      "id": "ocean_north",
+      "type": "water",
+      "position": [
+        0.0,
+        -0.4,
+        278.0
+      ],
+      "scale": [
+        316.0,
+        1.0,
+        240.0
+      ],
+      "color": [
+        0.04,
+        0.44,
+        0.62
+      ]
+    },
+    {
+      "id": "ocean_south",
+      "type": "water",
+      "position": [
+        0.0,
+        -0.4,
+        -278.0
+      ],
+      "scale": [
+        316.0,
+        1.0,
+        240.0
+      ],
+      "color": [
+        0.04,
+        0.44,
+        0.62
       ]
     },
     {
@@ -172,7 +306,7 @@
       "type": "primitive_plane",
       "position": [
         0.0,
-        0.0,
+        0.04,
         0.0
       ],
       "scale": [
@@ -181,9 +315,85 @@
         310.0
       ],
       "color": [
-        0.11,
-        0.12,
-        0.14
+        0.105,
+        0.115,
+        0.138
+      ]
+    },
+    {
+      "id": "loop_in_e",
+      "type": "primitive_plane",
+      "position": [
+        54.0,
+        0.04,
+        0.0
+      ],
+      "scale": [
+        11.0,
+        1.0,
+        120.0
+      ],
+      "color": [
+        0.105,
+        0.115,
+        0.138
+      ]
+    },
+    {
+      "id": "loop_in_w",
+      "type": "primitive_plane",
+      "position": [
+        -54.0,
+        0.04,
+        0.0
+      ],
+      "scale": [
+        11.0,
+        1.0,
+        120.0
+      ],
+      "color": [
+        0.105,
+        0.115,
+        0.138
+      ]
+    },
+    {
+      "id": "ring_out_e",
+      "type": "primitive_plane",
+      "position": [
+        120.0,
+        0.04,
+        0.0
+      ],
+      "scale": [
+        12.0,
+        1.0,
+        254.0
+      ],
+      "color": [
+        0.105,
+        0.115,
+        0.138
+      ]
+    },
+    {
+      "id": "ring_out_w",
+      "type": "primitive_plane",
+      "position": [
+        -120.0,
+        0.04,
+        0.0
+      ],
+      "scale": [
+        12.0,
+        1.0,
+        254.0
+      ],
+      "color": [
+        0.105,
+        0.115,
+        0.138
       ]
     },
     {
@@ -191,7 +401,7 @@
       "type": "primitive_plane",
       "position": [
         0.0,
-        0.0,
+        0.07,
         0.0
       ],
       "scale": [
@@ -200,8 +410,8 @@
         14.0
       ],
       "color": [
-        0.11,
-        0.12,
+        0.108,
+        0.118,
         0.14
       ]
     },
@@ -210,7 +420,7 @@
       "type": "primitive_plane",
       "position": [
         0.0,
-        0.0,
+        0.07,
         54.0
       ],
       "scale": [
@@ -219,8 +429,8 @@
         11.0
       ],
       "color": [
-        0.11,
-        0.12,
+        0.108,
+        0.118,
         0.14
       ]
     },
@@ -229,7 +439,7 @@
       "type": "primitive_plane",
       "position": [
         0.0,
-        0.0,
+        0.07,
         -54.0
       ],
       "scale": [
@@ -238,46 +448,8 @@
         11.0
       ],
       "color": [
-        0.11,
-        0.12,
-        0.14
-      ]
-    },
-    {
-      "id": "loop_in_e",
-      "type": "primitive_plane",
-      "position": [
-        54.0,
-        0.0,
-        0.0
-      ],
-      "scale": [
-        11.0,
-        1.0,
-        120.0
-      ],
-      "color": [
-        0.11,
-        0.12,
-        0.14
-      ]
-    },
-    {
-      "id": "loop_in_w",
-      "type": "primitive_plane",
-      "position": [
-        -54.0,
-        0.0,
-        0.0
-      ],
-      "scale": [
-        11.0,
-        1.0,
-        120.0
-      ],
-      "color": [
-        0.11,
-        0.12,
+        0.108,
+        0.118,
         0.14
       ]
     },
@@ -286,7 +458,7 @@
       "type": "primitive_plane",
       "position": [
         0.0,
-        0.0,
+        0.07,
         120.0
       ],
       "scale": [
@@ -295,8 +467,8 @@
         12.0
       ],
       "color": [
-        0.11,
-        0.12,
+        0.108,
+        0.118,
         0.14
       ]
     },
@@ -305,7 +477,7 @@
       "type": "primitive_plane",
       "position": [
         0.0,
-        0.0,
+        0.07,
         -120.0
       ],
       "scale": [
@@ -314,46 +486,8 @@
         12.0
       ],
       "color": [
-        0.11,
-        0.12,
-        0.14
-      ]
-    },
-    {
-      "id": "ring_out_e",
-      "type": "primitive_plane",
-      "position": [
-        120.0,
-        0.0,
-        0.0
-      ],
-      "scale": [
-        12.0,
-        1.0,
-        254.0
-      ],
-      "color": [
-        0.11,
-        0.12,
-        0.14
-      ]
-    },
-    {
-      "id": "ring_out_w",
-      "type": "primitive_plane",
-      "position": [
-        -120.0,
-        0.0,
-        0.0
-      ],
-      "scale": [
-        12.0,
-        1.0,
-        254.0
-      ],
-      "color": [
-        0.11,
-        0.12,
+        0.108,
+        0.118,
         0.14
       ]
     },
@@ -362,8 +496,8 @@
       "type": "primitive_box",
       "position": [
         0.0,
-        1.4,
-        156.0
+        0.85,
+        157.0
       ],
       "rotation": [
         0.0,
@@ -372,13 +506,13 @@
       ],
       "scale": [
         316.0,
-        2.8,
+        1.7,
         2.0
       ],
       "color": [
-        0.28,
-        0.31,
-        0.36
+        0.34,
+        0.37,
+        0.42
       ],
       "collider": {
         "type": "box",
@@ -394,8 +528,8 @@
       "type": "primitive_box",
       "position": [
         0.0,
-        1.4,
-        -156.0
+        0.7,
+        -157.0
       ],
       "rotation": [
         0.0,
@@ -404,13 +538,13 @@
       ],
       "scale": [
         316.0,
-        2.8,
+        1.4,
         2.0
       ],
       "color": [
-        0.28,
-        0.31,
-        0.36
+        0.58,
+        0.54,
+        0.46
       ],
       "collider": {
         "type": "box",
@@ -425,8 +559,8 @@
       "id": "wall_east",
       "type": "primitive_box",
       "position": [
-        156.0,
-        1.4,
+        157.0,
+        0.7,
         0.0
       ],
       "rotation": [
@@ -436,13 +570,13 @@
       ],
       "scale": [
         2.0,
-        2.8,
+        1.4,
         316.0
       ],
       "color": [
-        0.28,
-        0.31,
-        0.36
+        0.58,
+        0.54,
+        0.46
       ],
       "collider": {
         "type": "box",
@@ -457,8 +591,8 @@
       "id": "wall_west",
       "type": "primitive_box",
       "position": [
-        -156.0,
-        1.4,
+        -157.0,
+        0.85,
         0.0
       ],
       "rotation": [
@@ -468,13 +602,13 @@
       ],
       "scale": [
         2.0,
-        2.8,
+        1.7,
         316.0
       ],
       "color": [
-        0.28,
-        0.31,
-        0.36
+        0.34,
+        0.37,
+        0.42
       ],
       "collider": {
         "type": "box",
@@ -486,11 +620,663 @@
       }
     },
     {
+      "id": "arch_n_pil_l",
+      "type": "primitive_box",
+      "position": [
+        -8.4,
+        3.7,
+        16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.9,
+        7.4,
+        0.9
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          0.55,
+          3.7,
+          0.55
+        ]
+      }
+    },
+    {
+      "id": "arch_n_pil_r",
+      "type": "primitive_box",
+      "position": [
+        8.4,
+        3.7,
+        16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.9,
+        7.4,
+        0.9
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          0.55,
+          3.7,
+          0.55
+        ]
+      }
+    },
+    {
+      "id": "arch_n_beam",
+      "type": "primitive_box",
+      "position": [
+        0.0,
+        7.4,
+        16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        18.2,
+        0.75,
+        1.0
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ]
+    },
+    {
+      "id": "arch_n_neon",
+      "type": "primitive_box",
+      "position": [
+        0.0,
+        7.04,
+        16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        16.400000000000002,
+        0.22,
+        0.35
+      ],
+      "color": [
+        0.12,
+        0.88,
+        1.0
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_n_neon_l",
+      "type": "primitive_box",
+      "position": [
+        -7.9,
+        4.07,
+        16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.16,
+        5.328,
+        0.28
+      ],
+      "color": [
+        0.12,
+        0.88,
+        1.0
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_n_neon_r",
+      "type": "primitive_box",
+      "position": [
+        7.9,
+        4.07,
+        16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.16,
+        5.328,
+        0.28
+      ],
+      "color": [
+        0.12,
+        0.88,
+        1.0
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_s_pil_l",
+      "type": "primitive_box",
+      "position": [
+        -8.4,
+        3.7,
+        -16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.9,
+        7.4,
+        0.9
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          0.55,
+          3.7,
+          0.55
+        ]
+      }
+    },
+    {
+      "id": "arch_s_pil_r",
+      "type": "primitive_box",
+      "position": [
+        8.4,
+        3.7,
+        -16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.9,
+        7.4,
+        0.9
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          0.55,
+          3.7,
+          0.55
+        ]
+      }
+    },
+    {
+      "id": "arch_s_beam",
+      "type": "primitive_box",
+      "position": [
+        0.0,
+        7.4,
+        -16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        18.2,
+        0.75,
+        1.0
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ]
+    },
+    {
+      "id": "arch_s_neon",
+      "type": "primitive_box",
+      "position": [
+        0.0,
+        7.04,
+        -16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        16.400000000000002,
+        0.22,
+        0.35
+      ],
+      "color": [
+        1.0,
+        0.25,
+        0.68
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_s_neon_l",
+      "type": "primitive_box",
+      "position": [
+        -7.9,
+        4.07,
+        -16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.16,
+        5.328,
+        0.28
+      ],
+      "color": [
+        1.0,
+        0.25,
+        0.68
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_s_neon_r",
+      "type": "primitive_box",
+      "position": [
+        7.9,
+        4.07,
+        -16.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.16,
+        5.328,
+        0.28
+      ],
+      "color": [
+        1.0,
+        0.25,
+        0.68
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_e_pil_l",
+      "type": "primitive_box",
+      "position": [
+        16.0,
+        3.7,
+        -8.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.9,
+        7.4,
+        0.9
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          0.55,
+          3.7,
+          0.55
+        ]
+      }
+    },
+    {
+      "id": "arch_e_pil_r",
+      "type": "primitive_box",
+      "position": [
+        16.0,
+        3.7,
+        8.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.9,
+        7.4,
+        0.9
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          0.55,
+          3.7,
+          0.55
+        ]
+      }
+    },
+    {
+      "id": "arch_e_beam",
+      "type": "primitive_box",
+      "position": [
+        16.0,
+        7.4,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        0.75,
+        18.2
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ]
+    },
+    {
+      "id": "arch_e_neon",
+      "type": "primitive_box",
+      "position": [
+        16.0,
+        7.04,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.35,
+        0.22,
+        16.400000000000002
+      ],
+      "color": [
+        0.18,
+        1.0,
+        0.58
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_e_neon_l",
+      "type": "primitive_box",
+      "position": [
+        16.0,
+        4.07,
+        -7.9
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.28,
+        5.328,
+        0.16
+      ],
+      "color": [
+        0.18,
+        1.0,
+        0.58
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_e_neon_r",
+      "type": "primitive_box",
+      "position": [
+        16.0,
+        4.07,
+        7.9
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.28,
+        5.328,
+        0.16
+      ],
+      "color": [
+        0.18,
+        1.0,
+        0.58
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_w_pil_l",
+      "type": "primitive_box",
+      "position": [
+        -16.0,
+        3.7,
+        -8.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.9,
+        7.4,
+        0.9
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          0.55,
+          3.7,
+          0.55
+        ]
+      }
+    },
+    {
+      "id": "arch_w_pil_r",
+      "type": "primitive_box",
+      "position": [
+        -16.0,
+        3.7,
+        8.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.9,
+        7.4,
+        0.9
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          0.55,
+          3.7,
+          0.55
+        ]
+      }
+    },
+    {
+      "id": "arch_w_beam",
+      "type": "primitive_box",
+      "position": [
+        -16.0,
+        7.4,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        0.75,
+        18.2
+      ],
+      "color": [
+        0.14,
+        0.16,
+        0.2
+      ]
+    },
+    {
+      "id": "arch_w_neon",
+      "type": "primitive_box",
+      "position": [
+        -16.0,
+        7.04,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.35,
+        0.22,
+        16.400000000000002
+      ],
+      "color": [
+        1.0,
+        0.72,
+        0.14
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_w_neon_l",
+      "type": "primitive_box",
+      "position": [
+        -16.0,
+        4.07,
+        -7.9
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.28,
+        5.328,
+        0.16
+      ],
+      "color": [
+        1.0,
+        0.72,
+        0.14
+      ],
+      "emissive": true
+    },
+    {
+      "id": "arch_w_neon_r",
+      "type": "primitive_box",
+      "position": [
+        -16.0,
+        4.07,
+        7.9
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.28,
+        5.328,
+        0.16
+      ],
+      "color": [
+        1.0,
+        0.72,
+        0.14
+      ],
+      "emissive": true
+    },
+    {
       "id": "tower_nw_hub_pad",
       "type": "primitive_box",
       "position": [
         -24.0,
-        0.12,
+        0.14,
         24.0
       ],
       "rotation": [
@@ -500,7 +1286,7 @@
       ],
       "scale": [
         13.8,
-        0.24,
+        0.28,
         13.8
       ],
       "color": [
@@ -515,7 +1301,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         -24.0,
-        0.24,
+        0.28,
         24.0
       ],
       "rotation": [
@@ -548,7 +1334,7 @@
       "type": "primitive_box",
       "position": [
         24.0,
-        0.12,
+        0.14,
         24.0
       ],
       "rotation": [
@@ -558,7 +1344,7 @@
       ],
       "scale": [
         13.8,
-        0.24,
+        0.28,
         13.8
       ],
       "color": [
@@ -573,7 +1359,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         24.0,
-        0.24,
+        0.28,
         24.0
       ],
       "rotation": [
@@ -606,7 +1392,7 @@
       "type": "primitive_box",
       "position": [
         -24.0,
-        0.12,
+        0.14,
         -24.0
       ],
       "rotation": [
@@ -616,7 +1402,7 @@
       ],
       "scale": [
         13.8,
-        0.24,
+        0.28,
         13.8
       ],
       "color": [
@@ -631,7 +1417,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         -24.0,
-        0.24,
+        0.28,
         -24.0
       ],
       "rotation": [
@@ -664,7 +1450,7 @@
       "type": "primitive_box",
       "position": [
         24.0,
-        0.12,
+        0.14,
         -24.0
       ],
       "rotation": [
@@ -674,7 +1460,7 @@
       ],
       "scale": [
         13.8,
-        0.24,
+        0.28,
         13.8
       ],
       "color": [
@@ -689,7 +1475,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         24.0,
-        0.24,
+        0.28,
         -24.0
       ],
       "rotation": [
@@ -722,7 +1508,7 @@
       "type": "primitive_box",
       "position": [
         -84.0,
-        0.12,
+        0.14,
         28.0
       ],
       "rotation": [
@@ -732,7 +1518,7 @@
       ],
       "scale": [
         15.180000000000001,
-        0.24,
+        0.28,
         15.180000000000001
       ],
       "color": [
@@ -747,7 +1533,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         -84.0,
-        0.24,
+        0.28,
         28.0
       ],
       "rotation": [
@@ -780,7 +1566,7 @@
       "type": "primitive_box",
       "position": [
         -28.0,
-        0.12,
+        0.14,
         84.0
       ],
       "rotation": [
@@ -790,7 +1576,7 @@
       ],
       "scale": [
         15.180000000000001,
-        0.24,
+        0.28,
         15.180000000000001
       ],
       "color": [
@@ -805,7 +1591,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         -28.0,
-        0.24,
+        0.28,
         84.0
       ],
       "rotation": [
@@ -838,7 +1624,7 @@
       "type": "primitive_box",
       "position": [
         -86.0,
-        0.12,
+        0.14,
         86.0
       ],
       "rotation": [
@@ -848,7 +1634,7 @@
       ],
       "scale": [
         16.56,
-        0.24,
+        0.28,
         16.56
       ],
       "color": [
@@ -863,7 +1649,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         -86.0,
-        0.24,
+        0.28,
         86.0
       ],
       "rotation": [
@@ -896,7 +1682,7 @@
       "type": "primitive_box",
       "position": [
         -64.0,
-        0.12,
+        0.14,
         98.0
       ],
       "rotation": [
@@ -906,7 +1692,7 @@
       ],
       "scale": [
         13.11,
-        0.24,
+        0.28,
         13.11
       ],
       "color": [
@@ -921,7 +1707,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         -64.0,
-        0.24,
+        0.28,
         98.0
       ],
       "rotation": [
@@ -954,7 +1740,7 @@
       "type": "primitive_box",
       "position": [
         -98.0,
-        0.12,
+        0.14,
         62.0
       ],
       "rotation": [
@@ -964,7 +1750,7 @@
       ],
       "scale": [
         13.11,
-        0.24,
+        0.28,
         13.11
       ],
       "color": [
@@ -979,7 +1765,7 @@
       "model": "assets/models/city_tower.glb",
       "position": [
         -98.0,
-        0.24,
+        0.28,
         62.0
       ],
       "rotation": [
@@ -1130,7 +1916,7 @@
       "position": [
         9.5,
         0.0,
-        16.0
+        36.0
       ],
       "rotation": [
         0.0,
@@ -1155,7 +1941,7 @@
       "position": [
         -9.5,
         0.0,
-        16.0
+        36.0
       ],
       "rotation": [
         0.0,
@@ -1180,7 +1966,7 @@
       "position": [
         9.5,
         0.0,
-        -16.0
+        -36.0
       ],
       "rotation": [
         0.0,
@@ -1205,7 +1991,7 @@
       "position": [
         -9.5,
         0.0,
-        -16.0
+        -36.0
       ],
       "rotation": [
         0.0,
@@ -1328,7 +2114,7 @@
       "type": "model",
       "model": "assets/models/street_lamp.glb",
       "position": [
-        16.0,
+        36.0,
         0.0,
         9.5
       ],
@@ -1353,7 +2139,7 @@
       "type": "model",
       "model": "assets/models/street_lamp.glb",
       "position": [
-        16.0,
+        36.0,
         0.0,
         -9.5
       ],
@@ -1378,7 +2164,7 @@
       "type": "model",
       "model": "assets/models/street_lamp.glb",
       "position": [
-        -16.0,
+        -36.0,
         0.0,
         9.5
       ],
@@ -1403,7 +2189,7 @@
       "type": "model",
       "model": "assets/models/street_lamp.glb",
       "position": [
-        -16.0,
+        -36.0,
         0.0,
         -9.5
       ],
@@ -2124,13 +2910,45 @@
       }
     },
     {
+      "id": "lighthouse_quay",
+      "type": "primitive_box",
+      "position": [
+        102.0,
+        0.25,
+        -102.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        11.0,
+        1.5,
+        11.0
+      ],
+      "color": [
+        0.46,
+        0.44,
+        0.4
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          5.5,
+          1.5,
+          5.5
+        ]
+      }
+    },
+    {
       "id": "coastal_lighthouse",
       "type": "model",
       "model": "assets/models/lighthouse.glb",
       "position": [
-        94.0,
-        0.0,
-        -94.0
+        102.0,
+        1.0,
+        -102.0
       ],
       "rotation": [
         0.0,
@@ -2147,6 +2965,362 @@
         "radius": 3.5,
         "height": 22.0
       }
+    },
+    {
+      "id": "beach_pier_deck",
+      "type": "primitive_box",
+      "position": [
+        76.0,
+        0.42,
+        -88.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        22.0,
+        0.24,
+        4.6
+      ],
+      "color": [
+        0.42,
+        0.27,
+        0.15
+      ]
+    },
+    {
+      "id": "pier_post_1_n",
+      "type": "primitive_box",
+      "position": [
+        68.0,
+        0.2,
+        -85.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.34,
+        2.2,
+        0.34
+      ],
+      "color": [
+        0.28,
+        0.18,
+        0.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.22,
+        "height": 2.2
+      }
+    },
+    {
+      "id": "pier_post_1_s",
+      "type": "primitive_box",
+      "position": [
+        68.0,
+        0.2,
+        -90.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.34,
+        2.2,
+        0.34
+      ],
+      "color": [
+        0.28,
+        0.18,
+        0.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.22,
+        "height": 2.2
+      }
+    },
+    {
+      "id": "pier_post_2_n",
+      "type": "primitive_box",
+      "position": [
+        74.0,
+        0.2,
+        -85.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.34,
+        2.2,
+        0.34
+      ],
+      "color": [
+        0.28,
+        0.18,
+        0.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.22,
+        "height": 2.2
+      }
+    },
+    {
+      "id": "pier_lamp_2_n",
+      "type": "primitive_box",
+      "position": [
+        74.0,
+        1.45,
+        -85.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.38,
+        0.38,
+        0.38
+      ],
+      "color": [
+        1.0,
+        0.8,
+        0.34
+      ],
+      "emissive": true
+    },
+    {
+      "id": "pier_post_2_s",
+      "type": "primitive_box",
+      "position": [
+        74.0,
+        0.2,
+        -90.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.34,
+        2.2,
+        0.34
+      ],
+      "color": [
+        0.28,
+        0.18,
+        0.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.22,
+        "height": 2.2
+      }
+    },
+    {
+      "id": "pier_lamp_2_s",
+      "type": "primitive_box",
+      "position": [
+        74.0,
+        1.45,
+        -90.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.38,
+        0.38,
+        0.38
+      ],
+      "color": [
+        1.0,
+        0.8,
+        0.34
+      ],
+      "emissive": true
+    },
+    {
+      "id": "pier_post_3_n",
+      "type": "primitive_box",
+      "position": [
+        80.0,
+        0.2,
+        -85.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.34,
+        2.2,
+        0.34
+      ],
+      "color": [
+        0.28,
+        0.18,
+        0.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.22,
+        "height": 2.2
+      }
+    },
+    {
+      "id": "pier_post_3_s",
+      "type": "primitive_box",
+      "position": [
+        80.0,
+        0.2,
+        -90.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.34,
+        2.2,
+        0.34
+      ],
+      "color": [
+        0.28,
+        0.18,
+        0.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.22,
+        "height": 2.2
+      }
+    },
+    {
+      "id": "pier_post_4_n",
+      "type": "primitive_box",
+      "position": [
+        86.0,
+        0.2,
+        -85.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.34,
+        2.2,
+        0.34
+      ],
+      "color": [
+        0.28,
+        0.18,
+        0.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.22,
+        "height": 2.2
+      }
+    },
+    {
+      "id": "pier_lamp_4_n",
+      "type": "primitive_box",
+      "position": [
+        86.0,
+        1.45,
+        -85.8
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.38,
+        0.38,
+        0.38
+      ],
+      "color": [
+        1.0,
+        0.8,
+        0.34
+      ],
+      "emissive": true
+    },
+    {
+      "id": "pier_post_4_s",
+      "type": "primitive_box",
+      "position": [
+        86.0,
+        0.2,
+        -90.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.34,
+        2.2,
+        0.34
+      ],
+      "color": [
+        0.28,
+        0.18,
+        0.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.22,
+        "height": 2.2
+      }
+    },
+    {
+      "id": "pier_lamp_4_s",
+      "type": "primitive_box",
+      "position": [
+        86.0,
+        1.45,
+        -90.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        0.38,
+        0.38,
+        0.38
+      ],
+      "color": [
+        1.0,
+        0.8,
+        0.34
+      ],
+      "emissive": true
     },
     {
       "id": "palm_1",
@@ -2280,7 +3454,7 @@
       "position": [
         72.0,
         0.0,
-        -68.0
+        -58.0
       ],
       "rotation": [
         0.0,
@@ -2305,7 +3479,7 @@
       "position": [
         100.0,
         0.0,
-        -68.0
+        -58.0
       ],
       "rotation": [
         0.0,
@@ -2328,7 +3502,7 @@
       "type": "model",
       "model": "assets/models/palm_tree.glb",
       "position": [
-        66.0,
+        60.0,
         0.0,
         -98.0
       ],
@@ -2779,7 +3953,7 @@
       "model": "assets/models/stunt_ramp.glb",
       "position": [
         0.0,
-        0.0,
+        0.05,
         28.0
       ],
       "rotation": [
@@ -2805,7 +3979,7 @@
       "model": "assets/models/stunt_ramp.glb",
       "position": [
         0.0,
-        0.0,
+        0.05,
         -28.0
       ],
       "rotation": [
@@ -2831,7 +4005,7 @@
       "model": "assets/models/stunt_ramp.glb",
       "position": [
         28.0,
-        0.0,
+        0.05,
         0.0
       ],
       "rotation": [
@@ -2857,7 +4031,7 @@
       "model": "assets/models/stunt_ramp.glb",
       "position": [
         -28.0,
-        0.0,
+        0.05,
         0.0
       ],
       "rotation": [
@@ -2883,7 +4057,7 @@
       "model": "assets/models/stunt_ramp.glb",
       "position": [
         -54.0,
-        0.0,
+        0.05,
         86.0
       ],
       "rotation": [
@@ -2909,7 +4083,7 @@
       "model": "assets/models/stunt_ramp.glb",
       "position": [
         86.0,
-        0.0,
+        0.05,
         54.0
       ],
       "rotation": [
@@ -2935,7 +4109,7 @@
       "model": "assets/models/stunt_ramp.glb",
       "position": [
         54.0,
-        0.0,
+        0.05,
         -86.0
       ],
       "rotation": [
@@ -2961,7 +4135,7 @@
       "model": "assets/models/stunt_ramp.glb",
       "position": [
         -86.0,
-        0.0,
+        0.05,
         -54.0
       ],
       "rotation": [

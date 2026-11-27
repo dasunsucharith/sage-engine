@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE v0.6 Showcase — 4-Biome Open World with Main/Pause Menu, Solid Auto-Colliders on All Props, Vehicle Selector, Animated Models, Jolt Physics & V12 Audio.",
+  "description": "SAGE v0.7 Showcase — HDR Bloom, Animated 3D Ocean Water, Drifting Sky Clouds, Flicker-Free 4-Biome Open World, Solid Auto-Colliders, Main/Pause Menu, Jolt Physics & V12 Audio.",
   "scripts": [
     "main.lua"
   ]

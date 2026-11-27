@@ -118,6 +118,9 @@ struct LuaEngine::Impl {
         worldTbl.set_function("spawnPlane", [this](const std::string& id, float x, float y, float z) -> std::string {
             return world ? world->spawnEntity(id, EntityShape::Plane, {x, y, z}) : "";
         });
+        worldTbl.set_function("spawnWater", [this](const std::string& id, float x, float y, float z) -> std::string {
+            return world ? world->spawnEntity(id, EntityShape::Water, {x, y, z}) : "";
+        });
         worldTbl.set_function("spawnSphere", [this](const std::string& id, float x, float y, float z) -> std::string {
             return world ? world->spawnEntity(id, EntityShape::Sphere, {x, y, z}) : "";
         });
@@ -158,6 +161,14 @@ struct LuaEngine::Impl {
         worldTbl.set_function("setTimeOfDay", [this](float hours) {
             if (world) {
                 world->setTimeOfDay(hours);
+            }
+        });
+        worldTbl.set_function("setBloom", [this](bool enabled, sol::optional<float> intensity) {
+            if (world) {
+                world->sky().bloomEnabled = enabled;
+                if (intensity.has_value()) {
+                    world->sky().bloomIntensity = std::clamp(*intensity, 0.0f, 2.0f);
+                }
             }
         });
         worldTbl.set_function("playAnimation", [this](

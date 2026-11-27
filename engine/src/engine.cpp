@@ -132,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v0.6.0 (Multi-Biome Open World + Auto-Colliders + Game Menus)\n";
+    std::cout << "  SAGE Engine v0.7.0 (HDR Bloom + 3D Animated Ocean Water + Sky Clouds + Open World)\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -384,7 +384,7 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v0.4 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v0.7.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()

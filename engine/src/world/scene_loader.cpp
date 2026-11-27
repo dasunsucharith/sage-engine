@@ -106,6 +106,7 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
             const Vec3 rot = readVec3(e, "rotation", {0.0f, 0.0f, 0.0f});
             const Vec3 scale = readVec3(e, "scale", {1.0f, 1.0f, 1.0f});
             const bool emissive = e.value("emissive", false);
+            const bool visible = e.value("visible", true);
 
             if (type == "model") {
                 const std::string modelPath = e.value("model", "");
@@ -123,6 +124,8 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
                 EntityShape shape = EntityShape::Box;
                 if (type == "primitive_plane") {
                     shape = EntityShape::Plane;
+                } else if (type == "water") {
+                    shape = EntityShape::Water;
                 } else if (type == "primitive_sphere") {
                     shape = EntityShape::Sphere;
                 } else if (type == "primitive_ring") {
@@ -136,6 +139,7 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
 
             world.setRotation(id, rot.x, rot.y, rot.z);
             world.setEmissive(id, emissive);
+            world.setVisible(id, visible);
             ++loadedCount;
 
             // Optional declarative collider in JSON — automatically solid for Jolt AND vehicles!

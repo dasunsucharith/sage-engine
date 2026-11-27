@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (`v0.6.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **3D Soft Shadows & Animated glTF 2.0 (`.glb`)**, **Jolt Physics 5.7 + JSON Auto-Colliders**, **miniaudio 0.11**, and **Lua Menus & HUDs (`ui.*`)**.
+> **Status:** Live (`v0.7.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **HDR Bloom & Animated 3D Ocean Water**, **Soft Shadows & Animated glTF 2.0 (`.glb`)**, **Jolt Physics 5.7 + JSON Auto-Colliders**, **miniaudio 0.11**, and **Lua Menus & HUDs (`ui.*`)**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -39,7 +39,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 
 ---
 
-## Implemented Namespaces (`v0.4`)
+## Implemented Namespaces (`v0.7`)
 
 ### `sage`
 | Function | Description |
@@ -65,7 +65,8 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | :--- | :--- |
 | `world.spawnModel(id, path, x, y, z)` | Loads & caches a `.glb` / `.gltf` 3D model from `assets/models/` and returns `id`. |
 | `world.spawnBox(id, x, y, z)` | Spawns a 3D unit cube entity and returns `id`. |
-| `world.spawnPlane(id, x, y, z)` | Spawns a 3D horizontal plane entity and returns `id`. |
+| `world.spawnPlane(id, x, y, z)` | Spawns a 3D horizontal plane entity (with procedural surface micro-grain) and returns `id`. |
+| `world.spawnWater(id, x, y, z)` | Spawns an animated 3D ocean water surface (`56×56` subdivided grid with multi-wave displacement, Fresnel sky reflection, sun glints, and shoreline surf foam) and returns `id`. |
 | `world.spawnSphere(id, x, y, z)` | Spawns a 3D UV-sphere entity and returns `id`. |
 | `world.spawnTriangle(id, x, y, z)` | Spawns a 3D extruded pointer chevron (points along `+Z` at `yaw = 0`). |
 | `world.spawnRing(id, x, y, z)` | Spawns a glowing 3D pulsing checkpoint beacon ring. |
@@ -76,7 +77,8 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setColor(id, r, g, b)` | Sets RGB albedo for primitives, or tint multiplier for `.glb` models (`1, 1, 1` preserves original PBR colors). |
 | `world.setEmissive(id, enabled)` | Enables or disables glowing emissive shading on an entity. |
 | `world.setVisible(id, visible)` | Shows or hides an entity without destroying it. |
-| `world.setTimeOfDay(hours)` | Dynamically updates sun angle, sky gradient, ambient fill, and horizon fog (`0.0`–`24.0`). |
+| `world.setTimeOfDay(hours)` | Dynamically updates sun angle, sky gradient, cloud lighting, ambient fill, and horizon fog (`0.0`–`24.0`). |
+| `world.setBloom(enabled [, intensity])` | Toggles real-time HDR `RGBA16F` Bloom post-processing and optionally sets bloom strength (`0.0`–`2.0`, default `0.55`). |
 | `world.playAnimation(id [, clipName, loop, speed])` | Plays a glTF 2.0 keyframe animation clip on a `.glb` model (`""` plays clip 0). |
 | `world.stopAnimation(id)` | Pauses glTF animation playback on an entity. |
 | `world.setAnimationSpeed(id, speed)` | Adjusts glTF animation playback speed multiplier. |

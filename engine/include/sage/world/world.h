@@ -28,6 +28,7 @@ struct Color3 {
 enum class EntityShape {
     Box,
     Plane,
+    Water,
     Sphere,
     Triangle,
     Ring,
@@ -67,14 +68,16 @@ struct SkySettings {
     float fogStart = 125.0f;
     float fogEnd = 420.0f;
     bool shadowsEnabled = true;
+    bool bloomEnabled = true;
+    float bloomIntensity = 0.55f;
 };
 
 struct CameraState {
     Vec3 position{0.0f, 8.0f, -18.0f};
     Vec3 target{0.0f, 1.5f, 0.0f};
     float fovDegrees = 60.0f;
-    float nearPlane = 0.25f;
-    float farPlane = 800.0f;
+    float nearPlane = 0.50f;
+    float farPlane = 850.0f;
 };
 
 class World {

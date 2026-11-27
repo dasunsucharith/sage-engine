@@ -49,6 +49,12 @@ PFNGLFRAMEBUFFERTEXTURE2DPROC framebufferTexture2D = nullptr;
 PFNGLCHECKFRAMEBUFFERSTATUSPROC checkFramebufferStatus = nullptr;
 PFNGLDELETEFRAMEBUFFERSPROC deleteFramebuffers = nullptr;
 
+PFNGLGENRENDERBUFFERSPROC genRenderbuffers = nullptr;
+PFNGLBINDRENDERBUFFERPROC bindRenderbuffer = nullptr;
+PFNGLRENDERBUFFERSTORAGEPROC renderbufferStorage = nullptr;
+PFNGLFRAMEBUFFERRENDERBUFFERPROC framebufferRenderbuffer = nullptr;
+PFNGLDELETERENDERBUFFERSPROC deleteRenderbuffers = nullptr;
+
 namespace {
 
 template <typename FnPtr>
@@ -110,6 +116,12 @@ bool loadFunctions() {
     ok &= loadOne(framebufferTexture2D, "glFramebufferTexture2D");
     ok &= loadOne(checkFramebufferStatus, "glCheckFramebufferStatus");
     ok &= loadOne(deleteFramebuffers, "glDeleteFramebuffers");
+
+    ok &= loadOne(genRenderbuffers, "glGenRenderbuffers");
+    ok &= loadOne(bindRenderbuffer, "glBindRenderbuffer");
+    ok &= loadOne(renderbufferStorage, "glRenderbufferStorage");
+    ok &= loadOne(framebufferRenderbuffer, "glFramebufferRenderbuffer");
+    ok &= loadOne(deleteRenderbuffers, "glDeleteRenderbuffers");
 
     return ok;
 }

@@ -111,7 +111,7 @@ void EditorUI::render(
         ImGui::SetNextWindowPos(ImVec2(14.0f, 14.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(320.0f, 0.0f), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("SAGE Engine v0.6 — Live Inspector (F1)", &m_visible)) {
+        if (ImGui::Begin("SAGE Engine v0.7 — Live Inspector (F1)", &m_visible)) {
             ImGui::Text("FPS: %.0f (%.2f ms)", stats.fps, stats.frameMs);
             ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 36.0f));
             ImGui::TextDisabled("GPU: %s", stats.gpuRenderer.c_str());
@@ -147,6 +147,10 @@ void EditorUI::render(
                 ImGui::SameLine();
                 if (ImGui::SmallButton("Night")) world.setTimeOfDay(22.5f);
                 ImGui::Checkbox("Real-Time Soft Shadows (2048px PCF)", &world.sky().shadowsEnabled);
+                ImGui::Checkbox("HDR Bloom Post-Processing", &world.sky().bloomEnabled);
+                if (world.sky().bloomEnabled) {
+                    ImGui::SliderFloat("Bloom Intensity", &world.sky().bloomIntensity, 0.0f, 1.5f, "%.2f");
+                }
             }
 
             // --- Jolt Physics Controls ---

@@ -35,16 +35,16 @@ See [**Getting Started**](docs/getting_started.md) for prerequisite installation
 
 ---
 
-## Core Capabilities (`v0.6.0`)
+## Core Capabilities (`v0.7.0`)
 
 | Pillar | Technology | What You Get Out of the Box |
 | :--- | :--- | :--- |
 | **Native Performance Core** | **C++20** + **CMake** + **SDL3** | Deterministic 60 Hz fixed-timestep loop, cross-platform window/input, standalone binary |
-| **3D Graphics & Animations** | **OpenGL 3.3 Core** + **cgltf** + **GLM** | 2048×2048 texel-snapped PCF soft shadows, procedural dynamic sky (sunset/noon/night), PBR-lit shading + ACES tone mapping, drop-in `.glb` models & native glTF 2.0 keyframe animations |
-| **AAA 3D Physics** | **Jolt Physics 5.7** | Multithreaded rigid-body simulation (boxes, rolling spheres, capsules, convex-hull ramps, kinematic collisions, shockwaves, raycasts) |
-| **Live Scripting & HUDs** | **Lua 5.4** (`sol2`) + **Dear ImGui 1.92** | FiveM-style `resources/` folders, automatic file-watch & `F5` hot-reload, built-in `F1` Live Scene Inspector, and Lua `ui.*` custom game HUDs |
+| **HDR 3D Graphics & Water** | **OpenGL 3.3 Core** + **cgltf** + **GLM** | 6-pass `RGBA16F` HDR Bloom & ACES tone mapping, animated 3D multi-wave ocean water (Fresnel sky reflections, sun glints & shoreline foam), drifting procedural sky clouds, 2048×2048 PCF soft shadows, procedural terrain micro-grain, and animated `.glb` models |
+| **AAA 3D Physics** | **Jolt Physics 5.7** | Multithreaded rigid-body simulation (boxes, rolling spheres, capsules, convex-hull ramps, kinematic collisions, shockwaves, raycasts, declarative JSON auto-colliders) |
+| **Live Scripting & HUDs** | **Lua 5.4** (`sol2`) + **Dear ImGui 1.92** | FiveM-style `resources/` folders, automatic file-watch & `F5` hot-reload, built-in `F1` Live Scene Inspector (hidden by default), and Lua `ui.*` Main/Pause Menus & custom HUDs |
 | **Real-Time Audio** | **miniaudio 0.11** | Lock-free 48 kHz stereo audio thread with procedural V12 engine synth, drift screech, nitro roar, impacts, chimes & shockwave booms |
-| **AI-Native & Blender Ready** | Plain-text **JSON** + 15 starter `.glb` models | Ships with a playable **320m 4-Biome Open World** (Downtown Metro, Pine Highlands, Palm Coast Beach, Red Rock Desert) with Main/Pause Menu & solid auto-colliders |
+| **AI-Native & Blender Ready** | Plain-text **JSON** + 15 starter `.glb` models | Ships with a playable **320m 4-Biome HDR Open World** (Downtown Metro with neon arches, Pine Highlands, Palm Coast Lagoon & Pier, Red Rock Desert) surrounded by animated 3D ocean |
 
 ---
 
@@ -78,7 +78,8 @@ We follow the **Table Tennis Rule** (learned from RAGE's history): prove every c
 - [x] **v0.4 — Editor & Physics:** Live `Dear ImGui` viewport/inspector + `Jolt Physics` (gravity, collisions, drivable car) + 3D audio (`miniaudio`).
 - [x] **v0.5 — General-Purpose 3D Expansion:** Real-time soft Shadow Maps (2048px PCF), native glTF 2.0 keyframe animations, Jolt spheres/capsules/convex ramps, Blender animated asset kit, and Lua `ui.*` game HUDs.
 - [x] **v0.6 — Multi-Biome Open World & Game Menus:** Declarative JSON auto-colliders on all world objects (trees, turbines, lamps, rocks, towers), Main/Pause Menu with auto-hidden Inspector (`F1`), and a 320m × 320m 4-biome world with 15 Blender `.glb` assets.
-- [ ] **v0.7+ — RAGE-Scale Tech:** Deferred G-Buffer PBR, Multi-Cascade CSM, Jolt 4-Wheel Raycast Suspension & `CharacterVirtual`, skeletal skinning, open-world chunk streaming, and Vulkan/DX12 backend.
+- [x] **v0.7 — HDR Bloom, Animated 3D Ocean Water & Flicker-Free Roads:** 6-pass `RGBA16F` HDR Bloom + ACES post-processing, multi-wave 3D animated ocean water shader (Fresnel reflections, sun glints & shoreline foam), drifting procedural sky clouds, procedural terrain micro-grain, and zero-flicker layered roads.
+- [ ] **v0.8+ — RAGE-Scale Tech:** Deferred G-Buffer PBR, Multi-Cascade CSM, Jolt 4-Wheel Raycast Suspension & `CharacterVirtual`, skeletal skinning, open-world chunk streaming, and Vulkan/DX12 backend.
 
 ---
 

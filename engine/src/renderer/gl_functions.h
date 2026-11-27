@@ -55,6 +55,18 @@ using GLsizeiptr = std::ptrdiff_t;
 #ifndef GL_TEXTURE1
 #define GL_TEXTURE1 0x84C1
 #endif
+#ifndef GL_TEXTURE2
+#define GL_TEXTURE2 0x84C2
+#endif
+#ifndef GL_RGBA16F
+#define GL_RGBA16F 0x881A
+#endif
+#ifndef GL_COLOR_ATTACHMENT0
+#define GL_COLOR_ATTACHMENT0 0x8CE0
+#endif
+#ifndef GL_RENDERBUFFER
+#define GL_RENDERBUFFER 0x8D41
+#endif
 #ifndef GL_CLAMP_TO_EDGE
 #define GL_CLAMP_TO_EDGE 0x812F
 #endif
@@ -131,6 +143,12 @@ using PFNGLFRAMEBUFFERTEXTURE2DPROC = void(APIENTRYP)(GLenum target, GLenum atta
 using PFNGLCHECKFRAMEBUFFERSTATUSPROC = GLenum(APIENTRYP)(GLenum target);
 using PFNGLDELETEFRAMEBUFFERSPROC = void(APIENTRYP)(GLsizei n, const GLuint* framebuffers);
 
+using PFNGLGENRENDERBUFFERSPROC = void(APIENTRYP)(GLsizei n, GLuint* renderbuffers);
+using PFNGLBINDRENDERBUFFERPROC = void(APIENTRYP)(GLenum target, GLuint renderbuffer);
+using PFNGLRENDERBUFFERSTORAGEPROC = void(APIENTRYP)(GLenum target, GLenum internalformat, GLsizei width, GLsizei height);
+using PFNGLFRAMEBUFFERRENDERBUFFERPROC = void(APIENTRYP)(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer);
+using PFNGLDELETERENDERBUFFERSPROC = void(APIENTRYP)(GLsizei n, const GLuint* renderbuffers);
+
 extern PFNGLCREATESHADERPROC createShader;
 extern PFNGLSHADERSOURCEPROC shaderSource;
 extern PFNGLCOMPILESHADERPROC compileShader;
@@ -173,6 +191,12 @@ extern PFNGLBINDFRAMEBUFFERPROC bindFramebuffer;
 extern PFNGLFRAMEBUFFERTEXTURE2DPROC framebufferTexture2D;
 extern PFNGLCHECKFRAMEBUFFERSTATUSPROC checkFramebufferStatus;
 extern PFNGLDELETEFRAMEBUFFERSPROC deleteFramebuffers;
+
+extern PFNGLGENRENDERBUFFERSPROC genRenderbuffers;
+extern PFNGLBINDRENDERBUFFERPROC bindRenderbuffer;
+extern PFNGLRENDERBUFFERSTORAGEPROC renderbufferStorage;
+extern PFNGLFRAMEBUFFERRENDERBUFFERPROC framebufferRenderbuffer;
+extern PFNGLDELETERENDERBUFFERSPROC deleteRenderbuffers;
 
 // Loads all required OpenGL 3.3 Core functions from the current GL context.
 bool loadFunctions();
