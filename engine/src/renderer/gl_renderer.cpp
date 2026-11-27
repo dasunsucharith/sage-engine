@@ -200,6 +200,10 @@ uniform float uMetallic;
 uniform float uRoughness;
 uniform int uHasTexture;
 uniform sampler2D uAlbedoTex;
+uniform int uHasNormalTex;
+uniform sampler2D uNormalTex;
+uniform int uHasMetRoughTex;
+uniform sampler2D uMetRoughTex;
 uniform float uPulse;
 uniform float uTime;
 uniform int uIsGround;
@@ -288,6 +292,57 @@ float computeShadowVisibility(vec3 worldPos, vec3 N, vec3 L) {
     return mix(farResult, nearVis, nearFade);
 }
 
+// Cook-Torrance GGX Microfacet PBR BRDF (matches modern UE4 / RAGE physically based lighting!)
+const float PI = 3.14159265359;
+
+float distributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    return a2 / max(PI * denom * denom, 0.0001);
+}
+
+float geometrySchlickGGX(float NdotV, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    return NdotV / max(NdotV * (1.0 - k) + k, 0.0001);
+}
+
+float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    return geometrySchlickGGX(max(dot(N, V), 0.0), roughness)
+         * geometrySchlickGGX(max(dot(N, L), 0.0), roughness);
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+vec3 evaluatePbrLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, float metal, float rough, vec3 F0) {
+    float NdotL = max(dot(N, L), 0.0);
+    if (NdotL <= 0.0001) return vec3(0.0);
+    vec3 H = normalize(V + L);
+    float D = distributionGGX(N, H, rough);
+    float G = geometrySmith(N, V, L, rough);
+    vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+    vec3 spec = (D * G * F) / max(4.0 * max(dot(N, V), 0.0) * NdotL, 0.001);
+    vec3 kD = (vec3(1.0) - F) * (1.0 - metal);
+    return (kD * albedo / PI + spec) * radiance * NdotL;
+}
+
+vec3 perturbNormalFromMap(vec3 N, vec3 worldPos, vec2 uv) {
+    vec3 mapN = texture(uNormalTex, uv).xyz * 2.0 - 1.0;
+    vec3 Q1 = dFdx(worldPos);
+    vec3 Q2 = dFdy(worldPos);
+    vec2 st1 = dFdx(uv);
+    vec2 st2 = dFdy(uv);
+    vec3 T = normalize(Q1 * st2.t - Q2 * st1.t);
+    vec3 B = -normalize(cross(N, T));
+    mat3 TBN = mat3(T, B, N);
+    return normalize(TBN * mapN);
+}
+
 void main() {
     vec3 albedo = uBaseColor;
     if (uHasTexture == 1) {
@@ -295,51 +350,54 @@ void main() {
         albedo *= pow(texel.rgb, vec3(2.2));
     }
 
-    // Procedural world-space micro-grain + dynamic rain wetness & glossy puddles on roads/terrain!
-    float rough = clamp(uRoughness, 0.08, 1.0);
-    float metal = uMetallic;
+    // Procedural world-space micro-grain + glTF Metallic-Roughness texture + dynamic rain puddles!
+    float rough = clamp(uRoughness, 0.06, 1.0);
+    float metal = clamp(uMetallic, 0.0, 1.0);
+    if (uHasMetRoughTex == 1) {
+        vec4 mr = texture(uMetRoughTex, vUV);
+        rough = clamp(rough * mr.g, 0.06, 1.0);
+        metal = clamp(metal * mr.b, 0.0, 1.0);
+    }
+
     if (uIsGround == 1) {
         float nLarge = groundNoise(vWorldPos.xz * 0.14);
         float nFine  = groundNoise(vWorldPos.xz * 1.65);
         float grain  = (nLarge * 0.65 + nFine * 0.35) - 0.5;
         albedo *= (1.0 + grain * 0.24);
-        rough = clamp(rough + grain * 0.15, 0.25, 0.96);
+        rough = clamp(rough + grain * 0.15, 0.22, 0.96);
 
         if (uWetness > 0.01) {
             float puddleNoise = groundNoise(vWorldPos.xz * 0.11 + vec2(3.7, 9.1));
             float puddle = smoothstep(0.42, 0.72, puddleNoise) * uWetness;
-            albedo *= (1.0 - 0.34 * uWetness); // Wet asphalt & sand naturally darken
+            albedo *= (1.0 - 0.34 * uWetness);
             rough = mix(rough, 0.06, clamp(uWetness * 0.45 + puddle * 0.55, 0.0, 0.92));
-            metal = mix(metal, 0.45, puddle * 0.75);
+            metal = mix(metal, 0.48, puddle * 0.78);
         }
     }
 
     vec3 N = normalize(vWorldNormal);
+    if (uHasNormalTex == 1) {
+        N = perturbNormalFromMap(N, vWorldPos, vUV);
+    }
     vec3 L = normalize(uSunDir);
     vec3 V = normalize(uCameraPos - vWorldPos);
-    vec3 H = normalize(L + V);
+    vec3 F0 = mix(vec3(0.04), albedo, metal);
 
     float shadowVis = computeShadowVisibility(vWorldPos, N, L);
 
-    float ndotl = max(dot(N, L), 0.0);
-    float wrapDiffuse = max((dot(N, L) + 0.18) / 1.18, 0.0);
-    vec3 directDiffuse = albedo * (1.0 - 0.5 * metal) * uSunColor * mix(ndotl, wrapDiffuse, 0.25) * 1.38 * shadowVis;
+    // Direct Sun Radiance using true Cook-Torrance GGX PBR!
+    vec3 directSun = evaluatePbrLight(N, V, L, uSunColor * 3.45, albedo, metal, rough, F0) * shadowVis;
 
+    // Hemisphere Sky & Ground Bounce IBL + Glossy Clearcoat Sky Reflections!
     float hemiT = N.y * 0.5 + 0.5;
     vec3 skyFill = mix(uSkyHorizon, uSkyZenith, 0.35);
-    vec3 hemiAmbient = mix(uGroundAmbient, skyFill, hemiT) * albedo * (uAmbientIntensity * 1.35);
+    vec3 hemiAmbient = mix(uGroundAmbient, skyFill, hemiT) * albedo * (1.0 - 0.55 * metal) * (uAmbientIntensity * 1.40);
 
-    float shininess = mix(110.0, 8.0, rough);
-    float specStrength = mix(0.24, 0.92, metal) * (1.0 - rough * 0.65);
-    vec3 specTint = mix(vec3(1.0), albedo, metal);
-    vec3 specular = specTint * uSunColor * pow(max(dot(N, H), 0.0), shininess) * specStrength * step(0.001, ndotl) * shadowVis;
-
-    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * (1.0 - rough) * 0.36;
-    // Glossy sky-dome clearcoat reflection on metallic surfaces AND wet rain-slicked roads!
     vec3 R = reflect(-V, N);
     vec3 envSky = mix(uSkyHorizon, uSkyZenith, clamp(R.y * 1.2 + 0.15, 0.0, 1.0));
-    float envStrength = mix(0.08, 0.52, metal) * (1.0 - rough * 0.85);
-    vec3 rim = envSky * (fresnel + envStrength * 0.55);
+    vec3 Fenv = fresnelSchlick(max(dot(N, V), 0.0), F0);
+    float envGloss = (1.0 - rough) * (1.0 - rough);
+    vec3 iblSpec = envSky * Fenv * (0.28 + 0.92 * envGloss);
 
     // Subtle ground-contact ambient occlusion for grounded 3D buildings & cars near y=0
     float contactAO = (uIsGround == 0) ? mix(0.76, 1.0, smoothstep(0.0, 0.65, max(vWorldPos.y, 0.0))) : 1.0;
@@ -351,9 +409,9 @@ void main() {
         emissiveTerm *= p * 1.35;
     }
 
-    vec3 color = (hemiAmbient * contactAO) + directDiffuse + specular + rim + emissiveTerm;
+    vec3 color = (hemiAmbient * contactAO) + directSun + iblSpec + emissiveTerm;
 
-    // Real-time Dynamic Point Lights (headlights, neon arches, pier lanterns, lighthouse beam!)
+    // Real-time Dynamic Point Lights evaluated with true GGX PBR!
     for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
         if (i >= uPointLightCount) break;
         vec3 lp = uPointLightPosRadius[i].xyz;
@@ -365,10 +423,7 @@ void main() {
             vec3 plDir = toL / max(d, 0.001);
             float att = 1.0 - (d / lr);
             att = att * att;
-            float pNdotL = max(dot(N, plDir), 0.0);
-            vec3 pH = normalize(plDir + V);
-            float pSpec = pow(max(dot(N, pH), 0.0), max(shininess * 0.6, 12.0)) * specStrength * 0.85;
-            color += (albedo * (1.0 - 0.4 * uMetallic) * pNdotL + specTint * pSpec) * lc * att;
+            color += evaluatePbrLight(N, V, plDir, lc * att * 2.4, albedo, metal, rough, F0);
         }
     }
 
@@ -562,10 +617,21 @@ constexpr const char* kCompositeFrag = R"GLSL(
 in vec2 vUV;
 uniform sampler2D uHdrTex;
 uniform sampler2D uBloomTex;
+uniform sampler2D uDepthTex;
 uniform int uBloomEnabled;
 uniform float uBloomIntensity;
+uniform int uSsaoEnabled;
+uniform float uExposure;
+uniform vec2 uTexelSize;
+uniform float uNearPlane;
+uniform float uFarPlane;
 
 out vec4 FragColor;
+
+float linearizeDepth(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * uNearPlane * uFarPlane) / max(uFarPlane + uNearPlane - z * (uFarPlane - uNearPlane), 0.001);
+}
 
 vec3 acesToneMap(vec3 x) {
     const float a = 2.51;
@@ -578,17 +644,47 @@ vec3 acesToneMap(vec3 x) {
 
 void main() {
     vec3 hdr = texture(uHdrTex, vUV).rgb;
+
+    // Real-time Screen-Space Depth Contact AO (SSAO) darkening geometric crevices & contact seams!
+    if (uSsaoEnabled == 1) {
+        float centerRaw = texture(uDepthTex, vUV).r;
+        if (centerRaw < 0.9992) {
+            float centerZ = linearizeDepth(centerRaw);
+            const vec2 dirs[8] = vec2[8](
+                vec2( 1.0,  0.0), vec2(-1.0,  0.0), vec2( 0.0,  1.0), vec2( 0.0, -1.0),
+                vec2( 0.71, 0.71), vec2(-0.71, 0.71), vec2( 0.71,-0.71), vec2(-0.71,-0.71)
+            );
+            float radScale = clamp(42.0 / max(centerZ, 4.0), 1.5, 6.5);
+            float occ = 0.0;
+            for (int i = 0; i < 8; ++i) {
+                vec2 off = dirs[i] * uTexelSize * radScale;
+                float sampleZ = linearizeDepth(texture(uDepthTex, vUV + off).r);
+                float diff = centerZ - sampleZ;
+                float rangeCheck = smoothstep(2.6, 0.15, abs(diff));
+                occ += step(0.06, diff) * rangeCheck;
+            }
+            float ao = 1.0 - (occ / 8.0) * 0.42;
+            hdr *= ao;
+        }
+    }
+
     if (uBloomEnabled == 1) {
         vec3 bloom = texture(uBloomTex, vUV).rgb;
         hdr += bloom * uBloomIntensity;
     }
 
+    hdr *= max(uExposure, 0.2);
+
     // Subtle cinematic edge vignette
     vec2 centered = vUV * 2.0 - 1.0;
-    float vig = 1.0 - dot(centered, centered) * 0.11;
-    hdr *= clamp(vig, 0.78, 1.0);
+    float vig = 1.0 - dot(centered, centered) * 0.10;
+    hdr *= clamp(vig, 0.80, 1.0);
 
-    vec3 mapped = pow(acesToneMap(hdr), vec3(1.0 / 2.2));
+    vec3 mapped = acesToneMap(hdr);
+    // Subtle cinematic vibrance lift for crisp colors
+    float luma = dot(mapped, vec3(0.299, 0.587, 0.114));
+    mapped = clamp(mix(vec3(luma), mapped, 1.08), 0.0, 1.0);
+    mapped = pow(mapped, vec3(1.0 / 2.2));
     FragColor = vec4(mapped, 1.0);
 }
 )GLSL";
@@ -605,6 +701,8 @@ struct GpuSubMesh {
     GLuint ebo = 0;
     GLsizei indexCount = 0;
     GLuint albedoTex = 0;
+    GLuint normalTex = 0;
+    GLuint metRoughTex = 0;
     glm::vec3 baseColor{1.0f, 1.0f, 1.0f};
     glm::vec3 emissive{0.0f, 0.0f, 0.0f};
     float metallic = 0.1f;
@@ -643,6 +741,8 @@ struct GpuSubMesh {
     }
 
     void destroy() {
+        if (metRoughTex) { glDeleteTextures(1, &metRoughTex); metRoughTex = 0; }
+        if (normalTex) { glDeleteTextures(1, &normalTex); normalTex = 0; }
         if (albedoTex) { glDeleteTextures(1, &albedoTex); albedoTex = 0; }
         if (ebo) { gl::deleteBuffers(1, &ebo); ebo = 0; }
         if (vbo) { gl::deleteBuffers(1, &vbo); vbo = 0; }
@@ -961,8 +1061,17 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std:
     std::vector<const AnimClip*> clipsToEval;
     if (!model.animations.empty() && entity.activeAnimation != "none") {
         if (!entity.activeAnimation.empty()) {
+            // Exact match first, then case-insensitive prefix match (handles Blender NLA strip names!)
             for (const auto& c : model.animations) {
                 if (c.name == entity.activeAnimation) { clipsToEval.push_back(&c); break; }
+            }
+            if (clipsToEval.empty()) {
+                for (const auto& c : model.animations) {
+                    if (c.name.size() >= entity.activeAnimation.size() &&
+                        c.name.compare(0, entity.activeAnimation.size(), entity.activeAnimation) == 0) {
+                        clipsToEval.push_back(&c);
+                    }
+                }
             }
         }
         if (clipsToEval.empty()) {
@@ -1029,7 +1138,7 @@ public:
     bool initialize(int viewportWidth, int viewportHeight) override {
         if (!gl::loadFunctions()) return false;
 
-        m_info.backendName = "OpenGL 3.3 Core (v1.0: 2-Cascade CSM + HDR Bloom + Wet Roads/Rain + 3D Ocean + 16 Lights)";
+        m_info.backendName = "OpenGL 3.3 Core (v1.1: GGX PBR + Normal/MR Maps + SSAO + 2-Cascade CSM + HDR Bloom + Wet Roads)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
@@ -1102,6 +1211,10 @@ public:
         m_uRoughness = gl::getUniformLocation(m_litProgram, "uRoughness");
         m_uHasTexture = gl::getUniformLocation(m_litProgram, "uHasTexture");
         m_uAlbedoTex = gl::getUniformLocation(m_litProgram, "uAlbedoTex");
+        m_uHasNormalTex = gl::getUniformLocation(m_litProgram, "uHasNormalTex");
+        m_uNormalTex = gl::getUniformLocation(m_litProgram, "uNormalTex");
+        m_uHasMetRoughTex = gl::getUniformLocation(m_litProgram, "uHasMetRoughTex");
+        m_uMetRoughTex = gl::getUniformLocation(m_litProgram, "uMetRoughTex");
         m_uPulse = gl::getUniformLocation(m_litProgram, "uPulse");
         m_uTime = gl::getUniformLocation(m_litProgram, "uTime");
         m_uIsGround = gl::getUniformLocation(m_litProgram, "uIsGround");
@@ -1145,8 +1258,14 @@ public:
         m_bloomBlurDir = gl::getUniformLocation(m_bloomBlurProgram, "uDirection");
         m_compHdrTex = gl::getUniformLocation(m_compositeProgram, "uHdrTex");
         m_compBloomTex = gl::getUniformLocation(m_compositeProgram, "uBloomTex");
+        m_compDepthTex = gl::getUniformLocation(m_compositeProgram, "uDepthTex");
         m_compBloomEnabled = gl::getUniformLocation(m_compositeProgram, "uBloomEnabled");
         m_compBloomIntensity = gl::getUniformLocation(m_compositeProgram, "uBloomIntensity");
+        m_compSsaoEnabled = gl::getUniformLocation(m_compositeProgram, "uSsaoEnabled");
+        m_compExposure = gl::getUniformLocation(m_compositeProgram, "uExposure");
+        m_compTexelSize = gl::getUniformLocation(m_compositeProgram, "uTexelSize");
+        m_compNearPlane = gl::getUniformLocation(m_compositeProgram, "uNearPlane");
+        m_compFarPlane = gl::getUniformLocation(m_compositeProgram, "uFarPlane");
 
         m_boxMesh = buildUnitCubeMesh();
         m_planeMesh = buildUnitPlaneMesh();
@@ -1164,7 +1283,7 @@ public:
     }
 
     void destroyPostBuffers() {
-        if (m_hdrDepthRbo) { gl::deleteRenderbuffers(1, &m_hdrDepthRbo); m_hdrDepthRbo = 0; }
+        if (m_hdrDepthTex) { glDeleteTextures(1, &m_hdrDepthTex); m_hdrDepthTex = 0; }
         if (m_hdrColorTex) { glDeleteTextures(1, &m_hdrColorTex); m_hdrColorTex = 0; }
         if (m_hdrFbo) { gl::deleteFramebuffers(1, &m_hdrFbo); m_hdrFbo = 0; }
         for (int i = 0; i < 2; ++i) {
@@ -1176,7 +1295,7 @@ public:
     void recreatePostBuffers(int w, int h) {
         destroyPostBuffers();
 
-        // Main HDR RGBA16F framebuffer
+        // Main HDR RGBA16F framebuffer + sampleable Depth24 texture (for real-time Screen-Space AO!)
         gl::genFramebuffers(1, &m_hdrFbo);
         gl::bindFramebuffer(GL_FRAMEBUFFER, m_hdrFbo);
 
@@ -1189,10 +1308,14 @@ public:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         gl::framebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_hdrColorTex, 0);
 
-        gl::genRenderbuffers(1, &m_hdrDepthRbo);
-        gl::bindRenderbuffer(GL_RENDERBUFFER, m_hdrDepthRbo);
-        gl::renderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h);
-        gl::framebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_hdrDepthRbo);
+        glGenTextures(1, &m_hdrDepthTex);
+        glBindTexture(GL_TEXTURE_2D, m_hdrDepthTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        gl::framebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_hdrDepthTex, 0);
 
         const bool hdrOk = (gl::checkFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
@@ -1411,6 +1534,8 @@ public:
         gl::uniform1f(m_uTime, timeSeconds);
         gl::uniform1f(m_uWetness, std::clamp(sky.wetness, 0.0f, 1.0f));
         gl::uniform1i(m_uAlbedoTex, 0);
+        gl::uniform1i(m_uNormalTex, 4);
+        gl::uniform1i(m_uMetRoughTex, 5);
         gl::uniform1i(m_uShadowsEnabled, useShadows ? 1 : 0);
         gl::uniformMatrix4fv(m_uLightViewProj, 1, GL_FALSE, glm::value_ptr(lightViewProj));
         gl::uniformMatrix4fv(m_uLightViewProjFar, 1, GL_FALSE, glm::value_ptr(lightViewProjFar));
@@ -1546,6 +1671,8 @@ public:
             gl::useProgram(m_litProgram);
             gl::uniform1i(m_uIsGround, 0);
             gl::uniform1i(m_uHasTexture, 0);
+            gl::uniform1i(m_uHasNormalTex, 0);
+            gl::uniform1i(m_uHasMetRoughTex, 0);
             gl::bindVertexArray(m_sphereMesh.vao);
             for (const Particle3D& p : world.particles()) {
                 const float lifeFrac = 1.0f - std::clamp(p.age / std::max(p.maxLife, 0.01f), 0.0f, 1.0f);
@@ -1570,6 +1697,8 @@ public:
             gl::useProgram(m_litProgram);
             gl::uniform1i(m_uIsGround, 0);
             gl::uniform1i(m_uHasTexture, 0);
+            gl::uniform1i(m_uHasNormalTex, 0);
+            gl::uniform1i(m_uHasMetRoughTex, 0);
             gl::uniform3f(m_uBaseColor, 0.72f, 0.84f, 0.96f);
             gl::uniform3f(m_uEmissive, 0.45f, 0.58f, 0.78f);
             gl::uniform1f(m_uMetallic, 0.0f);
@@ -1634,7 +1763,7 @@ public:
                 }
             }
 
-            // 5. Final ACES Tone-Mapped Composite to OS Window Backbuffer
+            // 5. Final SSAO + ACES Tone-Mapped + Vibrance Composite to OS Window Backbuffer
             gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, m_viewportWidth, m_viewportHeight);
             gl::useProgram(m_compositeProgram);
@@ -1644,8 +1773,16 @@ public:
             gl::activeTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, m_bloomTex[0]);
             gl::uniform1i(m_compBloomTex, 2);
+            gl::activeTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_2D, m_hdrDepthTex);
+            gl::uniform1i(m_compDepthTex, 4);
             gl::uniform1i(m_compBloomEnabled, sky.bloomEnabled ? 1 : 0);
             gl::uniform1f(m_compBloomIntensity, sky.bloomIntensity);
+            gl::uniform1i(m_compSsaoEnabled, sky.ssaoEnabled ? 1 : 0);
+            gl::uniform1f(m_compExposure, sky.exposure);
+            gl::uniform2f(m_compTexelSize, 1.0f / static_cast<float>(m_viewportWidth), 1.0f / static_cast<float>(m_viewportHeight));
+            gl::uniform1f(m_compNearPlane, cam.nearPlane);
+            gl::uniform1f(m_compFarPlane, cam.farPlane);
             glDrawArrays(GL_TRIANGLES, 0, 3);
 
             glEnable(GL_DEPTH_TEST);
@@ -1692,6 +1829,20 @@ private:
             gl::uniform1i(m_uHasTexture, 1);
         } else {
             gl::uniform1i(m_uHasTexture, 0);
+        }
+        if (sm.normalTex != 0) {
+            gl::activeTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_2D, sm.normalTex);
+            gl::uniform1i(m_uHasNormalTex, 1);
+        } else {
+            gl::uniform1i(m_uHasNormalTex, 0);
+        }
+        if (sm.metRoughTex != 0) {
+            gl::activeTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_2D, sm.metRoughTex);
+            gl::uniform1i(m_uHasMetRoughTex, 1);
+        } else {
+            gl::uniform1i(m_uHasMetRoughTex, 0);
         }
 
         gl::bindVertexArray(sm.vao);
@@ -1807,6 +1958,12 @@ private:
                         if (pbr.base_color_texture.texture && pbr.base_color_texture.texture->image) {
                             sm.albedoTex = loadGltfImageTexture(pbr.base_color_texture.texture->image, modelDir);
                         }
+                        if (pbr.metallic_roughness_texture.texture && pbr.metallic_roughness_texture.texture->image) {
+                            sm.metRoughTex = loadGltfImageTexture(pbr.metallic_roughness_texture.texture->image, modelDir);
+                        }
+                    }
+                    if (mat->normal_texture.texture && mat->normal_texture.texture->image) {
+                        sm.normalTex = loadGltfImageTexture(mat->normal_texture.texture->image, modelDir);
                     }
                     sm.emissive = {mat->emissive_factor[0], mat->emissive_factor[1], mat->emissive_factor[2]};
                 }
@@ -1891,7 +2048,7 @@ private:
     GLuint m_shadowProgram = 0, m_shadowFbo = 0, m_shadowTex = 0, m_shadowFboFar = 0, m_shadowTexFar = 0;
     GLint m_shadowModel = -1, m_shadowLightVP = -1;
 
-    GLuint m_hdrFbo = 0, m_hdrColorTex = 0, m_hdrDepthRbo = 0;
+    GLuint m_hdrFbo = 0, m_hdrColorTex = 0, m_hdrDepthTex = 0;
     GLuint m_bloomFbo[2]{0, 0}, m_bloomTex[2]{0, 0};
     int m_bloomWidth = 640, m_bloomHeight = 360;
 
@@ -1902,6 +2059,7 @@ private:
     GLuint m_litProgram = 0;
     GLint m_uModel = -1, m_uViewProj = -1, m_uBaseColor = -1, m_uEmissive = -1;
     GLint m_uMetallic = -1, m_uRoughness = -1, m_uHasTexture = -1, m_uAlbedoTex = -1;
+    GLint m_uHasNormalTex = -1, m_uNormalTex = -1, m_uHasMetRoughTex = -1, m_uMetRoughTex = -1;
     GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1, m_uWetness = -1;
     GLint m_uShadowsEnabled = -1, m_uLightViewProj = -1, m_uLightViewProjFar = -1, m_uShadowMap = -1, m_uShadowMapFar = -1, m_uShadowTexelSize = -1;
     GLint m_uCameraPos = -1, m_uSunDir = -1, m_uSunColor = -1;
@@ -1917,7 +2075,8 @@ private:
 
     GLuint m_bloomExtractProgram = 0, m_bloomBlurProgram = 0, m_compositeProgram = 0;
     GLint m_bloomExtractTex = -1, m_bloomBlurImage = -1, m_bloomBlurDir = -1;
-    GLint m_compHdrTex = -1, m_compBloomTex = -1, m_compBloomEnabled = -1, m_compBloomIntensity = -1;
+    GLint m_compHdrTex = -1, m_compBloomTex = -1, m_compDepthTex = -1, m_compBloomEnabled = -1, m_compBloomIntensity = -1;
+    GLint m_compSsaoEnabled = -1, m_compExposure = -1, m_compTexelSize = -1, m_compNearPlane = -1, m_compFarPlane = -1;
 
     GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh;
     std::unordered_map<std::string, GpuModel> m_modelCache;

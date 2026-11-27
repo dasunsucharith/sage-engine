@@ -287,6 +287,15 @@ def build_world():
             collider={"type": "box", "halfExtents": [7.2, 3.6, 5.2], "offsetY": 3.6},
         )
 
+    # NEW v1.1.0 Animated Marble Plaza Fountains with glowing underwater lights!
+    for fid, fx, fz in [("plaza_fountain_nw", -42.0, 14.0), ("plaza_fountain_se", 42.0, -14.0)]:
+        add_model(
+            fid, "assets/models/fountain.glb", fx, 0.0, fz,
+            yaw=0.0, scale=(1.0, 1.0, 1.0),
+            collider={"type": "cylinder", "radius": 4.5, "height": 2.4},
+        )
+        add_light(fid + "_light", fx, 3.2, fz, [0.18, 0.85, 1.0], radius=22.0, intensity=2.2)
+
     # Street Lamps lining main avenues
     lamp_spots = []
     for d in (-200.0, -112.0, -42.0, 42.0, 112.0, 200.0):
@@ -489,7 +498,7 @@ def build_world():
         )
 
     scene = {
-        "name": "SAGE v1.0.0 — Production 560m Grand Open World (28 Models, Weather/Wet Roads, 2-Cascade CSM & Live Editor)",
+        "name": "SAGE v1.1.0 — GGX PBR 560m Open World (32 Models, 4-Clip Hero, Drivable Speedboat, Superbike & SSAO)",
         "version": 2,
         "sky": {
             "timeOfDay": 17.4,

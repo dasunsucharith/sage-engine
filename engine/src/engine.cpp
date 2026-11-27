@@ -132,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v1.0.0 — Production AI-Native 3D Game Engine\n";
+    std::cout << "  SAGE Engine v1.1.0 — GGX PBR + SSAO + 4-Clip Hero + Drivable Speedboat & 32 Models\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -390,7 +390,7 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v1.0.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v1.1.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()

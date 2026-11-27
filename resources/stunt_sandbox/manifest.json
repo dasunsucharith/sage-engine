@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE Engine v1.0.0 Flagship Showcase — 560m 4-Biome Open World, GTA Minimap Radar, Dynamic Rain & Wet Reflective Roads, Persistent High-Score Saves, Exit/Enter Supercar (F), AI Traffic, 2-Cascade Soft Shadows & 28 Blender .glb Models.",
+  "description": "SAGE Engine v1.1.0 Showcase — Cook-Torrance GGX PBR, Depth SSAO, Sculpted 4-Clip Hero Character (Idle/Walk/Run/Swim), Drivable Speedboat at Marina Pier, Cyberpunk Superbike, Flapping Seagulls, Supersonic Jet, Animated Fountains & 32 Blender .glb Models.",
   "scripts": [
     "main.lua"
   ]

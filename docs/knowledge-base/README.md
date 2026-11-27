@@ -18,6 +18,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [010](010-realistic-water-physics-point-lights-and-particles.md) | Realistic Water Physics, Archimedes Buoyancy, Dynamic Point Lights & 3D Particles | Milestone `v0.8` Implementation |
 | [011](011-cascaded-shadows-560m-world-and-walk-drive-ai.md) | 2-Cascade Soft Shadow Maps (CSM), 560m Open World, Walk/Drive Mode & AI Traffic | Milestone `v0.9` Implementation |
 | [012](012-v1-production-weather-minimap-and-world-editor.md) | SAGE Engine v1.0.0: Dynamic Weather & Wet Roads, 2D Minimap Canvas, Save Data & Live World Editor | Milestone `v1.0.0` Production Release |
+| [013](013-ggx-pbr-ssao-multi-clip-hero-and-speedboat.md) | Cook-Torrance GGX PBR, Normal/MR Maps, Screen-Space Depth AO, 4-Clip Hero & Drivable Speedboat | Milestone `v1.1.0` Implementation |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:

@@ -103,6 +103,8 @@ struct SkySettings {
     bool shadowsEnabled = true;
     bool bloomEnabled = true;
     float bloomIntensity = 0.55f;
+    bool ssaoEnabled = true;
+    float exposure = 1.08f;
     float rainIntensity = 0.0f;
     float wetness = 0.0f;
 };

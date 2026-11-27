@@ -112,7 +112,7 @@ void EditorUI::render(
         ImGui::SetNextWindowPos(ImVec2(14.0f, 14.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(345.0f, 0.0f), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("SAGE Engine v1.0 — Live World Editor (F1)", &m_visible)) {
+        if (ImGui::Begin("SAGE Engine v1.1 — Live World Editor (F1)", &m_visible)) {
             ImGui::Text("FPS: %.0f (%.2f ms)", stats.fps, stats.frameMs);
             ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 34.0f));
             ImGui::TextDisabled("GPU: %s", stats.gpuRenderer.c_str());
@@ -173,10 +173,12 @@ void EditorUI::render(
                 }
 
                 ImGui::Checkbox("2-Cascade Soft Shadows (2048px CSM)", &world.sky().shadowsEnabled);
+                ImGui::Checkbox("Screen-Space Contact AO (SSAO)", &world.sky().ssaoEnabled);
                 ImGui::Checkbox("HDR Bloom Post-Processing", &world.sky().bloomEnabled);
                 if (world.sky().bloomEnabled) {
                     ImGui::SliderFloat("Bloom Intensity", &world.sky().bloomIntensity, 0.0f, 1.5f, "%.2f");
                 }
+                ImGui::SliderFloat("HDR Exposure", &world.sky().exposure, 0.4f, 2.0f, "%.2f");
             }
 
             // --- Live World Builder (Spawn any .glb model or primitive in front of camera!) ---

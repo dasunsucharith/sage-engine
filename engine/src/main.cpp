@@ -4,7 +4,7 @@
 
 int main(int argc, char* argv[]) {
     sage::EngineConfig config;
-    config.appName = "SAGE Engine v1.0.0 — AI-Native 3D Open World Sandbox";
+    config.appName = "SAGE Engine v1.1.0 — GGX PBR Open World Sandbox";
     config.windowWidth = 1280;
     config.windowHeight = 720;
 

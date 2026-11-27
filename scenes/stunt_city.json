@@ -1,5 +1,5 @@
 {
-  "name": "SAGE v1.0.0 \u2014 Production 560m Grand Open World (28 Models, Weather/Wet Roads, 2-Cascade CSM & Live Editor)",
+  "name": "SAGE v1.1.0 \u2014 GGX PBR 560m Open World (32 Models, 4-Clip Hero, Drivable Speedboat, Superbike & SSAO)",
   "version": 2,
   "sky": {
     "timeOfDay": 17.4,
@@ -245,6 +245,36 @@
       ],
       "radius": 26.0,
       "intensity": 2.6
+    },
+    {
+      "id": "plaza_fountain_nw_light",
+      "position": [
+        -42.0,
+        3.2,
+        14.0
+      ],
+      "color": [
+        0.18,
+        0.85,
+        1.0
+      ],
+      "radius": 22.0,
+      "intensity": 2.2
+    },
+    {
+      "id": "plaza_fountain_se_light",
+      "position": [
+        42.0,
+        3.2,
+        -14.0
+      ],
+      "color": [
+        0.18,
+        0.85,
+        1.0
+      ],
+      "radius": 22.0,
+      "intensity": 2.2
     },
     {
       "id": "alpine_cabin_1_light",
@@ -3127,6 +3157,56 @@
           5.2
         ],
         "offsetY": 3.6
+      }
+    },
+    {
+      "id": "plaza_fountain_nw",
+      "type": "model",
+      "model": "assets/models/fountain.glb",
+      "position": [
+        -42.0,
+        0.0,
+        14.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 4.5,
+        "height": 2.4
+      }
+    },
+    {
+      "id": "plaza_fountain_se",
+      "type": "model",
+      "model": "assets/models/fountain.glb",
+      "position": [
+        42.0,
+        0.0,
+        -14.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 4.5,
+        "height": 2.4
       }
     },
     {

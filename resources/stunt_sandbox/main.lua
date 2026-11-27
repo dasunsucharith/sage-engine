@@ -1,11 +1,9 @@
 -- =============================================================================
--- SAGE Engine v1.0.0 Flagship Showcase: 560m Grand 4-Biome Open World Sandbox
---   * Dynamic Weather (Press G: Clear -> Drizzle -> Neon Rainstorm + Wet Roads!)
---   * Live GTA-Style 2D Corner Minimap Radar (Biomes, Lagoon, AI Traffic, Target)
---   * Persistent Best Score Save/Load (saves/stunt_sandbox_best.dat)
---   * GTA-Style Exit / Enter Supercar (Press F to walk/sprint/swim on foot!)
---   * 6 Autonomous AI Traffic Cruisers, Patrol Helicopter, Ferris Wheel & Yachts
---   * 2-Cascade Soft Shadows, HDR Bloom, Live World Editor (F1) & 28 .glb Models
+-- SAGE Engine v1.1.0 Showcase: GGX PBR 560m Grand 4-Biome Open World Sandbox
+--   * Sculpted Hero Character with 4 Named Animations: Idle, Walk, Run, Swim!
+--   * 3 Land Vehicles (Aventador SVJ, Cyberpunk Superbike, Sports Coupe)
+--   * DRIVABLE Racing Speedboat moored at the 32m Beach Pier (Press F to pilot!)
+--   * Cook-Torrance GGX PBR, Normal/MR Maps, Screen-Space AO, Flapping Seagulls & Jet
 -- =============================================================================
 -- CONTROLS:
 --   W / S (or Up / Down)   : Drive / Brake (or Walk Forward / Back on foot)
@@ -32,6 +30,9 @@ local CONFIG = {
     droneModel    = "assets/models/hover_drone.glb",
     heliModel     = "assets/models/helicopter.glb",
     charModel     = "assets/models/character.glb",
+    boatModel     = "assets/models/speedboat.glb",
+    gullModel     = "assets/models/seagull.glb",
+    jetModel      = "assets/models/jet_plane.glb",
     trafficModel  = "assets/models/ai_sedan.glb",
     maxSpeed      = 44.0,   -- Fast grand-highway speed for the 560m open world!
     boostSpeed    = 64.0,   -- Nitro top speed (~230 km/h)
@@ -47,8 +48,9 @@ local CONFIG = {
 }
 
 local vehicles = {
-    { name = "Lamborghini Aventador SVJ", model = "assets/models/aventador_svj.glb" },
-    { name = "SAGE Sports Coupe",         model = "assets/models/sports_car.glb" },
+    { name = "Lamborghini Aventador SVJ", model = "assets/models/aventador_svj.glb", isBike = false },
+    { name = "Cyberpunk Superbike",       model = "assets/models/superbike.glb",     isBike = true  },
+    { name = "SAGE Sports Coupe",         model = "assets/models/sports_car.glb",    isBike = false },
 }
 local selectedVehicleIdx = 1
 
@@ -107,6 +109,7 @@ local car = {
 }
 
 local player = {
+    mode = "CAR", -- "CAR" | "FOOT" | "BOAT"
     onFoot = false,
     x = 3.0, y = 0.0, z = -8.0,
     vx = 0.0, vy = 0.0, vz = 0.0,
@@ -114,7 +117,24 @@ local player = {
     grounded = true,
     swimming = false,
     moving = false,
+    currentAnim = "Idle",
     splashAccum = 0.0,
+}
+
+-- Drivable Luxury Racing Speedboat moored cleanly next to the 32m Marina Pier!
+local boat = {
+    x = 185.0, y = -0.26, z = -182.0,
+    vx = 0.0, vz = 0.0,
+    yaw = 25.0, pitch = 0.0, roll = 0.0,
+    speed = 0.0,
+    wakeAccum = 0.0,
+}
+
+local seagulls = {
+    { id = "gull_1", cx = 192.0, cz = -192.0, r = 24.0, h = 14.0, spd =  0.48, phase = 0.0 },
+    { id = "gull_2", cx = 188.0, cz = -186.0, r = 32.0, h = 17.5, spd = -0.38, phase = 1.6 },
+    { id = "gull_3", cx = 198.0, cz = -198.0, r = 18.0, h = 11.5, spd =  0.56, phase = 3.1 },
+    { id = "gull_4", cx = 165.0, cz = -192.0, r = 28.0, h = 15.5, spd = -0.44, phase = 4.7 },
 }
 
 -- 6 Autonomous AI Traffic Cruisers looping the Mid (±148m) & Outer Coastal (±236m) Highways!
@@ -223,6 +243,7 @@ end
 
 local function respawnCarAtBiome(idx)
     local sp = biomeSpawns[idx] or biomeSpawns[1]
+    player.mode = "CAR"
     player.onFoot = false
     world.setVisible("player_char", false)
 
@@ -326,10 +347,25 @@ local function spawnDynamicPropsAndPhysics()
     applySelectedVehicle()
     physics.addKinematicBox("player_car", car.x, car.y + 0.65, car.z, 1.05, 0.62, 2.25)
 
-    -- Playable 3rd-Person Character (.glb — hidden while driving, steps out on Press F!)
+    -- Playable 3rd-Person Sculpted Hero (.glb with 4 Named Animation Clips: Idle, Walk, Run, Swim!)
     world.spawnModel("player_char", CONFIG.charModel, car.x + 2.5, car.y, car.z)
-    world.stopAnimation("player_char")
+    world.playAnimation("player_char", "Idle", true, 1.0)
+    player.currentAnim = "Idle"
     world.setVisible("player_char", false)
+
+    -- Drivable Luxury Racing Speedboat moored next to the 32m Marina Pier!
+    world.spawnModel("player_boat", CONFIG.boatModel, boat.x, boat.y, boat.z)
+    world.setRotation("player_boat", 0.0, boat.yaw, 0.0)
+    world.playAnimation("player_boat", "", true, 0.35)
+
+    -- 4 Animated Flapping Coastal Seagulls soaring above the Marina Lagoon + Supersonic Patrol Jet!
+    for _, g in ipairs(seagulls) do
+        world.spawnModel(g.id, CONFIG.gullModel, g.cx + g.r, g.h, g.cz)
+        world.setScale(g.id, 1.25, 1.25, 1.25)
+        world.playAnimation(g.id, "", true, 1.35)
+    end
+    world.spawnModel("sky_jet", CONFIG.jetModel, -300.0, 78.0, 120.0)
+    world.setScale("sky_jet", 1.4, 1.4, 1.4)
 
     -- 6 Autonomous AI Traffic Cruisers (.glb)
     for _, tc in ipairs(trafficCars) do
@@ -527,8 +563,8 @@ function onStart()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
 
     sage.log("===================================================================")
-    sage.log("  SAGE Engine v1.0.0 — Production 560m Grand Open World Sandbox")
-    sage.log("  Press F = Walk/Drive | G = Weather/Rain | T = Sky | F1 = World Editor")
+    sage.log("  SAGE Engine v1.1.0 — GGX PBR + SSAO + 4-Clip Hero + Speedboat!")
+    sage.log("  Press F = Walk/Swim/Enter Car or Marina Speedboat! | G = Rain | F1 = Editor")
     sage.log("  All-Time Best Score Loaded: " .. tostring(bestScore))
     sage.log("===================================================================")
 end
@@ -545,13 +581,37 @@ function onTick(dt)
     world.setPosition("drone_2", 148.0 + math.cos(d2a) * 24.0, 13.0, -148.0 + math.sin(d2a) * 24.0)
     world.setRotation("drone_2", 0.0, math.deg(-d2a + math.pi), 0.0)
 
-    -- Patrolling Animated Helicopter circling wide over Downtown & Palm Coast!
+    -- Patrolling Animated Helicopter + Flapping Coastal Seagulls + Supersonic Sky Jet!
     local ha = timeNow * 0.14
     local hx = math.cos(ha) * 145.0
     local hz = math.sin(ha) * 145.0
     heliPos.x, heliPos.z = hx, hz
     world.setPosition("patrol_heli", hx, 32.0 + math.sin(timeNow * 0.8) * 2.5, hz)
     world.setRotation("patrol_heli", 6.0, math.deg(-ha), -10.0)
+
+    for _, g in ipairs(seagulls) do
+        local ga = timeNow * g.spd + g.phase
+        local gx = g.cx + math.cos(ga) * g.r
+        local gz = g.cz + math.sin(ga) * g.r
+        local gy = g.h + math.sin(timeNow * 1.4 + g.phase) * 1.3
+        local heading = math.deg(math.atan(-math.sin(ga) * g.spd, math.cos(ga) * g.spd))
+        world.setPosition(g.id, gx, gy, gz)
+        world.setRotation(g.id, 0.0, heading, g.spd > 0 and -12.0 or 12.0)
+    end
+
+    local jetAngle = timeNow * 0.22 + 0.8
+    local jx = math.cos(jetAngle) * 320.0
+    local jz = math.sin(jetAngle) * 320.0
+    world.setPosition("sky_jet", jx, 76.0 + math.sin(timeNow * 0.45) * 6.0, jz)
+    world.setRotation("sky_jet", 0.0, math.deg(math.atan(-math.sin(jetAngle), math.cos(jetAngle))), -22.0)
+
+    -- Gently bob moored Speedboat on the 3D animated waves when unoccupied!
+    if player.mode ~= "BOAT" then
+        local _, bWaveY = world.sampleWater(boat.x, boat.z)
+        boat.y = lerp(boat.y, bWaveY - 0.10, 6.0 * dt)
+        world.setPosition("player_boat", boat.x, boat.y, boat.z)
+        world.setRotation("player_boat", math.sin(timeNow * 1.9) * 2.8, boat.yaw, math.cos(timeNow * 1.5) * 3.5)
+    end
 
     -- Sweeping Rotating Golden Lighthouse Beacon Light shimmering across the 72m Marina Lagoon!
     local lhAngle = timeNow * 0.85
@@ -583,9 +643,9 @@ function onTick(dt)
             camera.setPosition(car.x + math.sin(orbit) * 10.8, car.y + 3.8, car.z + math.cos(orbit) * 10.8)
             camera.setTarget(car.x, car.y + 1.1, car.z)
             camera.setFov(55.0)
-            sage.setTitle("SAGE Engine v1.0.0 — Main Menu | 560m Grand Open World")
+            sage.setTitle("SAGE Engine v1.1.0 — Main Menu | GGX PBR Open World")
         else
-            sage.setTitle("SAGE Engine v1.0.0 — PAUSED (Press Esc to Resume)")
+            sage.setTitle("SAGE Engine v1.1.0 — PAUSED (Press Esc to Resume)")
         end
         return
     end
@@ -615,11 +675,12 @@ function onTick(dt)
         showHud = not showHud
     end
 
-    -- GTA-Style Press F: Exit / Enter Supercar!
+    -- GTA-Style Press F: Exit / Enter Land Vehicle OR Marina Speedboat!
     if keyJustPressed("F") then
-        if not player.onFoot then
+        if player.mode == "CAR" then
             local rad = degToRad(car.yaw)
             local sideX, sideZ = math.cos(rad), -math.sin(rad)
+            player.mode = "FOOT"
             player.onFoot = true
             player.x = car.x + sideX * 2.6
             player.y = math.max(car.y, 0.0)
@@ -630,20 +691,44 @@ function onTick(dt)
             world.setVisible("player_char", true)
             world.setPosition("player_char", player.x, player.y, player.z)
             world.setRotation("player_char", 0.0, player.yaw, 0.0)
+            world.playAnimation("player_char", "Idle", true, 1.0)
+            player.currentAnim = "Idle"
             world.setVisible("car_flame", false)
             audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
             audio.playChime()
-            sage.log("Stepped out of vehicle! WASD Walk | Shift Sprint | Space Jump | F to Re-Enter Car")
+            sage.log("Stepped out on foot! Walk to the Marina Pier to pilot the Speedboat (F)!")
+        elseif player.mode == "BOAT" then
+            local rad = degToRad(boat.yaw)
+            player.mode = "FOOT"
+            player.onFoot = true
+            player.x = boat.x + math.cos(rad) * 2.8
+            player.y = math.max(boat.y + 0.4, -0.3)
+            player.z = boat.z - math.sin(rad) * 2.8
+            player.vx, player.vy, player.vz = 0.0, 0.0, 0.0
+            player.yaw = boat.yaw
+            world.setVisible("player_char", true)
+            world.setPosition("player_char", player.x, player.y, player.z)
+            world.setAnimationSpeed("player_boat", 0.35)
+            audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
+            audio.playChime()
+            sage.log("Exited Speedboat! Swimming/walking on foot.")
         else
-            local dx = player.x - car.x
-            local dz = player.z - car.z
-            if (dx * dx + dz * dz) < 7.5 * 7.5 then
+            local dBoat = math.sqrt((player.x - boat.x) ^ 2 + (player.z - boat.z) ^ 2)
+            local dCar  = math.sqrt((player.x - car.x) ^ 2 + (player.z - car.z) ^ 2)
+            if dBoat < 9.5 and dBoat <= dCar then
+                player.mode = "BOAT"
+                player.onFoot = false
+                world.setVisible("player_char", false)
+                audio.playChime()
+                sage.log("Boarded Luxury Racing Speedboat! WASD to cruise the 72m Marina Lagoon!")
+            elseif dCar < 8.0 then
+                player.mode = "CAR"
                 player.onFoot = false
                 world.setVisible("player_char", false)
                 audio.playChime()
                 sage.log("Entered " .. vehicles[selectedVehicleIdx].name .. "!")
             else
-                sage.log("Move closer to your car to enter (or press R to respawn with vehicle)!")
+                sage.log("Move closer to your car or the Marina Speedboat to board (or press R)!")
             end
         end
     end
@@ -748,15 +833,28 @@ function onTick(dt)
             player.x, player.z, player.vx, player.vz = rx, rz, rvx, rvz
         end
 
-        -- Toggle walking glTF animation based on movement speed
+        -- Seamless 4-Clip Hero Animation State Machine: Idle / Walk / Run / Swim!
         local pSpd = math.sqrt(player.vx * player.vx + player.vz * player.vz)
-        if pSpd > 0.45 then
-            world.playAnimation("player_char", "", true, sprinting and 2.1 or 1.35)
+        local desiredAnim = "Idle"
+        local animRate = 1.0
+        if player.swimming then
+            desiredAnim = "Swim"
+            animRate = pSpd > 0.5 and 1.35 or 0.55
+        elseif pSpd > 7.8 then
+            desiredAnim = "Run"
+            animRate = 1.35
+        elseif pSpd > 0.45 then
+            desiredAnim = "Walk"
+            animRate = 1.25
+        end
+        if desiredAnim ~= player.currentAnim then
+            player.currentAnim = desiredAnim
+            world.playAnimation("player_char", desiredAnim, true, animRate)
         else
-            world.stopAnimation("player_char")
+            world.setAnimationSpeed("player_char", animRate)
         end
         world.setPosition("player_char", player.x, player.y, player.z)
-        world.setRotation("player_char", player.swimming and 28.0 or 0.0, player.yaw, 0.0)
+        world.setRotation("player_char", 0.0, player.yaw, 0.0)
 
         checkPhysicsCrateSmashes(dt)
         updateDeliveryMission(dt, timeNow, player.x, player.y, player.z)
@@ -788,7 +886,98 @@ function onTick(dt)
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
             local biome = getCurrentBiomeName(player.x, player.z)
-            sage.setTitle(string.format("SAGE v0.9 | %s | ON FOOT (F = Enter Car) | Score: %d", biome, score))
+            sage.setTitle(string.format("SAGE v1.1 | %s | ON FOOT [%s] (F = Enter Car/Boat)", biome, player.currentAnim))
+        end
+        return
+    end
+
+    -- =========================================================================
+    -- MODE A2: DRIVABLE LUXURY RACING SPEEDBOAT (Glides on 3D Ocean Waves!)
+    -- =========================================================================
+    if player.mode == "BOAT" then
+        local bThrottle = 0.0
+        local bSteer = 0.0
+        if input.isKeyDown("W") or input.isKeyDown("Up") then bThrottle = bThrottle + 1.0 end
+        if input.isKeyDown("S") or input.isKeyDown("Down") then bThrottle = bThrottle - 1.0 end
+        if input.isKeyDown("A") or input.isKeyDown("Left") then bSteer = bSteer + 1.0 end
+        if input.isKeyDown("D") or input.isKeyDown("Right") then bSteer = bSteer - 1.0 end
+        local bBoost = input.isKeyDown("LeftShift") or input.isKeyDown("RightShift")
+
+        boat.yaw = boat.yaw + bSteer * (72.0 + math.min(math.abs(boat.speed) * 2.2, 42.0)) * dt
+        local brad = degToRad(boat.yaw)
+        local bfx, bfz = math.sin(brad), math.cos(brad)
+
+        local topBoatSpd = bBoost and 26.0 or 18.0
+        if bThrottle > 0.0 then
+            boat.speed = clamp(boat.speed + (bBoost and 20.0 or 13.0) * dt, -7.0, topBoatSpd)
+        elseif bThrottle < 0.0 then
+            boat.speed = clamp(boat.speed - 14.0 * dt, -7.0, topBoatSpd)
+        else
+            boat.speed = boat.speed * math.exp(-1.6 * dt)
+        end
+
+        local nx = boat.x + bfx * boat.speed * dt
+        local nz = boat.z + bfz * boat.speed * dt
+        -- Keep Speedboat cleanly inside deep navigable water (prevents beaching onto dry sand!)
+        local inW, waveY, _, wDepth = world.sampleWater(nx, nz)
+        if inW and wDepth > 0.42 then
+            boat.x, boat.z = nx, nz
+        else
+            boat.speed = boat.speed * -0.35
+        end
+
+        -- Avoid pier & lighthouse quay solid colliders
+        local hitB, brx, brz = physics.resolveCircleXZ(boat.x, 0.2, boat.z, 2.1, bfx * boat.speed, bfz * boat.speed, 0.25)
+        if hitB then
+            boat.x, boat.z = brx, brz
+            boat.speed = boat.speed * 0.4
+        end
+
+        local _, curWaveY = world.sampleWater(boat.x, boat.z)
+        boat.y = lerp(boat.y, curWaveY - 0.08 + clamp(boat.speed * 0.012, 0.0, 0.25), 9.0 * dt)
+        boat.pitch = lerp(boat.pitch, -clamp(boat.speed * 0.48, -4.0, 11.0) + math.sin(timeNow * 2.2) * 2.0, 6.0 * dt)
+        boat.roll = lerp(boat.roll, -bSteer * clamp(math.abs(boat.speed) * 0.9, 0.0, 14.0) + math.cos(timeNow * 1.8) * 2.2, 6.0 * dt)
+
+        world.setPosition("player_boat", boat.x, boat.y, boat.z)
+        world.setRotation("player_boat", boat.pitch, boat.yaw, boat.roll)
+        world.setAnimationSpeed("player_boat", 0.5 + math.abs(boat.speed) * 0.35)
+        world.setPointLight("car_headlight", boat.x + bfx * 5.0, boat.y + 1.5, boat.z + bfz * 5.0, 0.25, 0.90, 1.0, 26.0, 2.8)
+
+        -- White-cyan churning wake spray behind twin outboard propellers!
+        boat.wakeAccum = boat.wakeAccum + dt
+        if math.abs(boat.speed) > 2.0 and boat.wakeAccum >= 0.045 then
+            boat.wakeAccum = 0.0
+            world.spawnParticles(boat.x - bfx * 3.1, curWaveY + 0.1, boat.z - bfz * 3.1, -bfx * 2.5, 2.2 + math.abs(boat.speed) * 0.1, -bfz * 2.5, 0.85, 0.97, 1.0, 3, 0.24, 0.55, false, 11.0)
+        end
+
+        audio.setVehicleState(clamp(0.18 + math.abs(boat.speed) / 26.0 * 0.78, 0.12, 0.95), bThrottle > 0 and 0.9 or 0.2, 0.0, bBoost and 0.8 or 0.0, false)
+        updateDeliveryMission(dt, timeNow, boat.x, boat.y, boat.z)
+
+        -- Dynamic Boat Chase Camera
+        if input.isMouseDown("Right") then
+            local mdx, mdy = input.getMouseDelta()
+            cam.orbitYaw = cam.orbitYaw - mdx * 0.35
+            cam.orbitPitch = clamp(cam.orbitPitch + mdy * 0.22, -10.0, 32.0)
+        else
+            cam.orbitYaw = lerp(cam.orbitYaw, 0.0, 2.0 * dt)
+            cam.orbitPitch = lerp(cam.orbitPitch, 0.0, 2.0 * dt)
+        end
+        local cyaw = degToRad(boat.yaw + cam.orbitYaw)
+        local cfx, cfz = math.sin(cyaw), math.cos(cyaw)
+        cam.x = lerp(cam.x, boat.x - cfx * 11.8, 6.5 * dt)
+        cam.y = lerp(cam.y, math.max(1.2, boat.y + 4.4 + math.sin(degToRad(cam.orbitPitch)) * 8.0), 6.5 * dt)
+        cam.z = lerp(cam.z, boat.z - cfz * 11.8, 6.5 * dt)
+        cam.tx = lerp(cam.tx, boat.x + cfx * 5.0, 12.0 * dt)
+        cam.ty = lerp(cam.ty, boat.y + 1.2, 12.0 * dt)
+        cam.tz = lerp(cam.tz, boat.z + cfz * 5.0, 12.0 * dt)
+        camera.setPosition(cam.x, cam.y, cam.z)
+        camera.setTarget(cam.tx, cam.ty, cam.tz)
+        camera.setFov(lerp(cam.fov, 62.0 + math.abs(boat.speed) * 0.35, 5.0 * dt))
+
+        titleUpdateAccum = titleUpdateAccum + dt
+        if titleUpdateAccum >= 0.25 then
+            titleUpdateAccum = 0.0
+            sage.setTitle(string.format("SAGE v1.1 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
         end
         return
     end
@@ -1007,7 +1196,8 @@ function onTick(dt)
     car.z = clamp(car.z, -S, S)
 
     if not car.flooded then
-        local targetRoll = clamp(lateralVel * 0.95 + car.steerSmooth * speedNorm * 2.5, -8.5, 8.5)
+        local bikeLean = vehicles[selectedVehicleIdx].isBike and (car.steerSmooth * speedNorm * 22.0) or 0.0
+        local targetRoll = clamp(lateralVel * 0.95 + car.steerSmooth * speedNorm * 2.5 - bikeLean, -24.0, 24.0)
         car.roll = lerp(car.roll, targetRoll, 9.0 * dt)
     end
 
@@ -1104,7 +1294,7 @@ function onTick(dt)
         local kmh = math.floor(speed * 3.6)
         local biome = getCurrentBiomeName(car.x, car.z)
         sage.setTitle(string.format(
-            "SAGE v1.0 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
+            "SAGE v1.1 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
             biome, car.gear, kmh, weatherPresets[weatherPresetIdx].name, score, bestScore
         ))
     end
@@ -1117,11 +1307,11 @@ function onRenderUI()
     local vpW, vpH = ui.getViewportSize()
 
     if gameState == "MENU" then
-        if ui.beginCenteredWindow("SAGE ENGINE v1.0.0 — PRODUCTION OPEN WORLD", 470, 455) then
+        if ui.beginCenteredWindow("SAGE ENGINE v1.1.0 — GGX PBR OPEN WORLD", 470, 455) then
             ui.setFontScale(1.38)
             ui.textCentered("SAGE STUNT & DELIVERY")
             ui.setFontScale(1.0)
-            ui.textCentered("v1.0.0  |  560m Island  |  Rain & Wet Roads  |  28 Models")
+            ui.textCentered("v1.1.0  |  GGX PBR + SSAO  |  4-Clip Hero & Speedboat  |  32 Models")
             ui.textCentered("All-Time Best Score: " .. tostring(bestScore))
             ui.spacing()
             ui.separator()
@@ -1279,10 +1469,12 @@ function onRenderUI()
             ui.drawCircle(dmx, dmy, 5.2, 1.0, 0.84, 0.14, 0.95, false)
             ui.drawCircle(dmx, dmy, 3.0, 1.0, 0.84, 0.14, 1.0, true)
 
-            -- Player Supercar (Cyan) + Walking Character (Bright White)
+            -- Player Supercar (Cyan), Speedboat (Emerald) + Walking Character (Bright White)
             local cmx, cmy = toMap(car.x, car.z)
             ui.drawCircle(cmx, cmy, 4.0, 0.14, 0.92, 1.0, 1.0, true)
-            if player.onFoot then
+            local bmx, bmy = toMap(boat.x, boat.z)
+            ui.drawCircle(bmx, bmy, 3.6, 0.16, 0.95, 0.56, 1.0, true)
+            if player.mode == "FOOT" then
                 local pmx, pmy = toMap(player.x, player.z)
                 ui.drawCircle(pmx, pmy, 3.6, 1.0, 1.0, 1.0, 1.0, true)
             end
@@ -1293,14 +1485,21 @@ function onRenderUI()
         -- 2. COMPACT DRIVING / WALKING HUD (Bottom-Right!)
         local hudW, hudH = 316, 192
         if ui.beginWindow("HUD (H = Hide | F = Walk | G = Rain)", vpW - hudW - 14, vpH - hudH - 14, hudW, hudH, true) then
-            if player.onFoot then
-                local modeStr = player.swimming and "SWIMMING" or "ON FOOT"
+            if player.mode == "BOAT" then
+                ui.text("Zone: Palm Marina Lagoon [SPEEDBOAT]")
+                ui.text(string.format("Speed: %d knots   |   [F] Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
+                ui.text("Controls: WASD Pilot | Shift Turbo | F Exit")
+            elseif player.mode == "FOOT" then
+                local modeStr = string.upper(player.currentAnim)
                 ui.text("Zone: " .. biome .. " [" .. modeStr .. "]")
-                local dCar = math.sqrt((player.x - car.x) ^ 2 + (player.z - car.z) ^ 2)
-                if dCar < 7.5 then
+                local dBoat = math.sqrt((player.x - boat.x) ^ 2 + (player.z - boat.z) ^ 2)
+                local dCar  = math.sqrt((player.x - car.x) ^ 2 + (player.z - car.z) ^ 2)
+                if dBoat < 9.5 then
+                    ui.text("Press [F] to Pilot Racing Speedboat!")
+                elseif dCar < 8.0 then
                     ui.text("Press [F] to Enter " .. vehicles[selectedVehicleIdx].name)
                 else
-                    ui.text(string.format("Car Distance: %d m  (Walk back or press R)", math.floor(dCar)))
+                    ui.text(string.format("Car: %dm | Boat: %dm (F to Board)", math.floor(dCar), math.floor(dBoat)))
                 end
                 ui.text("Weather: " .. weatherPresets[weatherPresetIdx].name .. " (G = Cycle)")
             else
@@ -1323,5 +1522,5 @@ end
 function onShutdown()
     updateBestScore()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
-    sage.log("v1.0.0 Production Open World Sandbox shutting down cleanly.")
+    sage.log("v1.1.0 GGX PBR Open World Sandbox shutting down cleanly.")
 end
