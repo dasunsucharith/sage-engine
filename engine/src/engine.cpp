@@ -132,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v1.1.0 — GGX PBR + SSAO + 4-Clip Hero + Drivable Speedboat & 32 Models\n";
+    std::cout << "  SAGE Engine v1.2.0 — GPU Skeletal Skinning + Crossfade Blending + FXAA + GGX PBR + SSAO\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -276,7 +276,7 @@ void Engine::render(double elapsedSeconds) {
     };
     actions.onSaveScene = [this]() -> bool {
         const fs::path exportPath = m_projectRoot / "scenes" / "exported_scene.json";
-        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.0 Exported World");
+        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.2.0 Exported World");
     };
     actions.onRenderCustomUi = [this]() {
         m_lua.renderUI();
@@ -390,7 +390,7 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v1.1.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v1.2.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()

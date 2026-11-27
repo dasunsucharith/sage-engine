@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE Engine v1.1.0 Showcase — Cook-Torrance GGX PBR, Depth SSAO, Sculpted 4-Clip Hero Character (Idle/Walk/Run/Swim), Drivable Speedboat at Marina Pier, Cyberpunk Superbike, Flapping Seagulls, Supersonic Jet, Animated Fountains & 32 Blender .glb Models.",
+  "description": "SAGE Engine v1.2.0 Showcase — GPU Skeletal Skinning, Real-Time Animation Crossfade Blending, Biomechanical 5-Clip Rigged Human (Idle/Walk/Run/Jump/Swim), FXAA 3.11, Surface-Aware Footstep Synth, GGX PBR, Depth SSAO & 33 Blender .glb Models.",
   "scripts": [
     "main.lua"
   ]

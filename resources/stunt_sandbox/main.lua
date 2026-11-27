@@ -1,9 +1,9 @@
 -- =============================================================================
--- SAGE Engine v1.1.0 Showcase: GGX PBR 560m Grand 4-Biome Open World Sandbox
---   * Sculpted Hero Character with 4 Named Animations: Idle, Walk, Run, Swim!
---   * 3 Land Vehicles (Aventador SVJ, Cyberpunk Superbike, Sports Coupe)
---   * DRIVABLE Racing Speedboat moored at the 32m Beach Pier (Press F to pilot!)
---   * Cook-Torrance GGX PBR, Normal/MR Maps, Screen-Space AO, Flapping Seagulls & Jet
+-- SAGE Engine v1.2.0 Showcase: GPU Skeletal Skinning + Crossfade Blending + FXAA
+--   * Biomechanical 5-Clip Rigged Human: Idle, Walk, Run, Jump, Swim!
+--   * Real-Time Skeletal Crossfade Blending & Surface-Aware Procedural Footsteps
+--   * 3 Land Vehicles (Aventador SVJ, Cyberpunk Superbike, Sports Coupe) + Speedboat
+--   * Cook-Torrance GGX PBR, FXAA 3.11, Aerial Scattering, Depth SSAO & 33 Models
 -- =============================================================================
 -- CONTROLS:
 --   W / S (or Up / Down)   : Drive / Brake (or Walk Forward / Back on foot)
@@ -29,7 +29,7 @@ local CONFIG = {
     ballModel     = "assets/models/stunt_ball.glb",
     droneModel    = "assets/models/hover_drone.glb",
     heliModel     = "assets/models/helicopter.glb",
-    charModel     = "assets/models/character.glb",
+    charModel     = "assets/models/character_rigged.glb",
     boatModel     = "assets/models/speedboat.glb",
     gullModel     = "assets/models/seagull.glb",
     jetModel      = "assets/models/jet_plane.glb",
@@ -114,11 +114,14 @@ local player = {
     x = 3.0, y = 0.0, z = -8.0,
     vx = 0.0, vy = 0.0, vz = 0.0,
     yaw = 0.0,
+    roll = 0.0,
     grounded = true,
     swimming = false,
     moving = false,
     currentAnim = "Idle",
     splashAccum = 0.0,
+    stepAccum = 0.0,
+    dustAccum = 0.0,
 }
 
 -- Drivable Luxury Racing Speedboat moored cleanly next to the 32m Marina Pier!
@@ -348,11 +351,20 @@ local function spawnDynamicPropsAndPhysics()
     applySelectedVehicle()
     physics.addKinematicBox("player_car", car.x, car.y + 0.65, car.z, 1.05, 0.62, 2.25)
 
-    -- Playable 3rd-Person Sculpted Hero (.glb with 4 Named Animation Clips: Idle, Walk, Run, Swim!)
+    -- Playable 3rd-Person Rigged & Skinned Hero (.glb with 22-Bone Armature: Idle, Walk, Run, Swim!)
     world.spawnModel("player_char", CONFIG.charModel, car.x + 2.5, car.y, car.z)
     world.playAnimation("player_char", "Idle", true, 1.0)
     player.currentAnim = "Idle"
     world.setVisible("player_char", false)
+
+    -- Live Rigged Citizens in the Open World (showcases GPU skeletal skinning + Walk gait live!)
+    world.spawnModel("npc_plaza_watcher", CONFIG.charModel, 13.5, 0.0, -6.0)
+    world.setRotation("npc_plaza_watcher", 0.0, -90.0, 0.0)
+    world.playAnimation("npc_plaza_watcher", "Idle", true, 0.9, 0.0)
+
+    world.spawnModel("npc_marina_jogger", CONFIG.charModel, 14.5, 0.0, -18.0)
+    world.setRotation("npc_marina_jogger", 0.0, 0.0, 0.0)
+    world.playAnimation("npc_marina_jogger", "Walk", true, 0.95, 0.0)
 
     -- Drivable Luxury Racing Speedboat moored next to the 32m Marina Pier!
     world.spawnModel("player_boat", CONFIG.boatModel, boat.x, boat.y, boat.z)
@@ -564,7 +576,7 @@ function onStart()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
 
     sage.log("===================================================================")
-    sage.log("  SAGE Engine v1.1.0 — GGX PBR + SSAO + 4-Clip Hero + Speedboat!")
+    sage.log("  SAGE Engine v1.2.0 — GPU Skeletal Skinning + Crossfade + FXAA + GGX PBR!")
     sage.log("  Press F = Walk/Swim/Enter Car or Marina Speedboat! | G = Rain | F1 = Editor")
     sage.log("  All-Time Best Score Loaded: " .. tostring(bestScore))
     sage.log("===================================================================")
@@ -622,6 +634,14 @@ function onTick(dt)
         1.0, 0.86, 0.42, 42.0, 3.4
     )
 
+    -- Live Patrolling Rigged Citizen walking smoothly along the Downtown Plaza sidewalk!
+    local patrolCycle = (timeNow * 0.16) % 2.0
+    local patrolForward = patrolCycle < 1.0
+    local patrolT = patrolForward and patrolCycle or (2.0 - patrolCycle)
+    local npcZ = lerp(-24.0, 14.0, patrolT)
+    world.setPosition("npc_marina_jogger", 15.2, 0.0, npcZ)
+    world.setRotation("npc_marina_jogger", 0.0, patrolForward and 0.0 or 180.0, 0.0)
+
     updateAiTraffic(dt)
 
     -- Toggle Pause Menu on Escape
@@ -644,9 +664,9 @@ function onTick(dt)
             camera.setPosition(car.x + math.sin(orbit) * 10.8, car.y + 3.8, car.z + math.cos(orbit) * 10.8)
             camera.setTarget(car.x, car.y + 1.1, car.z)
             camera.setFov(55.0)
-            sage.setTitle("SAGE Engine v1.1.0 — Main Menu | GGX PBR Open World")
+            sage.setTitle("SAGE Engine v1.2.0 — Main Menu | Skeletal Rigging & GGX PBR")
         else
-            sage.setTitle("SAGE Engine v1.1.0 — PAUSED (Press Esc to Resume)")
+            sage.setTitle("SAGE Engine v1.2.0 — PAUSED (Press Esc to Resume)")
         end
         return
     end
@@ -780,14 +800,14 @@ function onTick(dt)
         if input.isKeyDown("A") or input.isKeyDown("Left") then turnInput = turnInput + 1.0 end
         if input.isKeyDown("D") or input.isKeyDown("Right") then turnInput = turnInput - 1.0 end
 
-        player.yaw = player.yaw + turnInput * 155.0 * dt
+        player.yaw = player.yaw + turnInput * 145.0 * dt
         local prad = degToRad(player.yaw)
         local pfwdX, pfwdZ = math.sin(prad), math.cos(prad)
         local sprinting = input.isKeyDown("LeftShift") or input.isKeyDown("RightShift")
-        local walkSpeed = player.swimming and 4.4 or (sprinting and 11.2 or 6.4)
+        local walkSpeed = player.swimming and 4.4 or (sprinting and 9.8 or 4.6)
 
-        player.vx = lerp(player.vx, pfwdX * moveF * walkSpeed, 12.0 * dt)
-        player.vz = lerp(player.vz, pfwdZ * moveF * walkSpeed, 12.0 * dt)
+        player.vx = lerp(player.vx, pfwdX * moveF * walkSpeed, 11.0 * dt)
+        player.vz = lerp(player.vz, pfwdZ * moveF * walkSpeed, 11.0 * dt)
         player.x = clamp(player.x + player.vx * dt, -CONFIG.arenaHalfSize, CONFIG.arenaHalfSize)
         player.z = clamp(player.z + player.vz * dt, -CONFIG.arenaHalfSize, CONFIG.arenaHalfSize)
 
@@ -797,6 +817,18 @@ function onTick(dt)
         local inW, waveY, seaY, wDepth = world.sampleWater(player.x, player.z)
         local groundY = (inW and not overDeck) and seaY or surfY
 
+        -- Determine acoustic ground surface for procedural footstep synth (0=Asphalt, 1=Grass/Sand, 2=Wood Pier, 3=Water)
+        local footSurface = 0
+        if inW and not overDeck and wDepth > 0.05 then
+            footSurface = 3
+        elseif overDeck then
+            footSurface = 2
+        elseif math.abs(player.x) > 10.0 and math.abs(player.z) > 10.0 and
+               math.abs(math.abs(player.x) - 64.0) > 8.0 and math.abs(math.abs(player.z) - 64.0) > 8.0 and
+               math.abs(math.abs(player.x) - 148.0) > 9.0 and math.abs(math.abs(player.z) - 148.0) > 9.0 then
+            footSurface = 1
+        end
+
         player.swimming = inW and (not overDeck) and (wDepth >= 0.65)
         if player.swimming then
             local swimTargetY = waveY - 0.85
@@ -804,14 +836,16 @@ function onTick(dt)
             player.vy = 0.0
             player.grounded = true
             player.splashAccum = player.splashAccum + dt
-            if math.abs(moveF) > 0.1 and player.splashAccum >= 0.12 then
+            if math.abs(moveF) > 0.1 and player.splashAccum >= 0.16 then
                 player.splashAccum = 0.0
                 world.spawnParticles(player.x, waveY + 0.05, player.z, 0.0, 2.2, 0.0, 0.84, 0.96, 1.0, 4, 0.16, 0.45, false, 12.0)
+                audio.playFootstep(3, 0.45)
             end
         else
             if player.grounded and input.isKeyDown("Space") then
-                player.vy = 9.2
+                player.vy = 9.0
                 player.grounded = false
+                audio.playFootstep(footSurface, 0.72)
             end
             if not player.grounded then
                 player.vy = player.vy - 24.0 * dt
@@ -820,6 +854,7 @@ function onTick(dt)
                     player.y = groundY
                     player.vy = 0.0
                     player.grounded = true
+                    audio.playFootstep(footSurface, 0.92) -- Solid landing thud!
                 end
             else
                 if player.y > groundY + 0.25 then
@@ -836,33 +871,68 @@ function onTick(dt)
             player.x, player.z, player.vx, player.vz = rx, rz, rvx, rvz
         end
 
-        -- Seamless 4-Clip Hero Animation State Machine: Idle / Walk / Run / Swim!
+        -- Seamless 5-Clip Crossfaded Hero Animation State Machine: Idle / Walk / Run / Jump / Swim!
         local pSpd = math.sqrt(player.vx * player.vx + player.vz * player.vz)
         local desiredAnim = "Idle"
         local animRate = 1.0
+        local blendSec = 0.18
         if player.swimming then
             desiredAnim = "Swim"
-            animRate = pSpd > 0.5 and 1.35 or 0.55
-        elseif pSpd > 7.8 then
+            animRate = pSpd > 0.5 and 1.20 or 0.55
+            blendSec = 0.24
+        elseif not player.grounded then
+            desiredAnim = "Jump"
+            animRate = 1.0
+            blendSec = 0.10
+        elseif pSpd > 6.2 then
             desiredAnim = "Run"
-            animRate = 1.35
-        elseif pSpd > 0.45 then
+            -- Velocity-matched stride rate so sneakers plant cleanly without foot-sliding!
+            animRate = clamp(pSpd / 7.2, 0.85, 1.42)
+            blendSec = 0.20
+        elseif pSpd > 0.35 then
             desiredAnim = "Walk"
-            animRate = 1.25
+            animRate = clamp(pSpd / 3.6, 0.55, 1.45)
+            blendSec = 0.16
+        else
+            blendSec = 0.22
         end
+
         if desiredAnim ~= player.currentAnim then
             player.currentAnim = desiredAnim
-            world.playAnimation("player_char", desiredAnim, true, animRate)
+            world.playAnimation("player_char", desiredAnim, true, animRate, blendSec)
         else
             world.setAnimationSpeed("player_char", animRate)
         end
+
+        -- Synced Surface-Aware Procedural Footsteps + Sprint Dust Puffs!
+        if player.grounded and not player.swimming and pSpd > 0.45 then
+            local stepInterval = (desiredAnim == "Run") and (0.38 / animRate) or (0.58 / animRate)
+            player.stepAccum = player.stepAccum + dt
+            if player.stepAccum >= stepInterval then
+                player.stepAccum = 0.0
+                local stepVol = (desiredAnim == "Run") and 0.78 or 0.48
+                audio.playFootstep(footSurface, stepVol)
+                if desiredAnim == "Run" and footSurface ~= 3 then
+                    world.spawnParticles(player.x, player.y + 0.08, player.z, -player.vx * 0.2, 0.8, -player.vz * 0.2, 0.76, 0.72, 0.66, 2, 0.11, 0.32, false, 3.5)
+                end
+            end
+        else
+            player.stepAccum = 0.20
+        end
+
+        -- Subtle athletic banking lean when turning while running!
+        local targetBank = (player.grounded and not player.swimming)
+            and (-turnInput * clamp(pSpd / 9.5, 0.0, 1.0) * 9.5)
+            or 0.0
+        player.roll = lerp(player.roll, targetBank, 10.0 * dt)
+
         world.setPosition("player_char", player.x, player.y, player.z)
-        world.setRotation("player_char", 0.0, player.yaw, 0.0)
+        world.setRotation("player_char", 0.0, player.yaw, player.roll)
 
         checkPhysicsCrateSmashes(dt)
         updateDeliveryMission(dt, timeNow, player.x, player.y, player.z)
 
-        -- Smooth Over-The-Shoulder 3rd-Person Character Camera
+        -- Smooth Over-The-Shoulder 3rd-Person Character Camera (with dynamic sprint FOV!)
         if input.isMouseDown("Right") then
             local mdx, mdy = input.getMouseDelta()
             cam.orbitYaw = cam.orbitYaw - mdx * 0.35
@@ -873,14 +943,16 @@ function onTick(dt)
         end
         local cyaw = degToRad(player.yaw + cam.orbitYaw)
         local cfx, cfz = math.sin(cyaw), math.cos(cyaw)
-        local celev = math.sin(degToRad(cam.orbitPitch)) * 6.0
-        cam.x = lerp(cam.x, player.x - cfx * 6.2, 8.0 * dt)
-        cam.y = lerp(cam.y, math.max(0.9, player.y + 2.8 + celev), 8.0 * dt)
-        cam.z = lerp(cam.z, player.z - cfz * 6.2, 8.0 * dt)
-        cam.tx = lerp(cam.tx, player.x + cfx * 2.0, 14.0 * dt)
-        cam.ty = lerp(cam.ty, player.y + 1.45, 14.0 * dt)
-        cam.tz = lerp(cam.tz, player.z + cfz * 2.0, 14.0 * dt)
-        cam.fov = lerp(cam.fov, 60.0, 6.0 * dt)
+        local celev = math.sin(degToRad(cam.orbitPitch)) * 5.0
+        local camDist = (desiredAnim == "Run") and 4.85 or 4.35
+        cam.x = lerp(cam.x, player.x - cfx * camDist, 8.0 * dt)
+        cam.y = lerp(cam.y, math.max(0.85, player.y + 2.20 + celev), 8.0 * dt)
+        cam.z = lerp(cam.z, player.z - cfz * camDist, 8.0 * dt)
+        cam.tx = lerp(cam.tx, player.x + cfx * 1.4, 14.0 * dt)
+        cam.ty = lerp(cam.ty, player.y + 1.38, 14.0 * dt)
+        cam.tz = lerp(cam.tz, player.z + cfz * 1.4, 14.0 * dt)
+        local targetFov = (desiredAnim == "Run") and 66.0 or 60.0
+        cam.fov = lerp(cam.fov, targetFov, 6.0 * dt)
         camera.setPosition(cam.x, cam.y, cam.z)
         camera.setTarget(cam.tx, cam.ty, cam.tz)
         camera.setFov(cam.fov)
@@ -889,7 +961,7 @@ function onTick(dt)
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
             local biome = getCurrentBiomeName(player.x, player.z)
-            sage.setTitle(string.format("SAGE v1.1 | %s | ON FOOT [%s] (F = Enter Car/Boat)", biome, player.currentAnim))
+            sage.setTitle(string.format("SAGE v1.2 | %s | ON FOOT [%s] (F = Enter Car/Boat)", biome, player.currentAnim))
         end
         return
     end
@@ -980,7 +1052,7 @@ function onTick(dt)
         titleUpdateAccum = titleUpdateAccum + dt
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
-            sage.setTitle(string.format("SAGE v1.1 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
+            sage.setTitle(string.format("SAGE v1.2 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
         end
         return
     end
@@ -1301,7 +1373,7 @@ function onTick(dt)
         local kmh = math.floor(speed * 3.6)
         local biome = getCurrentBiomeName(car.x, car.z)
         sage.setTitle(string.format(
-            "SAGE v1.1 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
+            "SAGE v1.2 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
             biome, car.gear, kmh, weatherPresets[weatherPresetIdx].name, score, bestScore
         ))
     end
@@ -1314,11 +1386,11 @@ function onRenderUI()
     local vpW, vpH = ui.getViewportSize()
 
     if gameState == "MENU" then
-        if ui.beginCenteredWindow("SAGE ENGINE v1.1.0 — GGX PBR OPEN WORLD", 470, 455) then
+        if ui.beginCenteredWindow("SAGE ENGINE v1.2.0 — SKELETAL RIGGING & GGX PBR", 470, 455) then
             ui.setFontScale(1.38)
             ui.textCentered("SAGE STUNT & DELIVERY")
             ui.setFontScale(1.0)
-            ui.textCentered("v1.1.0  |  GGX PBR + SSAO  |  4-Clip Hero & Speedboat  |  32 Models")
+            ui.textCentered("v1.2.0  |  GPU Skinning + Crossfade  |  FXAA + GGX PBR  |  5-Clip Hero")
             ui.textCentered("All-Time Best Score: " .. tostring(bestScore))
             ui.spacing()
             ui.separator()
@@ -1529,5 +1601,5 @@ end
 function onShutdown()
     updateBestScore()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
-    sage.log("v1.1.0 GGX PBR Open World Sandbox shutting down cleanly.")
+    sage.log("v1.2.0 Skeletal Rigging & GGX PBR Open World Sandbox shutting down cleanly.")
 end

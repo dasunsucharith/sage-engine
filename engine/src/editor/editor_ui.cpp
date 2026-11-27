@@ -62,7 +62,7 @@ bool EditorUI::initialize(Window& window) {
     }
 
     m_initialized = true;
-    std::cout << "[SAGE][Editor] Dear ImGui " << IMGUI_VERSION << " v1.0 Live World Editor ready (Press F1 to toggle)\n";
+    std::cout << "[SAGE][Editor] Dear ImGui " << IMGUI_VERSION << " v1.2 Live World Editor ready (Press F1 to toggle)\n";
     return true;
 }
 
@@ -112,7 +112,7 @@ void EditorUI::render(
         ImGui::SetNextWindowPos(ImVec2(14.0f, 14.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(345.0f, 0.0f), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("SAGE Engine v1.1 — Live World Editor (F1)", &m_visible)) {
+        if (ImGui::Begin("SAGE Engine v1.2.0 — Live World Editor (F1)", &m_visible)) {
             ImGui::Text("FPS: %.0f (%.2f ms)", stats.fps, stats.frameMs);
             ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 34.0f));
             ImGui::TextDisabled("GPU: %s", stats.gpuRenderer.c_str());
@@ -174,6 +174,7 @@ void EditorUI::render(
 
                 ImGui::Checkbox("2-Cascade Soft Shadows (2048px CSM)", &world.sky().shadowsEnabled);
                 ImGui::Checkbox("Screen-Space Contact AO (SSAO)", &world.sky().ssaoEnabled);
+                ImGui::Checkbox("FXAA 3.11 Edge Anti-Aliasing", &world.sky().fxaaEnabled);
                 ImGui::Checkbox("HDR Bloom Post-Processing", &world.sky().bloomEnabled);
                 if (world.sky().bloomEnabled) {
                     ImGui::SliderFloat("Bloom Intensity", &world.sky().bloomIntensity, 0.0f, 1.5f, "%.2f");
@@ -312,6 +313,10 @@ void EditorUI::render(
                         const std::string delId = e.id;
                         world.destroy(delId);
                         m_selectedEntityIndex = -1;
+                    } else if (e.shape == EntityShape::Model && !e.activeAnimation.empty()) {
+                        ImGui::TextDisabled("Anim: %s (%.2fx)%s",
+                            e.activeAnimation.c_str(), e.animSpeed,
+                            e.blendDuration > 0.0f ? " [Blending]" : "");
                     }
                 }
             }

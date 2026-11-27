@@ -35,19 +35,37 @@ namespace {
 
 constexpr float kPi = 3.14159265358979323846f;
 constexpr int kShadowMapSize = 2048;
+constexpr int kMaxSkinBones = 64;
 
 // -----------------------------------------------------------------------------
-// Pass 0: Directional Shadow Map Depth Pass
+// Pass 0: Directional Shadow Map Depth Pass (supports GPU Skeletal Skinning!)
 // -----------------------------------------------------------------------------
 constexpr const char* kShadowVertexShader = R"GLSL(
 #version 330 core
 layout (location = 0) in vec3 aPos;
+layout (location = 3) in vec4 aJoints;
+layout (location = 4) in vec4 aWeights;
 
+#define MAX_BONES 64
+uniform int uHasSkin;
+uniform mat4 uBoneMatrices[MAX_BONES];
 uniform mat4 uModel;
 uniform mat4 uLightViewProj;
 
 void main() {
-    gl_Position = uLightViewProj * uModel * vec4(aPos, 1.0);
+    vec4 localPos = vec4(aPos, 1.0);
+    if (uHasSkin == 1) {
+        int j0 = clamp(int(aJoints.x + 0.5), 0, MAX_BONES - 1);
+        int j1 = clamp(int(aJoints.y + 0.5), 0, MAX_BONES - 1);
+        int j2 = clamp(int(aJoints.z + 0.5), 0, MAX_BONES - 1);
+        int j3 = clamp(int(aJoints.w + 0.5), 0, MAX_BONES - 1);
+        mat4 skinMat = aWeights.x * uBoneMatrices[j0]
+                     + aWeights.y * uBoneMatrices[j1]
+                     + aWeights.z * uBoneMatrices[j2]
+                     + aWeights.w * uBoneMatrices[j3];
+        localPos = skinMat * localPos;
+    }
+    gl_Position = uLightViewProj * uModel * localPos;
 }
 )GLSL";
 
@@ -164,14 +182,19 @@ void main() {
 )GLSL";
 
 // -----------------------------------------------------------------------------
-// Pass 2: 3D HDR Lit Mesh Shader + Soft Shadows + Procedural Surface Micro-Grain
+// Pass 2: 3D HDR Lit Mesh Shader + GPU Skeletal Skinning + Soft Shadows + PBR
 // -----------------------------------------------------------------------------
 constexpr const char* kLitVertexShader = R"GLSL(
 #version 330 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aNormal;
 layout (location = 2) in vec2 aUV;
+layout (location = 3) in vec4 aJoints;
+layout (location = 4) in vec4 aWeights;
 
+#define MAX_BONES 64
+uniform int uHasSkin;
+uniform mat4 uBoneMatrices[MAX_BONES];
 uniform mat4 uModel;
 uniform mat4 uViewProj;
 
@@ -180,9 +203,23 @@ out vec3 vWorldNormal;
 out vec2 vUV;
 
 void main() {
-    vec4 worldPos = uModel * vec4(aPos, 1.0);
+    vec4 localPos = vec4(aPos, 1.0);
+    vec3 localNorm = aNormal;
+    if (uHasSkin == 1) {
+        int j0 = clamp(int(aJoints.x + 0.5), 0, MAX_BONES - 1);
+        int j1 = clamp(int(aJoints.y + 0.5), 0, MAX_BONES - 1);
+        int j2 = clamp(int(aJoints.z + 0.5), 0, MAX_BONES - 1);
+        int j3 = clamp(int(aJoints.w + 0.5), 0, MAX_BONES - 1);
+        mat4 skinMat = aWeights.x * uBoneMatrices[j0]
+                     + aWeights.y * uBoneMatrices[j1]
+                     + aWeights.z * uBoneMatrices[j2]
+                     + aWeights.w * uBoneMatrices[j3];
+        localPos = skinMat * localPos;
+        localNorm = mat3(skinMat) * localNorm;
+    }
+    vec4 worldPos = uModel * localPos;
     vWorldPos = worldPos.xyz;
-    vWorldNormal = normalize(mat3(transpose(inverse(uModel))) * aNormal);
+    vWorldNormal = normalize(mat3(transpose(inverse(uModel))) * localNorm);
     vUV = aUV;
     gl_Position = uViewProj * worldPos;
 }
@@ -402,6 +439,10 @@ void main() {
     // Subtle ground-contact ambient occlusion for grounded 3D buildings & cars near y=0
     float contactAO = (uIsGround == 0) ? mix(0.76, 1.0, smoothstep(0.0, 0.65, max(vWorldPos.y, 0.0))) : 1.0;
 
+    // Subtle fresnel rim-light accent on 3D characters & vehicles so silhouettes pop cleanly!
+    float rimTerm = pow(1.0 - max(dot(N, V), 0.0), 3.6) * (uIsGround == 0 ? 1.0 : 0.0);
+    vec3 rimGlow = mix(uSkyHorizon, uSunColor, 0.45) * rimTerm * (0.22 + 0.18 * (1.0 - rough));
+
     // Emissive values exceed 1.0 in HDR so Bloom picks up headlights, neon & beacons!
     vec3 emissiveTerm = uEmissive * 1.55;
     if (uPulse > 0.5) {
@@ -409,7 +450,7 @@ void main() {
         emissiveTerm *= p * 1.35;
     }
 
-    vec3 color = (hemiAmbient * contactAO) + directSun + iblSpec + emissiveTerm;
+    vec3 color = (hemiAmbient * contactAO) + directSun + iblSpec + rimGlow + emissiveTerm;
 
     // Real-time Dynamic Point Lights evaluated with true GGX PBR!
     for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
@@ -427,9 +468,12 @@ void main() {
         }
     }
 
+    // Atmospheric Aerial Perspective + Mie Solar Scattering Glow in distance fog!
     float dist = length(uCameraPos - vWorldPos);
     float fogFactor = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1.0), 0.0, 1.0);
-    color = mix(color, uSkyHorizon, fogFactor * fogFactor * 0.85);
+    float sunInscatter = pow(max(dot(-V, L), 0.0), 6.0);
+    vec3 fogColor = mix(uSkyHorizon, uSunColor * 1.15, sunInscatter * 0.42);
+    color = mix(color, fogColor, fogFactor * fogFactor * 0.86);
 
     // Output linear HDR (tone-mapped in PostPass!)
     FragColor = vec4(color, 1.0);
@@ -621,6 +665,7 @@ uniform sampler2D uDepthTex;
 uniform int uBloomEnabled;
 uniform float uBloomIntensity;
 uniform int uSsaoEnabled;
+uniform int uFxaaEnabled;
 uniform float uExposure;
 uniform vec2 uTexelSize;
 uniform float uNearPlane;
@@ -642,8 +687,58 @@ vec3 acesToneMap(vec3 x) {
     return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
+float lumaOf(vec3 c) {
+    return dot(c, vec3(0.299, 0.587, 0.114));
+}
+
+// Fast FXAA 3.11 edge-directed anti-aliasing directly in HDR color space!
+vec3 sampleHdrFxaa(vec2 uv) {
+    vec3 rgbM = texture(uHdrTex, uv).rgb;
+    if (uFxaaEnabled == 0) {
+        return rgbM;
+    }
+    vec3 rgbNW = texture(uHdrTex, uv + vec2(-1.0, -1.0) * uTexelSize).rgb;
+    vec3 rgbNE = texture(uHdrTex, uv + vec2( 1.0, -1.0) * uTexelSize).rgb;
+    vec3 rgbSW = texture(uHdrTex, uv + vec2(-1.0,  1.0) * uTexelSize).rgb;
+    vec3 rgbSE = texture(uHdrTex, uv + vec2( 1.0,  1.0) * uTexelSize).rgb;
+
+    float lumaM  = lumaOf(acesToneMap(rgbM));
+    float lumaNW = lumaOf(acesToneMap(rgbNW));
+    float lumaNE = lumaOf(acesToneMap(rgbNE));
+    float lumaSW = lumaOf(acesToneMap(rgbSW));
+    float lumaSE = lumaOf(acesToneMap(rgbSE));
+
+    float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+    float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+    float lumaRange = lumaMax - lumaMin;
+    if (lumaRange < max(0.045, lumaMax * 0.125)) {
+        return rgbM;
+    }
+
+    vec2 dir;
+    dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+    dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+
+    float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * 0.03125, 0.0078125);
+    float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+    dir = clamp(dir * rcpDirMin, vec2(-6.0), vec2(6.0)) * uTexelSize;
+
+    vec3 rgbA = 0.5 * (
+        texture(uHdrTex, uv + dir * (1.0 / 3.0 - 0.5)).rgb +
+        texture(uHdrTex, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
+    vec3 rgbB = rgbA * 0.5 + 0.25 * (
+        texture(uHdrTex, uv + dir * -0.5).rgb +
+        texture(uHdrTex, uv + dir *  0.5).rgb);
+
+    float lumaB = lumaOf(acesToneMap(rgbB));
+    if (lumaB < lumaMin || lumaB > lumaMax) {
+        return rgbA;
+    }
+    return rgbB;
+}
+
 void main() {
-    vec3 hdr = texture(uHdrTex, vUV).rgb;
+    vec3 hdr = sampleHdrFxaa(vUV);
 
     // Real-time Screen-Space Depth Contact AO (SSAO) darkening geometric crevices & contact seams!
     if (uSsaoEnabled == 1) {
@@ -693,6 +788,8 @@ struct Vertex3D {
     float px, py, pz;
     float nx, ny, nz;
     float u, v;
+    float j0 = 0.0f, j1 = 0.0f, j2 = 0.0f, j3 = 0.0f;
+    float w0 = 1.0f, w1 = 0.0f, w2 = 0.0f, w3 = 0.0f;
 };
 
 struct GpuSubMesh {
@@ -736,6 +833,10 @@ struct GpuSubMesh {
         gl::enableVertexAttribArray(1);
         gl::vertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), reinterpret_cast<void*>(offsetof(Vertex3D, u)));
         gl::enableVertexAttribArray(2);
+        gl::vertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), reinterpret_cast<void*>(offsetof(Vertex3D, j0)));
+        gl::enableVertexAttribArray(3);
+        gl::vertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex3D), reinterpret_cast<void*>(offsetof(Vertex3D, w0)));
+        gl::enableVertexAttribArray(4);
 
         gl::bindVertexArray(0);
     }
@@ -751,8 +852,14 @@ struct GpuSubMesh {
     }
 };
 
+struct GpuSkin {
+    std::vector<int> jointNodeIndices;
+    std::vector<glm::mat4> inverseBindMatrices;
+};
+
 struct ModelNode {
     int parentIdx = -1;
+    int skinIdx = -1;
     bool hasMatrix = false;
     glm::mat4 staticMatrix{1.0f};
     glm::vec3 translation{0.0f};
@@ -779,15 +886,19 @@ struct AnimClip {
 struct GpuModel {
     std::vector<GpuSubMesh> subMeshes;
     std::vector<ModelNode> nodes;
+    std::vector<GpuSkin> skins;
     std::vector<AnimClip> animations;
     bool hasAnimations = false;
+    bool hasSkins = false;
 
     void destroy() {
         for (auto& sm : subMeshes) sm.destroy();
         subMeshes.clear();
         nodes.clear();
+        skins.clear();
         animations.clear();
         hasAnimations = false;
+        hasSkins = false;
     }
 };
 
@@ -1044,14 +1155,20 @@ glm::mat4 buildEntityMatrix(const Entity& e) {
     return model;
 }
 
-void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std::vector<glm::mat4>& outWorld) {
+void sampleModelClips(
+    const GpuModel& model,
+    const std::string& clipQuery,
+    float clipTime,
+    bool clipLoop,
+    std::vector<glm::vec3>& T,
+    std::vector<glm::quat>& R,
+    std::vector<glm::vec3>& S,
+    std::vector<bool>& animatedFlag) {
     const std::size_t n = model.nodes.size();
-    outWorld.assign(n, glm::mat4(1.0f));
-    if (n == 0) return;
-
-    std::vector<glm::vec3> T(n), S(n);
-    std::vector<glm::quat> R(n);
-    std::vector<bool> animatedFlag(n, false);
+    T.resize(n);
+    R.resize(n);
+    S.resize(n);
+    animatedFlag.assign(n, false);
     for (std::size_t i = 0; i < n; ++i) {
         T[i] = model.nodes[i].translation;
         R[i] = model.nodes[i].rotation;
@@ -1059,16 +1176,15 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std:
     }
 
     std::vector<const AnimClip*> clipsToEval;
-    if (!model.animations.empty() && entity.activeAnimation != "none") {
-        if (!entity.activeAnimation.empty()) {
-            // Exact match first, then case-insensitive prefix match (handles Blender NLA strip names!)
+    if (!model.animations.empty() && clipQuery != "none") {
+        if (!clipQuery.empty()) {
             for (const auto& c : model.animations) {
-                if (c.name == entity.activeAnimation) { clipsToEval.push_back(&c); break; }
+                if (c.name == clipQuery) { clipsToEval.push_back(&c); break; }
             }
             if (clipsToEval.empty()) {
                 for (const auto& c : model.animations) {
-                    if (c.name.size() >= entity.activeAnimation.size() &&
-                        c.name.compare(0, entity.activeAnimation.size(), entity.activeAnimation) == 0) {
+                    if (c.name.size() >= clipQuery.size() &&
+                        c.name.compare(0, clipQuery.size(), clipQuery) == 0) {
                         clipsToEval.push_back(&c);
                     }
                 }
@@ -1081,8 +1197,8 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std:
 
     for (const AnimClip* clip : clipsToEval) {
         if (!clip || clip->duration <= 0.0001f) continue;
-        float t = entity.animTime;
-        if (entity.animLoop) {
+        float t = clipTime;
+        if (clipLoop) {
             t = std::fmod(t, clip->duration);
             if (t < 0.0f) t += clip->duration;
         } else {
@@ -1112,6 +1228,36 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std:
             }
         }
     }
+}
+
+void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std::vector<glm::mat4>& outWorld) {
+    const std::size_t n = model.nodes.size();
+    outWorld.assign(n, glm::mat4(1.0f));
+    if (n == 0) return;
+
+    std::vector<glm::vec3> T, S;
+    std::vector<glm::quat> R;
+    std::vector<bool> animatedFlag;
+    sampleModelClips(model, entity.activeAnimation, entity.animTime, entity.animLoop, T, R, S, animatedFlag);
+
+    // Real-time bone-level crossfade blending between outgoing & incoming animation clips (v1.2.0)!
+    if (entity.blendDuration > 0.001f && !entity.prevAnimation.empty() && entity.blendElapsed < entity.blendDuration) {
+        std::vector<glm::vec3> prevT, prevS;
+        std::vector<glm::quat> prevR;
+        std::vector<bool> prevFlag;
+        sampleModelClips(model, entity.prevAnimation, entity.prevAnimTime, entity.prevAnimLoop, prevT, prevR, prevS, prevFlag);
+
+        const float rawW = std::clamp(entity.blendElapsed / entity.blendDuration, 0.0f, 1.0f);
+        const float w = rawW * rawW * (3.0f - 2.0f * rawW); // Smoothstep S-curve!
+        for (std::size_t i = 0; i < n; ++i) {
+            if (animatedFlag[i] || prevFlag[i]) {
+                T[i] = glm::mix(prevT[i], T[i], w);
+                R[i] = glm::slerp(prevR[i], R[i], w);
+                S[i] = glm::mix(prevS[i], S[i], w);
+                animatedFlag[i] = true;
+            }
+        }
+    }
 
     std::vector<glm::mat4> local(n);
     for (std::size_t i = 0; i < n; ++i) {
@@ -1138,7 +1284,7 @@ public:
     bool initialize(int viewportWidth, int viewportHeight) override {
         if (!gl::loadFunctions()) return false;
 
-        m_info.backendName = "OpenGL 3.3 Core (v1.1: GGX PBR + Normal/MR Maps + SSAO + 2-Cascade CSM + HDR Bloom + Wet Roads)";
+        m_info.backendName = "OpenGL 3.3 Core (v1.2.0: GPU Skeletal Skinning + Crossfade Blending + FXAA + GGX PBR + SSAO + 2-Cascade CSM)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
@@ -1193,6 +1339,8 @@ public:
         // Cache uniform locations
         m_shadowModel = gl::getUniformLocation(m_shadowProgram, "uModel");
         m_shadowLightVP = gl::getUniformLocation(m_shadowProgram, "uLightViewProj");
+        m_shadowHasSkin = gl::getUniformLocation(m_shadowProgram, "uHasSkin");
+        m_shadowBoneMatrices = gl::getUniformLocation(m_shadowProgram, "uBoneMatrices");
 
         m_skyInvViewProj = gl::getUniformLocation(m_skyProgram, "uInvViewProj");
         m_skyCameraPos = gl::getUniformLocation(m_skyProgram, "uCameraPos");
@@ -1205,6 +1353,8 @@ public:
 
         m_uModel = gl::getUniformLocation(m_litProgram, "uModel");
         m_uViewProj = gl::getUniformLocation(m_litProgram, "uViewProj");
+        m_uHasSkin = gl::getUniformLocation(m_litProgram, "uHasSkin");
+        m_uBoneMatrices = gl::getUniformLocation(m_litProgram, "uBoneMatrices");
         m_uBaseColor = gl::getUniformLocation(m_litProgram, "uBaseColor");
         m_uEmissive = gl::getUniformLocation(m_litProgram, "uEmissive");
         m_uMetallic = gl::getUniformLocation(m_litProgram, "uMetallic");
@@ -1262,6 +1412,7 @@ public:
         m_compBloomEnabled = gl::getUniformLocation(m_compositeProgram, "uBloomEnabled");
         m_compBloomIntensity = gl::getUniformLocation(m_compositeProgram, "uBloomIntensity");
         m_compSsaoEnabled = gl::getUniformLocation(m_compositeProgram, "uSsaoEnabled");
+        m_compFxaaEnabled = gl::getUniformLocation(m_compositeProgram, "uFxaaEnabled");
         m_compExposure = gl::getUniformLocation(m_compositeProgram, "uExposure");
         m_compTexelSize = gl::getUniformLocation(m_compositeProgram, "uTexelSize");
         m_compNearPlane = gl::getUniformLocation(m_compositeProgram, "uNearPlane");
@@ -1442,6 +1593,7 @@ public:
 
                 gl::useProgram(m_shadowProgram);
                 gl::uniformMatrix4fv(m_shadowLightVP, 1, GL_FALSE, glm::value_ptr(lvp));
+                gl::uniform1i(m_shadowHasSkin, 0);
 
                 const float cullDistSq = (radius + 32.0f) * (radius + 32.0f);
                 for (const Entity& e : world.entities()) {
@@ -1457,18 +1609,32 @@ public:
                     if (e.shape == EntityShape::Model) {
                         const GpuModel* gpuModel = getOrLoadModel(e.modelPath);
                         if (!gpuModel) continue;
-                        if (gpuModel->hasAnimations) {
+                        if (gpuModel->hasAnimations || gpuModel->hasSkins) {
                             evaluateModelNodeMatrices(*gpuModel, e, m_nodeWorldScratch);
+                            int uploadedSkin = -1;
                             for (std::size_t ni = 0; ni < gpuModel->nodes.size(); ++ni) {
-                                if (gpuModel->nodes[ni].subMeshIndices.empty()) continue;
-                                const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
-                                gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(fullMat));
-                                for (const std::size_t smIdx : gpuModel->nodes[ni].subMeshIndices) {
+                                const ModelNode& node = gpuModel->nodes[ni];
+                                if (node.subMeshIndices.empty()) continue;
+                                if (node.skinIdx >= 0 && static_cast<std::size_t>(node.skinIdx) < gpuModel->skins.size()) {
+                                    if (uploadedSkin != node.skinIdx) {
+                                        uploadSkinPalette(gpuModel->skins[static_cast<std::size_t>(node.skinIdx)], m_shadowBoneMatrices);
+                                        uploadedSkin = node.skinIdx;
+                                    }
+                                    gl::uniform1i(m_shadowHasSkin, 1);
+                                    gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
+                                } else {
+                                    gl::uniform1i(m_shadowHasSkin, 0);
+                                    const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
+                                    gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(fullMat));
+                                }
+                                for (const std::size_t smIdx : node.subMeshIndices) {
                                     gl::bindVertexArray(gpuModel->subMeshes[smIdx].vao);
                                     glDrawElements(GL_TRIANGLES, gpuModel->subMeshes[smIdx].indexCount, GL_UNSIGNED_INT, nullptr);
                                 }
                             }
+                            gl::uniform1i(m_shadowHasSkin, 0);
                         } else {
+                            gl::uniform1i(m_shadowHasSkin, 0);
                             gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
                             for (const GpuSubMesh& sm : gpuModel->subMeshes) {
                                 gl::bindVertexArray(sm.vao);
@@ -1476,6 +1642,7 @@ public:
                             }
                         }
                     } else {
+                        gl::uniform1i(m_shadowHasSkin, 0);
                         const GpuSubMesh* prim = getPrimitiveMesh(e.shape);
                         gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
                         gl::bindVertexArray(prim->vao);
@@ -1519,8 +1686,9 @@ public:
         glDepthMask(GL_TRUE);
         glEnable(GL_DEPTH_TEST);
 
-        // --- Pass 2: Opaque 3D Lit Geometry & Animated glTF Models ---
+        // --- Pass 2: Opaque 3D Lit Geometry & Animated/Skinned glTF Models ---
         gl::useProgram(m_litProgram);
+        gl::uniform1i(m_uHasSkin, 0);
         gl::uniformMatrix4fv(m_uViewProj, 1, GL_FALSE, glm::value_ptr(viewProj));
         gl::uniform3f(m_uCameraPos, camPos.x, camPos.y, camPos.z);
         gl::uniform3f(m_uSunDir, sky.sunDirection.x, sky.sunDirection.y, sky.sunDirection.z);
@@ -1600,20 +1768,34 @@ public:
                 const GpuModel* gpuModel = getOrLoadModel(e.modelPath);
                 if (!gpuModel) continue;
                 gl::uniform1i(m_uIsGround, 0);
-                if (gpuModel->hasAnimations) {
+                if (gpuModel->hasAnimations || gpuModel->hasSkins) {
                     evaluateModelNodeMatrices(*gpuModel, e, m_nodeWorldScratch);
+                    int uploadedSkin = -1;
                     for (std::size_t ni = 0; ni < gpuModel->nodes.size(); ++ni) {
-                        if (gpuModel->nodes[ni].subMeshIndices.empty()) continue;
-                        const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
-                        gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(fullMat));
-                        for (const std::size_t smIdx : gpuModel->nodes[ni].subMeshIndices) {
+                        const ModelNode& node = gpuModel->nodes[ni];
+                        if (node.subMeshIndices.empty()) continue;
+                        if (node.skinIdx >= 0 && static_cast<std::size_t>(node.skinIdx) < gpuModel->skins.size()) {
+                            if (uploadedSkin != node.skinIdx) {
+                                uploadSkinPalette(gpuModel->skins[static_cast<std::size_t>(node.skinIdx)], m_uBoneMatrices);
+                                uploadedSkin = node.skinIdx;
+                            }
+                            gl::uniform1i(m_uHasSkin, 1);
+                            gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(entityMat));
+                        } else {
+                            gl::uniform1i(m_uHasSkin, 0);
+                            const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
+                            gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(fullMat));
+                        }
+                        for (const std::size_t smIdx : node.subMeshIndices) {
                             const GpuSubMesh& sm = gpuModel->subMeshes[smIdx];
                             const glm::vec3 tinted = sm.baseColor * glm::vec3(e.color.r, e.color.g, e.color.b);
                             const glm::vec3 emissive = e.emissive ? tinted * 0.9f : sm.emissive;
                             drawSubMesh(sm, tinted, emissive, sm.metallic, sm.roughness, 0.0f);
                         }
                     }
+                    gl::uniform1i(m_uHasSkin, 0);
                 } else {
+                    gl::uniform1i(m_uHasSkin, 0);
                     gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(entityMat));
                     for (const GpuSubMesh& sm : gpuModel->subMeshes) {
                         const glm::vec3 tinted = sm.baseColor * glm::vec3(e.color.r, e.color.g, e.color.b);
@@ -1623,6 +1805,8 @@ public:
                 }
                 continue;
             }
+
+            gl::uniform1i(m_uHasSkin, 0);
 
             gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(entityMat));
             const GpuSubMesh* prim = getPrimitiveMesh(e.shape);
@@ -1669,6 +1853,7 @@ public:
         // --- Pass 3B: 3D HDR Particle Effects (Water Splashes, Drift Smoke, Nitro Sparks) ---
         if (!world.particles().empty()) {
             gl::useProgram(m_litProgram);
+            gl::uniform1i(m_uHasSkin, 0);
             gl::uniform1i(m_uIsGround, 0);
             gl::uniform1i(m_uHasTexture, 0);
             gl::uniform1i(m_uHasNormalTex, 0);
@@ -1695,6 +1880,7 @@ public:
         // --- Pass 3C: Real-Time 3D Falling Rain Streaks (when Weather rainIntensity > 0.05!) ---
         if (sky.rainIntensity > 0.05f) {
             gl::useProgram(m_litProgram);
+            gl::uniform1i(m_uHasSkin, 0);
             gl::uniform1i(m_uIsGround, 0);
             gl::uniform1i(m_uHasTexture, 0);
             gl::uniform1i(m_uHasNormalTex, 0);
@@ -1779,6 +1965,7 @@ public:
             gl::uniform1i(m_compBloomEnabled, sky.bloomEnabled ? 1 : 0);
             gl::uniform1f(m_compBloomIntensity, sky.bloomIntensity);
             gl::uniform1i(m_compSsaoEnabled, sky.ssaoEnabled ? 1 : 0);
+            gl::uniform1i(m_compFxaaEnabled, sky.fxaaEnabled ? 1 : 0);
             gl::uniform1f(m_compExposure, sky.exposure);
             gl::uniform2f(m_compTexelSize, 1.0f / static_cast<float>(m_viewportWidth), 1.0f / static_cast<float>(m_viewportHeight));
             gl::uniform1f(m_compNearPlane, cam.nearPlane);
@@ -1797,6 +1984,22 @@ public:
 
 private:
     bool m_hdrProgramReady() const { return m_compositeProgram != 0; }
+
+    void uploadSkinPalette(const GpuSkin& skin, GLint uniformLoc) {
+        const std::size_t count = std::min<std::size_t>(skin.jointNodeIndices.size(), static_cast<std::size_t>(kMaxSkinBones));
+        m_bonePaletteScratch.resize(count);
+        for (std::size_t j = 0; j < count; ++j) {
+            const int nodeIdx = skin.jointNodeIndices[j];
+            if (nodeIdx >= 0 && static_cast<std::size_t>(nodeIdx) < m_nodeWorldScratch.size()) {
+                m_bonePaletteScratch[j] = m_nodeWorldScratch[static_cast<std::size_t>(nodeIdx)] * skin.inverseBindMatrices[j];
+            } else {
+                m_bonePaletteScratch[j] = glm::mat4(1.0f);
+            }
+        }
+        if (count > 0) {
+            gl::uniformMatrix4fv(uniformLoc, static_cast<GLsizei>(count), GL_FALSE, glm::value_ptr(m_bonePaletteScratch[0]));
+        }
+    }
 
     const GpuSubMesh* getPrimitiveMesh(EntityShape shape) const {
         switch (shape) {
@@ -1890,6 +2093,7 @@ private:
         GpuModel gpuModel;
         const std::filesystem::path modelDir = fullPath.parent_path();
         gpuModel.hasAnimations = (data->animations_count > 0);
+        gpuModel.hasSkins = (data->skins_count > 0);
 
         auto uploadMeshPrimitives = [&](const cgltf_mesh* mesh, const glm::mat4& bakeTransform, std::vector<std::size_t>* outIndices) {
             const glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(bakeTransform)));
@@ -1899,24 +2103,45 @@ private:
                 const cgltf_accessor* posAcc = nullptr;
                 const cgltf_accessor* normAcc = nullptr;
                 const cgltf_accessor* uvAcc = nullptr;
+                const cgltf_accessor* jointsAcc = nullptr;
+                const cgltf_accessor* weightsAcc = nullptr;
                 for (cgltf_size a = 0; a < prim.attributes_count; ++a) {
                     const cgltf_attribute& attr = prim.attributes[a];
                     if (attr.type == cgltf_attribute_type_position) posAcc = attr.data;
                     else if (attr.type == cgltf_attribute_type_normal) normAcc = attr.data;
                     else if (attr.type == cgltf_attribute_type_texcoord && attr.index == 0) uvAcc = attr.data;
+                    else if (attr.type == cgltf_attribute_type_joints && attr.index == 0) jointsAcc = attr.data;
+                    else if (attr.type == cgltf_attribute_type_weights && attr.index == 0) weightsAcc = attr.data;
                 }
                 if (!posAcc || posAcc->count == 0) continue;
 
                 std::vector<Vertex3D> vertices(posAcc->count);
                 for (cgltf_size v = 0; v < posAcc->count; ++v) {
                     float pos[3] = {0, 0, 0}, norm[3] = {0, 1, 0}, uv[2] = {0, 0};
+                    cgltf_uint jIdx[4] = {0, 0, 0, 0};
+                    float jW[4] = {1.0f, 0.0f, 0.0f, 0.0f};
                     cgltf_accessor_read_float(posAcc, v, pos, 3);
                     if (normAcc) cgltf_accessor_read_float(normAcc, v, norm, 3);
                     if (uvAcc) cgltf_accessor_read_float(uvAcc, v, uv, 2);
+                    if (jointsAcc) cgltf_accessor_read_uint(jointsAcc, v, jIdx, 4);
+                    if (weightsAcc) {
+                        cgltf_accessor_read_float(weightsAcc, v, jW, 4);
+                        const float sum = jW[0] + jW[1] + jW[2] + jW[3];
+                        if (sum > 0.0001f) {
+                            jW[0] /= sum; jW[1] /= sum; jW[2] /= sum; jW[3] /= sum;
+                        } else {
+                            jW[0] = 1.0f; jW[1] = jW[2] = jW[3] = 0.0f;
+                        }
+                    }
                     const glm::vec4 wp = bakeTransform * glm::vec4(pos[0], pos[1], pos[2], 1.0f);
                     glm::vec3 wn = normalMat * glm::vec3(norm[0], norm[1], norm[2]);
                     wn = glm::length(wn) > 0.0001f ? glm::normalize(wn) : glm::vec3(0, 1, 0);
-                    vertices[v] = {wp.x, wp.y, wp.z, wn.x, wn.y, wn.z, uv[0], uv[1]};
+                    vertices[v] = {
+                        wp.x, wp.y, wp.z, wn.x, wn.y, wn.z, uv[0], uv[1],
+                        static_cast<float>(jIdx[0]), static_cast<float>(jIdx[1]),
+                        static_cast<float>(jIdx[2]), static_cast<float>(jIdx[3]),
+                        jW[0], jW[1], jW[2], jW[3]
+                    };
                 }
 
                 std::vector<std::uint32_t> indices;
@@ -1973,12 +2198,31 @@ private:
             }
         };
 
-        if (gpuModel.hasAnimations && data->nodes_count > 0) {
+        if ((gpuModel.hasAnimations || gpuModel.hasSkins) && data->nodes_count > 0) {
+            gpuModel.skins.resize(data->skins_count);
+            for (cgltf_size s = 0; s < data->skins_count; ++s) {
+                const cgltf_skin& srcSkin = data->skins[s];
+                GpuSkin& dstSkin = gpuModel.skins[s];
+                dstSkin.jointNodeIndices.resize(srcSkin.joints_count, -1);
+                dstSkin.inverseBindMatrices.assign(srcSkin.joints_count, glm::mat4(1.0f));
+                for (cgltf_size j = 0; j < srcSkin.joints_count; ++j) {
+                    if (srcSkin.joints[j]) {
+                        dstSkin.jointNodeIndices[j] = static_cast<int>(srcSkin.joints[j] - data->nodes);
+                    }
+                    if (srcSkin.inverse_bind_matrices && j < srcSkin.inverse_bind_matrices->count) {
+                        float m[16] = {};
+                        cgltf_accessor_read_float(srcSkin.inverse_bind_matrices, j, m, 16);
+                        dstSkin.inverseBindMatrices[j] = glm::make_mat4(m);
+                    }
+                }
+            }
+
             gpuModel.nodes.resize(data->nodes_count);
             for (cgltf_size n = 0; n < data->nodes_count; ++n) {
                 const cgltf_node* src = &data->nodes[n];
                 ModelNode& dst = gpuModel.nodes[n];
                 dst.parentIdx = src->parent ? static_cast<int>(src->parent - data->nodes) : -1;
+                dst.skinIdx = src->skin ? static_cast<int>(src->skin - data->skins) : -1;
                 if (src->has_matrix) { dst.hasMatrix = true; dst.staticMatrix = glm::make_mat4(src->matrix); }
                 if (src->has_translation) dst.translation = {src->translation[0], src->translation[1], src->translation[2]};
                 if (src->has_rotation) dst.rotation = glm::quat(src->rotation[3], src->rotation[0], src->rotation[1], src->rotation[2]);
@@ -2035,6 +2279,7 @@ private:
         cgltf_free(data);
         if (gpuModel.subMeshes.empty()) { m_failedModels.insert(rawPath); return nullptr; }
         std::cout << "[SAGE][Model] Loaded \"" << rawPath << "\" (" << gpuModel.subMeshes.size() << " submesh(es)"
+                  << (gpuModel.hasSkins ? (", " + std::to_string(gpuModel.skins.size()) + " skin(s)") : "")
                   << (gpuModel.hasAnimations ? (", " + std::to_string(gpuModel.animations.size()) + " anim clip(s)") : "") << ")\n";
         auto [it, inserted] = m_modelCache.emplace(rawPath, std::move(gpuModel));
         return &it->second;
@@ -2046,7 +2291,7 @@ private:
 
     GLuint m_fullscreenVao = 0;
     GLuint m_shadowProgram = 0, m_shadowFbo = 0, m_shadowTex = 0, m_shadowFboFar = 0, m_shadowTexFar = 0;
-    GLint m_shadowModel = -1, m_shadowLightVP = -1;
+    GLint m_shadowModel = -1, m_shadowLightVP = -1, m_shadowHasSkin = -1, m_shadowBoneMatrices = -1;
 
     GLuint m_hdrFbo = 0, m_hdrColorTex = 0, m_hdrDepthTex = 0;
     GLuint m_bloomFbo[2]{0, 0}, m_bloomTex[2]{0, 0};
@@ -2057,7 +2302,7 @@ private:
     GLint m_skyZenith = -1, m_skyHorizon = -1, m_skyGround = -1, m_skyTime = -1;
 
     GLuint m_litProgram = 0;
-    GLint m_uModel = -1, m_uViewProj = -1, m_uBaseColor = -1, m_uEmissive = -1;
+    GLint m_uModel = -1, m_uViewProj = -1, m_uHasSkin = -1, m_uBoneMatrices = -1, m_uBaseColor = -1, m_uEmissive = -1;
     GLint m_uMetallic = -1, m_uRoughness = -1, m_uHasTexture = -1, m_uAlbedoTex = -1;
     GLint m_uHasNormalTex = -1, m_uNormalTex = -1, m_uHasMetRoughTex = -1, m_uMetRoughTex = -1;
     GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1, m_uWetness = -1;
@@ -2076,12 +2321,13 @@ private:
     GLuint m_bloomExtractProgram = 0, m_bloomBlurProgram = 0, m_compositeProgram = 0;
     GLint m_bloomExtractTex = -1, m_bloomBlurImage = -1, m_bloomBlurDir = -1;
     GLint m_compHdrTex = -1, m_compBloomTex = -1, m_compDepthTex = -1, m_compBloomEnabled = -1, m_compBloomIntensity = -1;
-    GLint m_compSsaoEnabled = -1, m_compExposure = -1, m_compTexelSize = -1, m_compNearPlane = -1, m_compFarPlane = -1;
+    GLint m_compSsaoEnabled = -1, m_compFxaaEnabled = -1, m_compExposure = -1, m_compTexelSize = -1, m_compNearPlane = -1, m_compFarPlane = -1;
 
     GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh;
     std::unordered_map<std::string, GpuModel> m_modelCache;
     std::unordered_set<std::string> m_failedModels;
     std::vector<glm::mat4> m_nodeWorldScratch;
+    std::vector<glm::mat4> m_bonePaletteScratch;
     std::vector<const Entity*> m_waterEntitiesScratch;
 
     int m_viewportWidth = 1280, m_viewportHeight = 720;

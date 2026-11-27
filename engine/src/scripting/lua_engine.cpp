@@ -200,6 +200,16 @@ struct LuaEngine::Impl {
                 }
             }
         });
+        worldTbl.set_function("setFXAA", [this](bool enabled) {
+            if (world) {
+                world->sky().fxaaEnabled = enabled;
+            }
+        });
+        worldTbl.set_function("setSSAO", [this](bool enabled) {
+            if (world) {
+                world->sky().ssaoEnabled = enabled;
+            }
+        });
         worldTbl.set_function("setWeather", [this](float rainIntensity, sol::optional<float> wetness) {
             if (world) {
                 const float r = std::clamp(rainIntensity, 0.0f, 1.0f);
@@ -239,8 +249,14 @@ struct LuaEngine::Impl {
             const std::string& id,
             sol::optional<std::string> clipName,
             sol::optional<bool> loop,
-            sol::optional<float> speed) -> bool {
-            return world ? world->playAnimation(id, clipName.value_or(""), loop.value_or(true), speed.value_or(1.0f)) : false;
+            sol::optional<float> speed,
+            sol::optional<float> blendSeconds) -> bool {
+            return world ? world->playAnimation(
+                id,
+                clipName.value_or(""),
+                loop.value_or(true),
+                speed.value_or(1.0f),
+                blendSeconds.value_or(0.18f)) : false;
         });
         worldTbl.set_function("stopAnimation", [this](const std::string& id) -> bool {
             return world ? world->stopAnimation(id) : false;
@@ -380,6 +396,11 @@ struct LuaEngine::Impl {
         audioTbl.set_function("playShiftPop", [this](sol::optional<float> intensity) {
             if (audio) {
                 audio->playShiftPop(intensity.value_or(0.75f));
+            }
+        });
+        audioTbl.set_function("playFootstep", [this](sol::optional<int> surface, sol::optional<float> intensity) {
+            if (audio) {
+                audio->playFootstep(surface.value_or(0), intensity.value_or(0.65f));
             }
         });
         audioTbl.set_function("playImpact", [this](sol::optional<float> intensity) {

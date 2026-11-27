@@ -185,8 +185,23 @@ bool World::setWaterSeabed(const std::string& id, float seabedY) {
     return false;
 }
 
-bool World::playAnimation(const std::string& id, const std::string& clipName, bool loop, float speed) {
+bool World::playAnimation(const std::string& id, const std::string& clipName, bool loop, float speed, float blendSeconds) {
     if (Entity* e = findEntity(id)) {
+        const bool clipChanged = (e->activeAnimation != clipName);
+        if (clipChanged && blendSeconds > 0.005f && !e->activeAnimation.empty()) {
+            e->prevAnimation = e->activeAnimation;
+            e->prevAnimTime = e->animTime;
+            e->prevAnimSpeed = e->animSpeed;
+            e->prevAnimLoop = e->animLoop;
+            e->blendDuration = std::clamp(blendSeconds, 0.02f, 1.5f);
+            e->blendElapsed = 0.0f;
+            e->animTime = 0.0f;
+        } else if (clipChanged) {
+            e->prevAnimation.clear();
+            e->blendDuration = 0.0f;
+            e->blendElapsed = 0.0f;
+            e->animTime = 0.0f;
+        }
         e->activeAnimation = clipName;
         e->animLoop = loop;
         e->animSpeed = speed;
@@ -216,6 +231,15 @@ void World::updateAnimations(float dt) {
     for (Entity& e : m_entities) {
         if (e.shape == EntityShape::Model && e.animPlaying) {
             e.animTime += dt * e.animSpeed;
+            if (e.blendDuration > 0.0f) {
+                e.prevAnimTime += dt * e.prevAnimSpeed;
+                e.blendElapsed += dt;
+                if (e.blendElapsed >= e.blendDuration) {
+                    e.blendDuration = 0.0f;
+                    e.blendElapsed = 0.0f;
+                    e.prevAnimation.clear();
+                }
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (**`v1.1.0`**) — **Cook-Torrance GGX PBR + Normal/MR Maps + Depth SSAO**, **2-Cascade PCF Soft Shadows (CSM)**, **Dynamic Rain & Wet Reflective Roads**, **Nearest-16 Dynamic Point Lights**, **3D Particles**, **Realistic Water Submersion & Jolt Buoyancy**, **HDR Bloom & Animated 3D Ocean Water**, **Live World Editor & Scene JSON Export (`F1`)**, **2D Minimap/Canvas API (`ui.draw*`)**, **Persistent Save Data**, **32 Blender `.glb` Models** (including 4-clip Hero & Drivable Speedboat), **Jolt Physics 5.7**, and **miniaudio 0.11**.
+> **Status:** Live (**`v1.2.0`**) — **glTF 2.0 GPU Skeletal Skinning (`JOINTS_0`/`WEIGHTS_0`)**, **Real-Time Bone Crossfade Blending**, **FXAA 3.11 Edge Anti-Aliasing**, **Atmospheric Solar Haze & Rim Lighting**, **Cook-Torrance GGX PBR + Normal/MR Maps + Depth SSAO**, **2-Cascade PCF Soft Shadows (CSM)**, **Dynamic Rain & Wet Reflective Roads**, **Nearest-16 Dynamic Point Lights**, **3D Particles**, **Realistic Water Submersion & Jolt Buoyancy**, **HDR Bloom & Animated 3D Ocean Water**, **Live World Editor & Scene JSON Export (`F1`)**, **2D Minimap/Canvas API (`ui.draw*`)**, **Persistent Save Data**, **33 Blender `.glb` Models** (including 5-clip rigged Human & Drivable Speedboat), **Jolt Physics 5.7**, and **miniaudio 0.11** (4-profile vehicle combustion + surface-aware footsteps).
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -39,7 +39,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 
 ---
 
-## Implemented Namespaces (`v1.1.0`)
+## Implemented Namespaces (`v1.2.0`)
 
 ### `sage`
 | Function | Description |
@@ -81,12 +81,14 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setVisible(id, visible)` | Shows or hides an entity without destroying it. |
 | `world.setTimeOfDay(hours)` | Dynamically updates sun angle, sky gradient, cloud lighting, ambient fill, and horizon fog (`0.0`–`24.0`). |
 | `world.setBloom(enabled [, intensity])` | Toggles real-time HDR `RGBA16F` Bloom post-processing and optionally sets bloom strength (`0.0`–`2.0`, default `0.55`). |
+| `world.setFXAA(enabled)` | Enables or disables GPU FXAA 3.11 edge-directed anti-aliasing in the HDR composite pass (`true` by default). |
+| `world.setSSAO(enabled)` | Enables or disables Screen-Space Depth Contact Ambient Occlusion (`true` by default). |
 | `world.setWeather(rainIntensity [, wetness])` | Controls real-time 3D falling rain (`0.0`–`1.0`) and reflective wet-puddle road/terrain shading (`0.0`–`1.0`). |
 | `world.setPointLight(id, x, y, z, r, g, b [, radius, intensity])` | Creates or updates a real-time dynamic point light (up to 16 active) that illuminates 3D meshes, roads, and reflects off animated ocean waves. |
 | `world.removePointLight(id)` | Removes a dynamic point light by `id`. |
 | `world.spawnParticles(x, y, z, vx, vy, vz, r, g, b, count [, size, life, emissive, gravity])` | Emits a burst of 3D particles (water splashes, tire drift smoke, nitro sparks, debris) with optional HDR emission and gravity. |
 | `world.sampleWater(x, z)` | Queries animated water volumes at `(x, z)` and returns `inWater, waveSurfaceY, seabedY, waterDepth, shoreDist` (exact match to the GPU wave shader). |
-| `world.playAnimation(id [, clipName, loop, speed])` | Plays a glTF 2.0 keyframe animation clip on a `.glb` model (`""` plays clip 0). |
+| `world.playAnimation(id [, clipName, loop, speed, blendSeconds])` | Plays a glTF 2.0 keyframe or skeletal-skinned animation clip on a `.glb` model with smooth bone-level crossfade blending (default `blendSeconds = 0.18`). |
 | `world.stopAnimation(id)` | Pauses glTF animation playback on an entity. |
 | `world.setAnimationSpeed(id, speed)` | Adjusts glTF animation playback speed multiplier. |
 | `world.destroy(id)` | Removes an entity from the world. |
@@ -125,6 +127,7 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `audio.setVehicleProfile(profile)` | Selects the active combustion engine profile (`0` = Supercar V12, `1` = Superbike I4, `2` = Marine Speedboat V8 + water wake, `3` = Sports Coupe V8). |
 | `audio.setVehicleState(rpm01, throttle01, drift01, boost01, airborne)` | Drives the real-time combustion engine + exhaust formant synth, turbo whine, aerodynamic wind/wake rush, and filtered tire drift squeal (fades cleanly to silence when idle/off). |
 | `audio.playShiftPop([intensity01])` | Triggers a crisp exhaust gear-upshift crackle / backfire pop (`0.2`–`1.0`). |
+| `audio.playFootstep([surface, intensity01])` | Plays a procedural surface-aware footstep/landing sound (`0` = Asphalt, `1` = Grass/Dirt, `2` = Wood Pier, `3` = Water Splash; `intensity01` `0.15`–`1.0`). |
 | `audio.playImpact([intensity01])` | Plays a dynamic collision thud/smash SFX (`0.1`–`1.0`). |
 | `audio.playChime()` | Plays an ascending harmonic reward chord (deliveries & stunt jumps). |
 | `audio.playExplosion()` | Plays a sub-bass shockwave boom SFX. |

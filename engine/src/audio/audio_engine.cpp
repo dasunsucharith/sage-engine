@@ -85,6 +85,8 @@ struct AudioEngine::Impl {
     // One-shot trigger mailboxes
     std::atomic<float> triggerImpact{0.0f};
     std::atomic<float> triggerShiftPop{0.0f};
+    std::atomic<float> triggerFootstep{0.0f};
+    std::atomic<int> triggerFootSurface{0};
     std::atomic<bool> triggerChime{false};
     std::atomic<bool> triggerExplosion{false};
 
@@ -113,10 +115,16 @@ struct AudioEngine::Impl {
     SvfFilter windFilter{};
     SvfFilter driftFilter{};
     SvfFilter popFilter{};
+    SvfFilter footFilter{};
 
     // Active one-shot envelopes
     float popEnv = 0.0f;
     float popCooldown = 0.0f;
+
+    float footEnv = 0.0f;
+    float footPhase = 0.0f;
+    float footFreq = 110.0f;
+    int footSurface = 0;
 
     float impactEnv = 0.0f;
     float impactFreq = 140.0f;
@@ -159,6 +167,13 @@ struct AudioEngine::Impl {
         }
         if (const float pop = self->triggerShiftPop.exchange(0.0f, std::memory_order_relaxed); pop > 0.01f) {
             self->popEnv = std::max(self->popEnv, std::clamp(pop, 0.35f, 1.0f));
+        }
+        if (const float step = self->triggerFootstep.exchange(0.0f, std::memory_order_relaxed); step > 0.01f) {
+            self->footEnv = std::clamp(step, 0.15f, 1.0f);
+            self->footSurface = self->triggerFootSurface.load(std::memory_order_relaxed);
+            self->footPhase = 0.0f;
+            const float jitter = 0.90f + 0.20f * (0.5f + 0.5f * self->nextNoise());
+            self->footFreq = (self->footSurface == 2 ? 128.0f : (self->footSurface == 0 ? 105.0f : 82.0f)) * jitter;
         }
         if (self->triggerChime.exchange(false, std::memory_order_relaxed)) {
             self->chimeTime = 0.0f;
@@ -329,7 +344,39 @@ struct AudioEngine::Impl {
                 self->explosionEnv *= std::exp(-3.2f * dt);
             }
 
-            const float sharedFx = popSig + boostRoar + turboWhine + driftSig + impactSig + chimeSig + expSig;
+            // Procedural surface-aware footstep synth (0=Asphalt, 1=Grass/Sand, 2=Wood Pier, 3=Water Splash)
+            float footSig = 0.0f;
+            if (self->footEnv > 0.002f) {
+                self->footPhase += self->footFreq * dt;
+                if (self->footPhase >= 1.0f) self->footPhase -= 1.0f;
+                const float thump = std::sin(self->footPhase * kTwoPi);
+                float decay = 28.0f;
+                if (self->footSurface == 1) {
+                    // Soft grass / sandy crunch
+                    const float crunch = self->footFilter.processBandpass(white, 1350.0f, 0.9f, self->sampleRate);
+                    footSig = (thump * 0.22f + crunch * 0.78f) * self->footEnv * 0.34f;
+                    decay = 20.0f;
+                } else if (self->footSurface == 2) {
+                    // Hollow wooden Marina Pier board thump
+                    const float wood = self->footFilter.processBandpass(thump + white * 0.22f, 240.0f, 2.2f, self->sampleRate);
+                    footSig = (thump * 0.58f + wood * 0.75f) * self->footEnv * 0.42f;
+                    decay = 24.0f;
+                } else if (self->footSurface == 3) {
+                    // Shallow water splash
+                    const float splash = self->footFilter.processBandpass(white, 920.0f + self->footEnv * 750.0f, 0.75f, self->sampleRate);
+                    footSig = (splash * 0.85f + self->lpNoise * 0.30f) * self->footEnv * 0.38f;
+                    decay = 11.5f;
+                } else {
+                    // Crisp sneaker sole on asphalt / concrete
+                    const float scuff = self->footFilter.processBandpass(white, 780.0f, 1.2f, self->sampleRate);
+                    footSig = (thump * 0.52f + scuff * 0.48f) * self->footEnv * 0.32f;
+                    decay = 32.0f;
+                }
+                self->footFreq = std::max(42.0f, self->footFreq - 380.0f * dt);
+                self->footEnv *= std::exp(-decay * dt);
+            }
+
+            const float sharedFx = popSig + boostRoar + turboWhine + driftSig + impactSig + chimeSig + expSig + footSig;
             const float left  = std::tanh((engL + windBand * windVol + sharedFx) * gain);
             const float right = std::tanh((engR + (windBand * 0.85f + self->lpNoise2 * 0.15f) * windVol + sharedFx) * gain);
             out[i * 2 + 0] = left;
@@ -397,6 +444,11 @@ void AudioEngine::setVehicleState(float rpm01, float throttle01, float drift01, 
 
 void AudioEngine::playShiftPop(float intensity01) {
     m_impl->triggerShiftPop.store(std::clamp(intensity01, 0.2f, 1.0f), std::memory_order_relaxed);
+}
+
+void AudioEngine::playFootstep(int surface, float intensity01) {
+    m_impl->triggerFootSurface.store(std::clamp(surface, 0, 3), std::memory_order_relaxed);
+    m_impl->triggerFootstep.store(std::clamp(intensity01, 0.15f, 1.0f), std::memory_order_relaxed);
 }
 
 void AudioEngine::playImpact(float intensity01) {

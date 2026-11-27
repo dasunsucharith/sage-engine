@@ -52,12 +52,19 @@ struct Entity {
     // Water volume metadata (for EntityShape::Water buoyancy & realistic submersion)
     float waterSeabedY = -1.15f;
 
-    // glTF 2.0 animation playback state
+    // glTF 2.0 animation playback & real-time skeletal crossfade blending state (v1.2.0)
     std::string activeAnimation; // Empty = auto-play all animation tracks
     float animTime = 0.0f;
     float animSpeed = 1.0f;
     bool animPlaying = true;
     bool animLoop = true;
+
+    std::string prevAnimation;
+    float prevAnimTime = 0.0f;
+    float prevAnimSpeed = 1.0f;
+    bool prevAnimLoop = true;
+    float blendDuration = 0.0f;
+    float blendElapsed = 0.0f;
 };
 
 // Real-time dynamic point light (headlights, street lamps, neon arches, lighthouse beam!)
@@ -104,6 +111,7 @@ struct SkySettings {
     bool bloomEnabled = true;
     float bloomIntensity = 0.55f;
     bool ssaoEnabled = true;
+    bool fxaaEnabled = true;
     float exposure = 1.08f;
     float rainIntensity = 0.0f;
     float wetness = 0.0f;
@@ -141,7 +149,7 @@ public:
     bool setVisible(const std::string& id, bool visible);
     bool setWaterSeabed(const std::string& id, float seabedY);
 
-    bool playAnimation(const std::string& id, const std::string& clipName = "", bool loop = true, float speed = 1.0f);
+    bool playAnimation(const std::string& id, const std::string& clipName = "", bool loop = true, float speed = 1.0f, float blendSeconds = 0.18f);
     bool stopAnimation(const std::string& id);
     bool setAnimationSpeed(const std::string& id, float speed);
     void updateAnimations(float dt);
