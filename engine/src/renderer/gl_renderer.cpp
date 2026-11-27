@@ -206,6 +206,11 @@ uniform float uAmbientIntensity;
 uniform float uFogStart;
 uniform float uFogEnd;
 
+#define MAX_POINT_LIGHTS 16
+uniform int uPointLightCount;
+uniform vec4 uPointLightPosRadius[MAX_POINT_LIGHTS];
+uniform vec4 uPointLightColorInt[MAX_POINT_LIGHTS];
+
 out vec4 FragColor;
 
 float hash21(vec2 p) {
@@ -303,6 +308,25 @@ void main() {
 
     vec3 color = hemiAmbient + directDiffuse + specular + rim + emissiveTerm;
 
+    // Real-time Dynamic Point Lights (headlights, neon arches, pier lanterns, lighthouse beam!)
+    for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        if (i >= uPointLightCount) break;
+        vec3 lp = uPointLightPosRadius[i].xyz;
+        float lr = max(uPointLightPosRadius[i].w, 0.5);
+        vec3 lc = uPointLightColorInt[i].rgb * uPointLightColorInt[i].w;
+        vec3 toL = lp - vWorldPos;
+        float d = length(toL);
+        if (d < lr) {
+            vec3 plDir = toL / max(d, 0.001);
+            float att = 1.0 - (d / lr);
+            att = att * att;
+            float pNdotL = max(dot(N, plDir), 0.0);
+            vec3 pH = normalize(plDir + V);
+            float pSpec = pow(max(dot(N, pH), 0.0), max(shininess * 0.6, 12.0)) * specStrength * 0.85;
+            color += (albedo * (1.0 - 0.4 * uMetallic) * pNdotL + specTint * pSpec) * lc * att;
+        }
+    }
+
     float dist = length(uCameraPos - vWorldPos);
     float fogFactor = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1.0), 0.0, 1.0);
     color = mix(color, uSkyHorizon, fogFactor * fogFactor * 0.85);
@@ -365,6 +389,11 @@ uniform vec3 uSkyHorizon;
 uniform float uFogStart;
 uniform float uFogEnd;
 
+#define MAX_POINT_LIGHTS 16
+uniform int uWaterPointLightCount;
+uniform vec4 uWaterPointLightPosRadius[MAX_POINT_LIGHTS];
+uniform vec4 uWaterPointLightColorInt[MAX_POINT_LIGHTS];
+
 out vec4 FragColor;
 
 void main() {
@@ -402,6 +431,24 @@ void main() {
     float specBroad = pow(max(dot(N, H), 0.0), 48.0) * 0.65;
     float specSharp = pow(max(dot(N, H), 0.0), 320.0) * 3.20;
     color += uSunColor * (specBroad + specSharp);
+
+    // Dynamic point-light shimmer & colored reflections across the animated water ripples!
+    for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
+        if (i >= uWaterPointLightCount) break;
+        vec3 lp = uWaterPointLightPosRadius[i].xyz;
+        float lr = max(uWaterPointLightPosRadius[i].w * 1.35, 1.0);
+        vec3 lc = uWaterPointLightColorInt[i].rgb * uWaterPointLightColorInt[i].w;
+        vec3 toL = lp - vWorldPos;
+        float d = length(toL);
+        if (d < lr) {
+            vec3 plDir = toL / max(d, 0.001);
+            float att = 1.0 - (d / lr);
+            att = att * att;
+            vec3 pH = normalize(plDir + V);
+            float wSpec = pow(max(dot(N, pH), 0.0), 72.0) * 2.2 + max(dot(N, plDir), 0.0) * 0.25;
+            color += lc * wSpec * att;
+        }
+    }
 
     // Animated shoreline surf foam + subtle wave-crest whitecaps
     float foamWave = sin(edgeDist * 55.0 - uTime * 4.2 + sin(p.x * 0.35 + p.y * 0.35) * 2.5);
@@ -937,7 +984,7 @@ public:
     bool initialize(int viewportWidth, int viewportHeight) override {
         if (!gl::loadFunctions()) return false;
 
-        m_info.backendName = "OpenGL 3.3 Core (HDR Bloom + Soft Shadows + 3D Ocean + glTF Anim)";
+        m_info.backendName = "OpenGL 3.3 Core (HDR Bloom + Point Lights + 3D Ocean + Particles + Soft Shadows)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
@@ -1022,6 +1069,9 @@ public:
         m_uAmbientIntensity = gl::getUniformLocation(m_litProgram, "uAmbientIntensity");
         m_uFogStart = gl::getUniformLocation(m_litProgram, "uFogStart");
         m_uFogEnd = gl::getUniformLocation(m_litProgram, "uFogEnd");
+        m_uPointLightCount = gl::getUniformLocation(m_litProgram, "uPointLightCount");
+        m_uPointLightPosRadius = gl::getUniformLocation(m_litProgram, "uPointLightPosRadius");
+        m_uPointLightColorInt = gl::getUniformLocation(m_litProgram, "uPointLightColorInt");
 
         m_waterModel = gl::getUniformLocation(m_waterProgram, "uModel");
         m_waterViewProj = gl::getUniformLocation(m_waterProgram, "uViewProj");
@@ -1034,6 +1084,9 @@ public:
         m_waterSkyHorizon = gl::getUniformLocation(m_waterProgram, "uSkyHorizon");
         m_waterFogStart = gl::getUniformLocation(m_waterProgram, "uFogStart");
         m_waterFogEnd = gl::getUniformLocation(m_waterProgram, "uFogEnd");
+        m_waterPointLightCount = gl::getUniformLocation(m_waterProgram, "uWaterPointLightCount");
+        m_waterPointLightPosRadius = gl::getUniformLocation(m_waterProgram, "uWaterPointLightPosRadius");
+        m_waterPointLightColorInt = gl::getUniformLocation(m_waterProgram, "uWaterPointLightColorInt");
 
         m_bloomExtractTex = gl::getUniformLocation(m_bloomExtractProgram, "uHdrTex");
         m_bloomBlurImage = gl::getUniformLocation(m_bloomBlurProgram, "uImage");
@@ -1301,6 +1354,23 @@ public:
             glBindTexture(GL_TEXTURE_2D, m_shadowTex);
         }
 
+        // Pack up to 16 nearest/active dynamic point lights for HDR lit + water shaders
+        constexpr int kMaxPointLights = 16;
+        glm::vec4 lightPosRad[kMaxPointLights]{};
+        glm::vec4 lightColInt[kMaxPointLights]{};
+        const auto& allLights = world.pointLights();
+        const int lightCount = static_cast<int>(std::min<std::size_t>(allLights.size(), kMaxPointLights));
+        for (int i = 0; i < lightCount; ++i) {
+            const PointLight& pl = allLights[static_cast<std::size_t>(i)];
+            lightPosRad[i] = glm::vec4(pl.position.x, pl.position.y, pl.position.z, pl.radius);
+            lightColInt[i] = glm::vec4(pl.color.r, pl.color.g, pl.color.b, pl.intensity);
+        }
+        gl::uniform1i(m_uPointLightCount, lightCount);
+        if (lightCount > 0) {
+            gl::uniform4fv(m_uPointLightPosRadius, lightCount, &lightPosRad[0].x);
+            gl::uniform4fv(m_uPointLightColorInt, lightCount, &lightColInt[0].x);
+        }
+
         m_waterEntitiesScratch.clear();
 
         for (const Entity& e : world.entities()) {
@@ -1365,6 +1435,11 @@ public:
             gl::uniform3f(m_waterSkyHorizon, sky.skyHorizonColor.r, sky.skyHorizonColor.g, sky.skyHorizonColor.b);
             gl::uniform1f(m_waterFogStart, sky.fogStart);
             gl::uniform1f(m_waterFogEnd, sky.fogEnd);
+            gl::uniform1i(m_waterPointLightCount, lightCount);
+            if (lightCount > 0) {
+                gl::uniform4fv(m_waterPointLightPosRadius, lightCount, &lightPosRad[0].x);
+                gl::uniform4fv(m_waterPointLightColorInt, lightCount, &lightColInt[0].x);
+            }
 
             gl::bindVertexArray(m_waterMesh.vao);
             for (const Entity* w : m_waterEntitiesScratch) {
@@ -1374,6 +1449,30 @@ public:
                 glDrawElements(GL_TRIANGLES, m_waterMesh.indexCount, GL_UNSIGNED_INT, nullptr);
             }
             glDisable(GL_BLEND);
+        }
+
+        // --- Pass 3B: 3D HDR Particle Effects (Water Splashes, Drift Smoke, Nitro Sparks) ---
+        if (!world.particles().empty()) {
+            gl::useProgram(m_litProgram);
+            gl::uniform1i(m_uIsGround, 0);
+            gl::uniform1i(m_uHasTexture, 0);
+            gl::bindVertexArray(m_sphereMesh.vao);
+            for (const Particle3D& p : world.particles()) {
+                const float lifeFrac = 1.0f - std::clamp(p.age / std::max(p.maxLife, 0.01f), 0.0f, 1.0f);
+                const float s = p.size * (0.25f + 0.85f * lifeFrac);
+                glm::mat4 pMat(1.0f);
+                pMat = glm::translate(pMat, glm::vec3(p.position.x, p.position.y, p.position.z));
+                pMat = glm::scale(pMat, glm::vec3(s, s, s));
+                gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(pMat));
+                const glm::vec3 col(p.color.r, p.color.g, p.color.b);
+                const glm::vec3 em = p.emissive ? col * (1.8f * lifeFrac) : col * (0.35f * lifeFrac);
+                gl::uniform3f(m_uBaseColor, col.r, col.g, col.b);
+                gl::uniform3f(m_uEmissive, em.r, em.g, em.b);
+                gl::uniform1f(m_uMetallic, 0.0f);
+                gl::uniform1f(m_uRoughness, 0.7f);
+                gl::uniform1f(m_uPulse, 0.0f);
+                glDrawElements(GL_TRIANGLES, m_sphereMesh.indexCount, GL_UNSIGNED_INT, nullptr);
+            }
         }
 
         // --- Pass 4 & 5: HDR Bloom Blur + ACES Filmic Tone-Mapping Composite ---
@@ -1682,11 +1781,13 @@ private:
     GLint m_uCameraPos = -1, m_uSunDir = -1, m_uSunColor = -1;
     GLint m_uSkyZenith = -1, m_uSkyHorizon = -1, m_uGroundAmbient = -1, m_uAmbientIntensity = -1;
     GLint m_uFogStart = -1, m_uFogEnd = -1;
+    GLint m_uPointLightCount = -1, m_uPointLightPosRadius = -1, m_uPointLightColorInt = -1;
 
     GLuint m_waterProgram = 0;
     GLint m_waterModel = -1, m_waterViewProj = -1, m_waterTime = -1, m_waterShallow = -1;
     GLint m_waterCamPos = -1, m_waterSunDir = -1, m_waterSunColor = -1;
     GLint m_waterSkyZenith = -1, m_waterSkyHorizon = -1, m_waterFogStart = -1, m_waterFogEnd = -1;
+    GLint m_waterPointLightCount = -1, m_waterPointLightPosRadius = -1, m_waterPointLightColorInt = -1;
 
     GLuint m_bloomExtractProgram = 0, m_bloomBlurProgram = 0, m_compositeProgram = 0;
     GLint m_bloomExtractTex = -1, m_bloomBlurImage = -1, m_bloomBlurDir = -1;

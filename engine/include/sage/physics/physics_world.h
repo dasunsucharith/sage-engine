@@ -47,6 +47,7 @@ public:
     void clearBodies();
 
     bool addStaticBox(const std::string& entityId, Vec3 pos, Vec3 halfExtents, Vec3 rotDeg = {});
+    bool addStaticDeck(const std::string& entityId, Vec3 pos, Vec3 halfExtents, float yawDeg = 0.0f);
     bool addStaticCylinder(const std::string& entityId, Vec3 basePos, float radius, float height);
     bool addStaticRamp(const std::string& entityId, Vec3 pos, float width, float height, float length, float yawDeg);
 
@@ -86,7 +87,7 @@ public:
     CircleCollisionResult resolveCircleXZ(
         float x, float y, float z, float radius, float vx, float vz, float bounce = 0.32f) const;
 
-    // Samples elevation across ALL registered 3D stunt ramps in the world!
+    // Samples elevation across ALL registered 3D stunt ramps AND drivable decks/piers!
     RampSampleResult sampleRampSurface(float x, float z) const;
 
     float getLinearSpeed(const std::string& entityId) const;
@@ -95,7 +96,7 @@ public:
 
     RaycastHit raycast(Vec3 origin, Vec3 direction, float maxDistance) const;
 
-    void step(float dt, World& world);
+    void step(float dt, World& world, float elapsedSeconds = 0.0f);
 
     std::size_t bodyCount() const;
     std::size_t dynamicBodyCount() const;

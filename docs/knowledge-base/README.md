@@ -15,6 +15,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [007](007-gltf-animations-shadows-and-lua-hud.md) | Real-Time Soft Shadows, glTF 2.0 Keyframe Animations & Lua Game HUDs | Milestone `v0.5` Implementation |
 | [008](008-auto-colliders-menus-and-multi-biome-worlds.md) | Declarative JSON Auto-Colliders, Game Menus & Multi-Biome Worlds | Milestone `v0.6` Implementation |
 | [009](009-hdr-bloom-water-shader-and-zfighting-fix.md) | Eliminating Road Z-Fighting, HDR Bloom Post-Processing & Animated 3D Ocean Water | Milestone `v0.7` Implementation |
+| [010](010-realistic-water-physics-point-lights-and-particles.md) | Realistic Water Physics, Archimedes Buoyancy, Dynamic Point Lights & 3D Particles | Milestone `v0.8` Implementation |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:

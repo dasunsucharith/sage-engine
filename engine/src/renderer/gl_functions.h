@@ -120,6 +120,7 @@ using PFNGLUNIFORM1IPROC = void(APIENTRYP)(GLint location, GLint v0);
 using PFNGLUNIFORM1FPROC = void(APIENTRYP)(GLint location, GLfloat v0);
 using PFNGLUNIFORM2FPROC = void(APIENTRYP)(GLint location, GLfloat v0, GLfloat v1);
 using PFNGLUNIFORM3FPROC = void(APIENTRYP)(GLint location, GLfloat v0, GLfloat v1, GLfloat v2);
+using PFNGLUNIFORM4FVPROC = void(APIENTRYP)(GLint location, GLsizei count, const GLfloat* value);
 using PFNGLUNIFORMMATRIX4FVPROC = void(APIENTRYP)(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);
 
 using PFNGLGENVERTEXARRAYSPROC = void(APIENTRYP)(GLsizei n, GLuint* arrays);
@@ -169,6 +170,7 @@ extern PFNGLUNIFORM1IPROC uniform1i;
 extern PFNGLUNIFORM1FPROC uniform1f;
 extern PFNGLUNIFORM2FPROC uniform2f;
 extern PFNGLUNIFORM3FPROC uniform3f;
+extern PFNGLUNIFORM4FVPROC uniform4fv;
 extern PFNGLUNIFORMMATRIX4FVPROC uniformMatrix4fv;
 
 extern PFNGLGENVERTEXARRAYSPROC genVertexArrays;

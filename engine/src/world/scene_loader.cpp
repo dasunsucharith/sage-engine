@@ -135,6 +135,9 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
                 }
                 const Color3 color = readColor3(e, "color", {0.8f, 0.8f, 0.8f});
                 world.spawnEntity(id, shape, pos, scale, color);
+                if (shape == EntityShape::Water && e.contains("seabedY") && e["seabedY"].is_number()) {
+                    world.setWaterSeabed(id, e["seabedY"].get<float>());
+                }
             }
 
             world.setRotation(id, rot.x, rot.y, rot.z);
@@ -160,6 +163,10 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
                     const float l = col.value("length", 7.5f * scale.z);
                     physics->addStaticRamp(colId, {pos.x, pos.y + offsetY, pos.z}, w, h, l, rot.y);
                     ++colliderCount;
+                } else if (colType == "deck") {
+                    const Vec3 he = readVec3(col, "halfExtents", {scale.x * 0.5f, scale.y * 0.5f, scale.z * 0.5f});
+                    physics->addStaticDeck(colId, {pos.x, pos.y + offsetY, pos.z}, he, rot.y);
+                    ++colliderCount;
                 } else {
                     const Vec3 he = readVec3(col, "halfExtents", {scale.x * 0.5f, scale.y * 0.5f, scale.z * 0.5f});
                     physics->addStaticBox(colId, {pos.x, pos.y + offsetY, pos.z}, he, rot);
@@ -169,8 +176,27 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
         }
     }
 
+    // Optional declarative dynamic point lights in JSON ("lights": [...])
+    std::size_t lightCount = 0;
+    if (root.contains("lights") && root["lights"].is_array()) {
+        for (std::size_t i = 0; i < root["lights"].size(); ++i) {
+            const auto& l = root["lights"][i];
+            if (!l.is_object()) {
+                continue;
+            }
+            const std::string lid = l.value("id", "scene_light_" + std::to_string(i));
+            const Vec3 pos = readVec3(l, "position", {0.0f, 3.0f, 0.0f});
+            const Color3 col = readColor3(l, "color", {1.0f, 0.9f, 0.7f});
+            const float radius = l.value("radius", 18.0f);
+            const float intensity = l.value("intensity", 2.0f);
+            world.setPointLight(lid, pos, col, radius, intensity);
+            ++lightCount;
+        }
+    }
+
     std::cout << "[SAGE][Scene] Loaded \"" << sceneName << "\" from " << scenePath.string()
-              << " (" << loadedCount << " entities, " << colliderCount << " solid collider(s))\n";
+              << " (" << loadedCount << " entities, " << colliderCount << " solid collider(s), "
+              << lightCount << " dynamic light(s))\n";
     return true;
 }
 

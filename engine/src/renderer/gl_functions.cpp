@@ -26,6 +26,7 @@ PFNGLUNIFORM1IPROC uniform1i = nullptr;
 PFNGLUNIFORM1FPROC uniform1f = nullptr;
 PFNGLUNIFORM2FPROC uniform2f = nullptr;
 PFNGLUNIFORM3FPROC uniform3f = nullptr;
+PFNGLUNIFORM4FVPROC uniform4fv = nullptr;
 PFNGLUNIFORMMATRIX4FVPROC uniformMatrix4fv = nullptr;
 
 PFNGLGENVERTEXARRAYSPROC genVertexArrays = nullptr;
@@ -94,6 +95,7 @@ bool loadFunctions() {
     ok &= loadOne(uniform1f, "glUniform1f");
     ok &= loadOne(uniform2f, "glUniform2f");
     ok &= loadOne(uniform3f, "glUniform3f");
+    ok &= loadOne(uniform4fv, "glUniform4fv");
     ok &= loadOne(uniformMatrix4fv, "glUniformMatrix4fv");
 
     ok &= loadOne(genVertexArrays, "glGenVertexArrays");

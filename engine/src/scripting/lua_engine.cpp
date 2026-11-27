@@ -171,6 +171,34 @@ struct LuaEngine::Impl {
                 }
             }
         });
+        worldTbl.set_function("setPointLight", [this](
+            const std::string& id, float x, float y, float z, float r, float g, float b,
+            sol::optional<float> radius, sol::optional<float> intensity) {
+            if (world) {
+                world->setPointLight(id, {x, y, z}, {r, g, b}, radius.value_or(18.0f), intensity.value_or(2.0f));
+            }
+        });
+        worldTbl.set_function("removePointLight", [this](const std::string& id) -> bool {
+            return world ? world->removePointLight(id) : false;
+        });
+        worldTbl.set_function("spawnParticles", [this](
+            float x, float y, float z, float vx, float vy, float vz, float r, float g, float b, int count,
+            sol::optional<float> size, sol::optional<float> life, sol::optional<bool> emissive, sol::optional<float> gravity) {
+            if (world) {
+                world->spawnParticles(
+                    {x, y, z}, {vx, vy, vz}, {r, g, b}, count,
+                    size.value_or(0.25f), life.value_or(0.65f), emissive.value_or(false), gravity.value_or(14.0f));
+            }
+        });
+        worldTbl.set_function("sampleWater", [this](float x, float z)
+            -> std::tuple<bool, float, float, float, float> {
+            if (!world) {
+                return {false, -10.0f, 0.0f, 0.0f, 0.0f};
+            }
+            const float t = callbacks.getTimeSeconds ? static_cast<float>(callbacks.getTimeSeconds()) : 0.0f;
+            const WaterSampleResult w = world->sampleWater(x, z, t);
+            return {w.inWater, w.surfaceY, w.seabedY, w.depth, w.shoreDist};
+        });
         worldTbl.set_function("playAnimation", [this](
             const std::string& id,
             sol::optional<std::string> clipName,
@@ -221,6 +249,10 @@ struct LuaEngine::Impl {
         sol::table physTbl = state.create_named_table("physics");
         physTbl.set_function("addStaticBox", [this](const std::string& id, float px, float py, float pz, float hx, float hy, float hz) -> bool {
             return physics ? physics->addStaticBox(id, {px, py, pz}, {hx, hy, hz}) : false;
+        });
+        physTbl.set_function("addStaticDeck", [this](
+            const std::string& id, float px, float py, float pz, float hx, float hy, float hz, sol::optional<float> yawDeg) -> bool {
+            return physics ? physics->addStaticDeck(id, {px, py, pz}, {hx, hy, hz}, yawDeg.value_or(0.0f)) : false;
         });
         physTbl.set_function("addStaticCylinder", [this](const std::string& id, float px, float py, float pz, float radius, float height) -> bool {
             return physics ? physics->addStaticCylinder(id, {px, py, pz}, radius, height) : false;

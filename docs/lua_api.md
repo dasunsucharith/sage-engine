@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (`v0.7.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **HDR Bloom & Animated 3D Ocean Water**, **Soft Shadows & Animated glTF 2.0 (`.glb`)**, **Jolt Physics 5.7 + JSON Auto-Colliders**, **miniaudio 0.11**, and **Lua Menus & HUDs (`ui.*`)**.
+> **Status:** Live (`v0.8.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **Dynamic Point Lights**, **3D Particles**, **Realistic Water Submersion & Jolt Buoyancy**, **HDR Bloom & Animated 3D Ocean Water**, **Soft Shadows & Animated glTF 2.0 (`.glb`)**, **Jolt Physics 5.7 + JSON Auto-Colliders**, **miniaudio 0.11**, and **Lua Menus & HUDs (`ui.*`)**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -39,7 +39,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 
 ---
 
-## Implemented Namespaces (`v0.7`)
+## Implemented Namespaces (`v0.8`)
 
 ### `sage`
 | Function | Description |
@@ -79,6 +79,10 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setVisible(id, visible)` | Shows or hides an entity without destroying it. |
 | `world.setTimeOfDay(hours)` | Dynamically updates sun angle, sky gradient, cloud lighting, ambient fill, and horizon fog (`0.0`–`24.0`). |
 | `world.setBloom(enabled [, intensity])` | Toggles real-time HDR `RGBA16F` Bloom post-processing and optionally sets bloom strength (`0.0`–`2.0`, default `0.55`). |
+| `world.setPointLight(id, x, y, z, r, g, b [, radius, intensity])` | Creates or updates a real-time dynamic point light (up to 16 active) that illuminates 3D meshes, roads, and reflects off animated ocean waves. |
+| `world.removePointLight(id)` | Removes a dynamic point light by `id`. |
+| `world.spawnParticles(x, y, z, vx, vy, vz, r, g, b, count [, size, life, emissive, gravity])` | Emits a burst of 3D particles (water splashes, tire drift smoke, nitro sparks, debris) with optional HDR emission and gravity. |
+| `world.sampleWater(x, z)` | Queries animated water volumes at `(x, z)` and returns `inWater, waveSurfaceY, seabedY, waterDepth, shoreDist` (exact match to the GPU wave shader). |
 | `world.playAnimation(id [, clipName, loop, speed])` | Plays a glTF 2.0 keyframe animation clip on a `.glb` model (`""` plays clip 0). |
 | `world.stopAnimation(id)` | Pauses glTF animation playback on an entity. |
 | `world.setAnimationSpeed(id, speed)` | Adjusts glTF animation playback speed multiplier. |
@@ -96,6 +100,7 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | Function | Description |
 | :--- | :--- |
 | `physics.addStaticBox(id, px, py, pz, hx, hy, hz)` | Registers an immovable 3D box collider (ground, walls, buildings) with half-extents `(hx, hy, hz)`. |
+| `physics.addStaticDeck(id, px, py, pz, hx, hy, hz [, yawDeg])` | Registers a drivable elevated deck/pier/bridge surface (solid for Jolt objects and sampled by `sampleRampSurface`, without blocking vehicle entry horizontally). |
 | `physics.addStaticCylinder(id, px, py, pz, radius, height)` | Registers a solid vertical cylinder collider (tree trunks, street lamps, wind turbine masts, lighthouses). |
 | `physics.addStaticRamp(id, px, py, pz, w, h, l, yawDeg)` | Registers a 3D convex-hull ramp wedge collider so physics objects can roll up and launch off ramps. |
 | `physics.addDynamicBox(id, px, py, pz, hx, hy, hz [, mass, restitution, friction])` | Attaches a full 3D tumbling box rigid body to `id`. |

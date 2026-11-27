@@ -157,6 +157,16 @@ struct StaticRampInfo {
     float yawDeg = 0.0f;
 };
 
+struct StaticDeckInfo {
+    float cx = 0.0f;
+    float cz = 0.0f;
+    float topY = 0.0f;
+    float hx = 2.0f;
+    float hz = 2.0f;
+    float yawRad = 0.0f;
+    float yawDeg = 0.0f;
+};
+
 struct PhysicsWorld::Impl {
     bool initialized = false;
     BPLayerInterfaceImpl broadPhaseLayerInterface;
@@ -171,6 +181,7 @@ struct PhysicsWorld::Impl {
     std::unordered_map<JPH::uint32, std::string> entityByBodyRaw;
     std::vector<StaticObstacle2D> staticObstacles;
     std::vector<StaticRampInfo> staticRamps;
+    std::vector<StaticDeckInfo> staticDecks;
 
     void removeExisting(const std::string& entityId) {
         const auto it = bodiesByEntity.find(entityId);
@@ -265,6 +276,7 @@ void PhysicsWorld::clearBodies() {
     m_impl->entityByBodyRaw.clear();
     m_impl->staticObstacles.clear();
     m_impl->staticRamps.clear();
+    m_impl->staticDecks.clear();
 }
 
 bool PhysicsWorld::addStaticBox(const std::string& entityId, Vec3 pos, Vec3 halfExtents, Vec3 rotDeg) {
@@ -310,6 +322,42 @@ bool PhysicsWorld::addStaticBox(const std::string& entityId, Vec3 pos, Vec3 half
         obs.yawRad = glm::radians(rotDeg.y);
         m_impl->staticObstacles.push_back(std::move(obs));
     }
+    return true;
+}
+
+bool PhysicsWorld::addStaticDeck(const std::string& entityId, Vec3 pos, Vec3 halfExtents, float yawDeg) {
+    if (!m_impl->initialized) {
+        return false;
+    }
+    m_impl->removeExisting(entityId);
+
+    const JPH::Vec3 he(
+        std::max(halfExtents.x, 0.05f),
+        std::max(halfExtents.y, 0.05f),
+        std::max(halfExtents.z, 0.05f));
+
+    JPH::BodyCreationSettings settings(
+        new JPH::BoxShape(he),
+        JPH::RVec3(pos.x, pos.y, pos.z),
+        eulerDegToJoltQuat({0.0f, yawDeg, 0.0f}),
+        JPH::EMotionType::Static,
+        Layers::NON_MOVING);
+    settings.mFriction = 0.78f;
+    settings.mRestitution = 0.15f;
+
+    auto& bi = m_impl->physicsSystem->GetBodyInterface();
+    const JPH::BodyID bid = bi.CreateAndAddBody(settings, JPH::EActivation::DontActivate);
+    if (bid.IsInvalid()) {
+        return false;
+    }
+
+    m_impl->bodiesByEntity[entityId] = {bid, false};
+    m_impl->entityByBodyRaw[bid.GetIndexAndSequenceNumber()] = entityId;
+    m_impl->staticDecks.push_back({
+        pos.x, pos.z, pos.y + he.GetY(),
+        he.GetX(), he.GetZ(),
+        glm::radians(yawDeg), yawDeg
+    });
     return true;
 }
 
@@ -728,6 +776,23 @@ RampSampleResult PhysicsWorld::sampleRampSurface(float x, float z) const {
             }
         }
     }
+    // Also check drivable elevated decks (wooden piers, bridges, platforms — rampHeight == 0.0f)
+    for (const StaticDeckInfo& d : m_impl->staticDecks) {
+        const float c = std::cos(d.yawRad);
+        const float s = std::sin(d.yawRad);
+        const float dx = x - d.cx;
+        const float dz = z - d.cz;
+        const float localX = dx * c - dz * s;
+        const float localZ = dx * s + dz * c;
+        if (std::abs(localX) <= d.hx && std::abs(localZ) <= d.hz) {
+            if (!best.onRamp || d.topY > best.groundY) {
+                best.onRamp = true;
+                best.groundY = d.topY;
+                best.rampHeight = 0.0f;
+                best.rampYawDeg = d.yawDeg;
+            }
+        }
+    }
     return best;
 }
 
@@ -788,15 +853,49 @@ RaycastHit PhysicsWorld::raycast(Vec3 origin, Vec3 direction, float maxDistance)
     return out;
 }
 
-void PhysicsWorld::step(float dt, World& world) {
+void PhysicsWorld::step(float dt, World& world, float elapsedSeconds) {
     if (!m_impl->initialized) {
         return;
+    }
+
+    auto& bi = m_impl->physicsSystem->GetBodyInterface();
+
+    // Real Archimedes water buoyancy & hydrodynamic drag for Jolt dynamic bodies in 3D water!
+    const JPH::Vec3 gravity = m_impl->physicsSystem->GetGravity();
+    const float gravityMag = std::max(std::abs(gravity.GetY()), 1.0f);
+    for (const auto& [entityId, entry] : m_impl->bodiesByEntity) {
+        if (!entry.isDynamic) {
+            continue;
+        }
+        const JPH::RVec3 p = bi.GetCenterOfMassPosition(entry.bodyId);
+        const float px = static_cast<float>(p.GetX());
+        const float py = static_cast<float>(p.GetY());
+        const float pz = static_cast<float>(p.GetZ());
+
+        const WaterSampleResult ws = world.sampleWater(px, pz, elapsedSeconds);
+        if (ws.inWater && py < ws.surfaceY + 0.50f) {
+            const float submersion = std::clamp((ws.surfaceY + 0.50f - py) / 1.05f, 0.0f, 1.0f);
+            JPH::Vec3 vel = bi.GetLinearVelocity(entry.bodyId);
+            JPH::Vec3 angVel = bi.GetAngularVelocity(entry.bodyId);
+
+            // Buoyant upward acceleration balances gravity (~1.42x gravity when submerged -> floats & bobs!)
+            const float buoyAccel = gravityMag * (1.42f * submersion);
+            vel.SetY(vel.GetY() + buoyAccel * dt);
+
+            // Hydrodynamic water drag slows splashing objects cleanly
+            const float linDrag = std::exp(-3.4f * submersion * dt);
+            const float angDrag = std::exp(-2.8f * submersion * dt);
+            vel = JPH::Vec3(vel.GetX() * linDrag, vel.GetY() * std::exp(-2.6f * submersion * dt), vel.GetZ() * linDrag);
+            angVel *= angDrag;
+
+            bi.ActivateBody(entry.bodyId);
+            bi.SetLinearAndAngularVelocity(entry.bodyId, vel, angVel);
+        }
     }
 
     constexpr int kCollisionSteps = 1;
     m_impl->physicsSystem->Update(dt, kCollisionSteps, m_impl->tempAllocator.get(), m_impl->jobSystem.get());
 
-    const auto& bi = m_impl->physicsSystem->GetBodyInterface();
     for (const auto& [entityId, entry] : m_impl->bodiesByEntity) {
         if (!entry.isDynamic) {
             continue;

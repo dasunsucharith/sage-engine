@@ -132,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v0.7.0 (HDR Bloom + 3D Animated Ocean Water + Sky Clouds + Open World)\n";
+    std::cout << "  SAGE Engine v0.8.0 (Dynamic Point Lights + 3D Particles + Realistic Water Buoyancy)\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -236,7 +236,8 @@ void Engine::fixedTick(double dt) {
     if (!m_freeFlyMode) {
         m_lua.tick(dt);
     }
-    m_physics.step(static_cast<float>(dt), m_world);
+    const float elapsed = static_cast<float>(Window::getTimeSeconds() - m_startTime);
+    m_physics.step(static_cast<float>(dt), m_world, elapsed);
     m_world.updateAnimations(static_cast<float>(dt));
 }
 
@@ -384,12 +385,13 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v0.7.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v0.8.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()
                       << " .glb model(s), " << m_physics.bodyCount()
-                      << " Jolt bodies).\n";
+                      << " Jolt bodies, " << m_world.pointLights().size()
+                      << " dynamic light(s)).\n";
             break;
         }
     }

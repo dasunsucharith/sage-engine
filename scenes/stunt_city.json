@@ -1,5 +1,5 @@
 {
-  "name": "SAGE v0.7 \u2014 HDR Open World (4 Biomes, 3D Animated Ocean Water, Sky Clouds & Bloom)",
+  "name": "SAGE v0.8 \u2014 Dynamic HDR Open World (Realistic Water Buoyancy, Point Lights, 3D Particles & 18 Models)",
   "version": 2,
   "sky": {
     "timeOfDay": 17.4,
@@ -20,12 +20,149 @@
     ],
     "fov": 60.0
   },
-  "entities": [
+  "lights": [
     {
-      "id": "world_ground_collider",
-      "type": "primitive_box",
+      "id": "arch_n_light",
       "position": [
         0.0,
+        6.2,
+        16.0
+      ],
+      "color": [
+        0.12,
+        0.88,
+        1.0
+      ],
+      "radius": 24.0,
+      "intensity": 2.4
+    },
+    {
+      "id": "arch_s_light",
+      "position": [
+        0.0,
+        6.2,
+        -16.0
+      ],
+      "color": [
+        1.0,
+        0.25,
+        0.68
+      ],
+      "radius": 24.0,
+      "intensity": 2.4
+    },
+    {
+      "id": "arch_e_light",
+      "position": [
+        16.0,
+        6.2,
+        0.0
+      ],
+      "color": [
+        0.18,
+        1.0,
+        0.58
+      ],
+      "radius": 24.0,
+      "intensity": 2.4
+    },
+    {
+      "id": "arch_w_light",
+      "position": [
+        -16.0,
+        6.2,
+        0.0
+      ],
+      "color": [
+        1.0,
+        0.72,
+        0.14
+      ],
+      "radius": 24.0,
+      "intensity": 2.4
+    },
+    {
+      "id": "gas_station_metro_light",
+      "position": [
+        -36.0,
+        4.5,
+        36.0
+      ],
+      "color": [
+        0.15,
+        0.9,
+        1.0
+      ],
+      "radius": 24.0,
+      "intensity": 2.6
+    },
+    {
+      "id": "gas_station_desert_light",
+      "position": [
+        -36.0,
+        4.5,
+        -36.0
+      ],
+      "color": [
+        1.0,
+        0.38,
+        0.65
+      ],
+      "radius": 24.0,
+      "intensity": 2.6
+    },
+    {
+      "id": "pier_light_mid",
+      "position": [
+        74.0,
+        2.2,
+        -88.0
+      ],
+      "color": [
+        1.0,
+        0.78,
+        0.36
+      ],
+      "radius": 22.0,
+      "intensity": 2.4
+    },
+    {
+      "id": "pier_light_end",
+      "position": [
+        86.0,
+        2.2,
+        -88.0
+      ],
+      "color": [
+        1.0,
+        0.8,
+        0.38
+      ],
+      "radius": 24.0,
+      "intensity": 2.8
+    },
+    {
+      "id": "lifeguard_light_1",
+      "position": [
+        62.0,
+        5.2,
+        -72.0
+      ],
+      "color": [
+        1.0,
+        0.82,
+        0.42
+      ],
+      "radius": 18.0,
+      "intensity": 1.8
+    }
+  ],
+  "entities": [
+    {
+      "id": "ground_col_west",
+      "type": "primitive_box",
+      "position": [
+        -72.0,
         -1.0,
         0.0
       ],
@@ -35,22 +172,154 @@
         0.0
       ],
       "scale": [
-        420.0,
+        276.0,
         2.0,
         420.0
       ],
       "color": [
-        0.12,
-        0.14,
-        0.16
+        0.1,
+        0.1,
+        0.1
       ],
       "visible": false,
       "collider": {
         "type": "box",
         "halfExtents": [
-          210.0,
+          138.0,
           1.0,
           210.0
+        ]
+      }
+    },
+    {
+      "id": "ground_col_east",
+      "type": "primitive_box",
+      "position": [
+        160.0,
+        -1.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        100.0,
+        2.0,
+        420.0
+      ],
+      "color": [
+        0.1,
+        0.1,
+        0.1
+      ],
+      "visible": false,
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          50.0,
+          1.0,
+          210.0
+        ]
+      }
+    },
+    {
+      "id": "ground_col_north",
+      "type": "primitive_box",
+      "position": [
+        88.0,
+        -1.0,
+        72.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        44.0,
+        2.0,
+        276.0
+      ],
+      "color": [
+        0.1,
+        0.1,
+        0.1
+      ],
+      "visible": false,
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          22.0,
+          1.0,
+          138.0
+        ]
+      }
+    },
+    {
+      "id": "ground_col_south",
+      "type": "primitive_box",
+      "position": [
+        88.0,
+        -1.0,
+        -160.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        44.0,
+        2.0,
+        100.0
+      ],
+      "color": [
+        0.1,
+        0.1,
+        0.1
+      ],
+      "visible": false,
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          22.0,
+          1.0,
+          50.0
+        ]
+      }
+    },
+    {
+      "id": "lagoon_seabed_col",
+      "type": "primitive_box",
+      "position": [
+        88.0,
+        -2.25,
+        -88.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        48.0,
+        2.0,
+        48.0
+      ],
+      "color": [
+        0.1,
+        0.1,
+        0.1
+      ],
+      "visible": false,
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          24.0,
+          1.0,
+          24.0
         ]
       }
     },
@@ -192,7 +461,7 @@
       "type": "primitive_plane",
       "position": [
         88.0,
-        -1.15,
+        -1.25,
         -88.0
       ],
       "scale": [
@@ -201,9 +470,9 @@
         46.0
       ],
       "color": [
-        0.32,
-        0.35,
-        0.28
+        0.3,
+        0.34,
+        0.27
       ]
     },
     {
@@ -211,7 +480,7 @@
       "type": "water",
       "position": [
         88.0,
-        -0.32,
+        -0.26,
         -88.0
       ],
       "scale": [
@@ -223,7 +492,8 @@
         0.06,
         0.58,
         0.7
-      ]
+      ],
+      "seabedY": -1.25
     },
     {
       "id": "ocean_east",
@@ -242,7 +512,8 @@
         0.04,
         0.44,
         0.62
-      ]
+      ],
+      "seabedY": -3.5
     },
     {
       "id": "ocean_west",
@@ -261,7 +532,8 @@
         0.04,
         0.44,
         0.62
-      ]
+      ],
+      "seabedY": -3.5
     },
     {
       "id": "ocean_north",
@@ -280,7 +552,8 @@
         0.04,
         0.44,
         0.62
-      ]
+      ],
+      "seabedY": -3.5
     },
     {
       "id": "ocean_south",
@@ -299,7 +572,8 @@
         0.04,
         0.44,
         0.62
-      ]
+      ],
+      "seabedY": -3.5
     },
     {
       "id": "hwy_ns",
@@ -1794,6 +2068,64 @@
       }
     },
     {
+      "id": "gas_station_metro",
+      "type": "model",
+      "model": "assets/models/gas_station.glb",
+      "position": [
+        -36.0,
+        0.0,
+        36.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          6.5,
+          2.8,
+          4.2
+        ],
+        "offsetY": 2.8
+      }
+    },
+    {
+      "id": "gas_station_desert",
+      "type": "model",
+      "model": "assets/models/gas_station.glb",
+      "position": [
+        -36.0,
+        0.0,
+        -36.0
+      ],
+      "rotation": [
+        0.0,
+        180.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          6.5,
+          2.8,
+          4.2
+        ],
+        "offsetY": 2.8
+      }
+    },
+    {
       "id": "warehouse_dt_w",
       "type": "model",
       "model": "assets/models/warehouse.glb",
@@ -2967,6 +3299,61 @@
       }
     },
     {
+      "id": "beach_pier_ramp",
+      "type": "primitive_box",
+      "position": [
+        63.0,
+        0.0,
+        -88.0
+      ],
+      "rotation": [
+        0.0,
+        90.0,
+        0.0
+      ],
+      "scale": [
+        4.4,
+        0.1,
+        4.8
+      ],
+      "color": [
+        0.44,
+        0.28,
+        0.16
+      ],
+      "visible": false,
+      "collider": {
+        "type": "ramp",
+        "width": 4.8,
+        "height": 0.54,
+        "length": 4.4
+      }
+    },
+    {
+      "id": "beach_pier_ramp_vis",
+      "type": "primitive_box",
+      "position": [
+        63.0,
+        0.22,
+        -88.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        4.6,
+        0.22,
+        4.8
+      ],
+      "color": [
+        0.44,
+        0.28,
+        0.16
+      ]
+    },
+    {
       "id": "beach_pier_deck",
       "type": "primitive_box",
       "position": [
@@ -2982,13 +3369,21 @@
       "scale": [
         22.0,
         0.24,
-        4.6
+        4.8
       ],
       "color": [
-        0.42,
-        0.27,
-        0.15
-      ]
+        0.44,
+        0.28,
+        0.16
+      ],
+      "collider": {
+        "type": "deck",
+        "halfExtents": [
+          11.0,
+          0.12,
+          2.4
+        ]
+      }
     },
     {
       "id": "pier_post_1_n",
@@ -2996,7 +3391,7 @@
       "position": [
         68.0,
         0.2,
-        -85.8
+        -85.4
       ],
       "rotation": [
         0.0,
@@ -3025,7 +3420,7 @@
       "position": [
         68.0,
         0.2,
-        -90.2
+        -90.6
       ],
       "rotation": [
         0.0,
@@ -3054,7 +3449,7 @@
       "position": [
         74.0,
         0.2,
-        -85.8
+        -85.4
       ],
       "rotation": [
         0.0,
@@ -3083,7 +3478,7 @@
       "position": [
         74.0,
         1.45,
-        -85.8
+        -85.4
       ],
       "rotation": [
         0.0,
@@ -3108,7 +3503,7 @@
       "position": [
         74.0,
         0.2,
-        -90.2
+        -90.6
       ],
       "rotation": [
         0.0,
@@ -3137,7 +3532,7 @@
       "position": [
         74.0,
         1.45,
-        -90.2
+        -90.6
       ],
       "rotation": [
         0.0,
@@ -3162,7 +3557,7 @@
       "position": [
         80.0,
         0.2,
-        -85.8
+        -85.4
       ],
       "rotation": [
         0.0,
@@ -3191,7 +3586,7 @@
       "position": [
         80.0,
         0.2,
-        -90.2
+        -90.6
       ],
       "rotation": [
         0.0,
@@ -3220,7 +3615,7 @@
       "position": [
         86.0,
         0.2,
-        -85.8
+        -85.4
       ],
       "rotation": [
         0.0,
@@ -3249,7 +3644,7 @@
       "position": [
         86.0,
         1.45,
-        -85.8
+        -85.4
       ],
       "rotation": [
         0.0,
@@ -3274,7 +3669,7 @@
       "position": [
         86.0,
         0.2,
-        -90.2
+        -90.6
       ],
       "rotation": [
         0.0,
@@ -3303,7 +3698,7 @@
       "position": [
         86.0,
         1.45,
-        -90.2
+        -90.6
       ],
       "rotation": [
         0.0,
@@ -3321,6 +3716,104 @@
         0.34
       ],
       "emissive": true
+    },
+    {
+      "id": "sailboat_lagoon",
+      "type": "model",
+      "model": "assets/models/sailboat.glb",
+      "position": [
+        94.0,
+        -0.34,
+        -75.0
+      ],
+      "rotation": [
+        0.0,
+        125.0,
+        0.0
+      ],
+      "scale": [
+        1.05,
+        1.05,
+        1.05
+      ]
+    },
+    {
+      "id": "sailboat_offshore",
+      "type": "model",
+      "model": "assets/models/sailboat.glb",
+      "position": [
+        184.0,
+        -0.42,
+        -55.0
+      ],
+      "rotation": [
+        0.0,
+        -35.0,
+        0.0
+      ],
+      "scale": [
+        1.35,
+        1.35,
+        1.35
+      ]
+    },
+    {
+      "id": "lifeguard_tower_1",
+      "type": "model",
+      "model": "assets/models/lifeguard_tower.glb",
+      "position": [
+        62.0,
+        0.0,
+        -72.0
+      ],
+      "rotation": [
+        0.0,
+        -65.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          1.8,
+          3.0,
+          1.8
+        ],
+        "offsetY": 3.0
+      }
+    },
+    {
+      "id": "lifeguard_tower_2",
+      "type": "model",
+      "model": "assets/models/lifeguard_tower.glb",
+      "position": [
+        78.0,
+        0.0,
+        -61.0
+      ],
+      "rotation": [
+        0.0,
+        180.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          1.8,
+          3.0,
+          1.8
+        ],
+        "offsetY": 3.0
+      }
     },
     {
       "id": "palm_1",
@@ -3454,7 +3947,7 @@
       "position": [
         72.0,
         0.0,
-        -58.0
+        -56.0
       ],
       "rotation": [
         0.0,
@@ -3479,7 +3972,7 @@
       "position": [
         100.0,
         0.0,
-        -58.0
+        -56.0
       ],
       "rotation": [
         0.0,
@@ -3502,9 +3995,9 @@
       "type": "model",
       "model": "assets/models/palm_tree.glb",
       "position": [
-        60.0,
+        58.0,
         0.0,
-        -98.0
+        -102.0
       ],
       "rotation": [
         0.0,

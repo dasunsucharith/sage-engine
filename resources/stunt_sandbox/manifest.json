@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE v0.7 Showcase — HDR Bloom, Animated 3D Ocean Water, Drifting Sky Clouds, Flicker-Free 4-Biome Open World, Solid Auto-Colliders, Main/Pause Menu, Jolt Physics & V12 Audio.",
+  "description": "SAGE v0.8 Showcase — Realistic Water Submersion & Buoyancy, Dynamic Point Lights (Car Headlights, Neon Arches, Lighthouse Beam), 3D Particle FX (Splashes, Drift Smoke, Nitro Sparks), 18 Blender .glb Models & HDR 4-Biome Open World.",
   "scripts": [
     "main.lua"
   ]

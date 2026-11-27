@@ -35,7 +35,7 @@ enum class EntityShape {
     Model
 };
 
-// Scene entity rendered in 3D perspective (primitive or animated .glb/.gltf model).
+// Scene entity rendered in 3D perspective (primitive, animated water, or .glb/.gltf model).
 struct Entity {
     std::string id;
     EntityShape shape = EntityShape::Box;
@@ -49,12 +49,45 @@ struct Entity {
     bool emissive = false;
     bool visible = true;
 
+    // Water volume metadata (for EntityShape::Water buoyancy & realistic submersion)
+    float waterSeabedY = -1.15f;
+
     // glTF 2.0 animation playback state
-    std::string activeAnimation; // Empty = auto-play clip 0 if model contains animations
+    std::string activeAnimation; // Empty = auto-play all animation tracks
     float animTime = 0.0f;
     float animSpeed = 1.0f;
     bool animPlaying = true;
     bool animLoop = true;
+};
+
+// Real-time dynamic point light (headlights, street lamps, neon arches, lighthouse beam!)
+struct PointLight {
+    std::string id;
+    Vec3 position{0.0f, 2.0f, 0.0f};
+    Color3 color{1.0f, 0.9f, 0.7f};
+    float radius = 18.0f;
+    float intensity = 2.0f;
+};
+
+// Lightweight 3D HDR particle (water splash spray, tire drift smoke, nitro sparks, debris!)
+struct Particle3D {
+    Vec3 position{};
+    Vec3 velocity{};
+    Color3 color{1.0f, 1.0f, 1.0f};
+    float size = 0.25f;
+    float age = 0.0f;
+    float maxLife = 0.75f;
+    float gravity = 14.0f;
+    bool emissive = false;
+};
+
+// Exact water surface & seabed depth query at (x, z) matching the GPU 4-wave ocean shader!
+struct WaterSampleResult {
+    bool inWater = false;
+    float surfaceY = -10.0f;
+    float seabedY = 0.0f;
+    float depth = 0.0f;      // Water column depth (surfaceY - effectiveSeabedY)
+    float shoreDist = 0.0f;  // Horizontal distance inside the water boundary (meters)
 };
 
 struct SkySettings {
@@ -102,11 +135,32 @@ public:
     bool setColor(const std::string& id, float r, float g, float b);
     bool setEmissive(const std::string& id, bool emissive);
     bool setVisible(const std::string& id, bool visible);
+    bool setWaterSeabed(const std::string& id, float seabedY);
 
     bool playAnimation(const std::string& id, const std::string& clipName = "", bool loop = true, float speed = 1.0f);
     bool stopAnimation(const std::string& id);
     bool setAnimationSpeed(const std::string& id, float speed);
     void updateAnimations(float dt);
+
+    // Dynamic point lights (up to 16 active in HDR shader & water specular reflections)
+    void setPointLight(const std::string& id, Vec3 pos, Color3 color, float radius = 18.0f, float intensity = 2.0f);
+    bool removePointLight(const std::string& id);
+    const std::vector<PointLight>& pointLights() const { return m_pointLights; }
+
+    // 3D particle bursts (water splashes, tire drift smoke, nitro sparks, impact debris)
+    void spawnParticles(
+        Vec3 pos,
+        Vec3 baseVel,
+        Color3 color,
+        int count,
+        float size = 0.25f,
+        float maxLife = 0.7f,
+        bool emissive = false,
+        float gravity = 14.0f);
+    const std::vector<Particle3D>& particles() const { return m_particles; }
+
+    // Exact water volume + animated wave height query (matches GPU ocean vertex shader!)
+    WaterSampleResult sampleWater(float x, float z, float timeSeconds) const;
 
     bool hasEntity(const std::string& id) const;
     Vec3 getPosition(const std::string& id) const;
@@ -130,6 +184,10 @@ public:
 private:
     std::vector<Entity> m_entities;
     std::unordered_map<std::string, std::size_t> m_indexById;
+    std::vector<PointLight> m_pointLights;
+    std::unordered_map<std::string, std::size_t> m_lightIndexById;
+    std::vector<Particle3D> m_particles;
+    std::uint32_t m_rngState = 0x5A6E0800u;
     CameraState m_camera{};
     SkySettings m_sky{};
 };

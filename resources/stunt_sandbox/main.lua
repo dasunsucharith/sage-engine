@@ -1,5 +1,8 @@
 -- =============================================================================
--- SAGE Engine v0.7 Showcase: HDR 4-Biome Open World Stunt & Delivery Sandbox
+-- SAGE Engine v0.8 Showcase: Dynamic HDR 4-Biome Open World Sandbox
+--   * Realistic Water Submersion & Engine Flooding (no driving on water!)
+--   * Real-Time Car Headlights, Nitro Glow & Rotating Lighthouse Point Light
+--   * 3D Particle FX (Water Splashes, Tire Drift Smoke, Nitro Sparks)
 -- =============================================================================
 -- BIOMES TO EXPLORE (320m x 320m Open World):
 --   NW: Downtown Metro       | NE: Pine Highlands & Wind Ridge
@@ -80,6 +83,14 @@ local car = {
     boostTimer = 0.0,
     isDrifting = false,
     isBoosting = false,
+    inWater = false,
+    waterDepth = 0.0,
+    flooded = false,
+    floodTimer = 0.0,
+    lastDryX = 0.0,
+    lastDryZ = -6.0,
+    lastDryYaw = 0.0,
+    fxAccum = 0.0,
     gear = 1,
     rpm = 0.12,
 }
@@ -172,6 +183,11 @@ local function respawnCarAtBiome(idx)
     car.yaw, car.pitch, car.roll = sp.yaw, 0.0, 0.0
     car.grounded = true
     car.airTime = 0.0
+    car.inWater = false
+    car.waterDepth = 0.0
+    car.flooded = false
+    car.floodTimer = 0.0
+    car.lastDryX, car.lastDryZ, car.lastDryYaw = sp.x, sp.z, sp.yaw
     car.boostEnergy = 100.0
     cam.orbitYaw, cam.orbitPitch = 0.0, 0.0
     world.setPosition("player_car", car.x, car.y, car.z)
@@ -298,6 +314,8 @@ local function checkPhysicsCrateSmashes(dt)
                 cratesSmashed = cratesSmashed + 1
                 score = score + 25
                 world.setColor(c.id, 1.0, 0.65, 0.42)
+                local cx, cy, cz = world.getPosition(c.id)
+                world.spawnParticles(cx, cy + 0.4, cz, 0.0, 5.5, 0.0, 1.0, 0.72, 0.24, 8, 0.20, 0.55, true, 16.0)
                 if impactSoundCooldown <= 0.0 then
                     audio.playImpact(clamp(spd / 18.0, 0.35, 1.0))
                     impactSoundCooldown = 0.11
@@ -361,8 +379,8 @@ function onStart()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
 
     sage.log("===================================================================")
-    sage.log("  SAGE Engine v0.7 — HDR 4-Biome Open World Stunt & Delivery Sandbox")
-    sage.log("  Features: HDR Bloom | 3D Animated Ocean | Sky Clouds | Jolt Physics")
+    sage.log("  SAGE Engine v0.8 — Dynamic HDR Open World Stunt & Delivery Sandbox")
+    sage.log("  Features: Realistic Water Physics | Dynamic Lights | 3D Particles")
     sage.log("  Click PLAY on the Main Menu to drive (Esc = Pause Menu, F1 = Editor)")
     sage.log("===================================================================")
 end
@@ -378,6 +396,14 @@ function onTick(dt)
     local d2a = -timeNow * 0.30 + 1.2
     world.setPosition("drone_2", 64.0 + math.cos(d2a) * 20.0, 11.0, -64.0 + math.sin(d2a) * 20.0)
     world.setRotation("drone_2", 0.0, math.deg(-d2a + math.pi), 0.0)
+
+    -- Sweeping Rotating Golden Lighthouse Beacon Light shimmering across the Palm Lagoon waves!
+    local lhAngle = timeNow * 0.85
+    world.setPointLight(
+        "lighthouse_beam",
+        102.0 + math.cos(lhAngle) * 16.0, 7.5, -102.0 + math.sin(lhAngle) * 16.0,
+        1.0, 0.86, 0.42, 34.0, 3.2
+    )
 
     -- Toggle Pause Menu on Escape
     if keyJustPressed("Escape") then
@@ -400,9 +426,9 @@ function onTick(dt)
             camera.setPosition(car.x + math.sin(orbit) * 10.5, car.y + 3.8, car.z + math.cos(orbit) * 10.5)
             camera.setTarget(car.x, car.y + 1.1, car.z)
             camera.setFov(55.0)
-            sage.setTitle("SAGE Engine v0.7 — Main Menu | HDR Open World")
+            sage.setTitle("SAGE Engine v0.8 — Main Menu | Dynamic HDR Open World")
         else
-            sage.setTitle("SAGE Engine v0.7 — PAUSED (Press Esc to Resume)")
+            sage.setTitle("SAGE Engine v0.8 — PAUSED (Press Esc to Resume)")
         end
         return
     end
@@ -430,6 +456,7 @@ function onTick(dt)
     if keyJustPressed("X") then
         local hitCount = physics.applyExplosion(car.x, car.y + 0.5, car.z, 26.0, 400.0)
         audio.playExplosion()
+        world.spawnParticles(car.x, car.y + 0.8, car.z, 0.0, 7.5, 0.0, 1.0, 0.65, 0.18, 22, 0.34, 0.75, true, 12.0)
         sage.log("SHOCKWAVE! Blasted " .. hitCount .. " Jolt Physics objects!")
     end
 
@@ -445,19 +472,20 @@ function onTick(dt)
         respawnCarAtBiome(selectedBiomeIdx)
     end
 
-    -- Driving inputs
+    -- Driving inputs (disabled automatically if the car's engine is flooded underwater!)
     local throttle = 0.0
-    if input.isKeyDown("W") or input.isKeyDown("Up") then throttle = throttle + 1.0 end
-    if input.isKeyDown("S") or input.isKeyDown("Down") then throttle = throttle - 1.0 end
-
     local rawSteer = 0.0
-    if input.isKeyDown("A") or input.isKeyDown("Left") then rawSteer = rawSteer + 1.0 end
-    if input.isKeyDown("D") or input.isKeyDown("Right") then rawSteer = rawSteer - 1.0 end
+    if not car.flooded then
+        if input.isKeyDown("W") or input.isKeyDown("Up") then throttle = throttle + 1.0 end
+        if input.isKeyDown("S") or input.isKeyDown("Down") then throttle = throttle - 1.0 end
+        if input.isKeyDown("A") or input.isKeyDown("Left") then rawSteer = rawSteer + 1.0 end
+        if input.isKeyDown("D") or input.isKeyDown("Right") then rawSteer = rawSteer - 1.0 end
+    end
     car.steerSmooth = lerp(car.steerSmooth, rawSteer, 13.0 * dt)
 
-    car.isDrifting = input.isKeyDown("Space")
+    car.isDrifting = (not car.flooded) and (not car.inWater) and input.isKeyDown("Space")
 
-    local shiftHeld = input.isKeyDown("LeftShift") or input.isKeyDown("RightShift")
+    local shiftHeld = (not car.flooded) and (not car.inWater) and (input.isKeyDown("LeftShift") or input.isKeyDown("RightShift"))
     if car.boostTimer > 0.0 then car.boostTimer = car.boostTimer - dt end
     car.isBoosting = (shiftHeld and car.boostEnergy > 1.0) or (car.boostTimer > 0.0)
     if shiftHeld and car.boostEnergy > 0.0 then
@@ -521,10 +549,21 @@ function onTick(dt)
     car.x = car.x + car.vx * dt
     car.z = car.z + car.vz * dt
 
-    -- Unified C++ Ramp Elevation across ALL 8 ramps in the 4-Biome Open World!
-    local onRamp, groundY, rampHeight = physics.sampleRampSurface(car.x, car.z)
+    -- Unified C++ Surface Elevation (Ramps + Drivable Pier Decks) + Realistic Water Physics!
+    local onSurface, surfY, rampHeight = physics.sampleRampSurface(car.x, car.z)
+    local isElevatedDeck = onSurface and (rampHeight <= 0.01) and (surfY > 0.10)
+    local isRamp = onSurface and (rampHeight > 0.05)
+
+    local inWaterVol, waveSurfaceY, seabedY, waterDepth = world.sampleWater(car.x, car.z)
+    -- If driving on top of the wooden pier deck, the car stays dry above the water!
+    local overPier = isElevatedDeck and (car.y >= surfY - 0.45)
+    local groundY = surfY
+    if inWaterVol and not overPier then
+        groundY = seabedY
+    end
+
     if car.grounded then
-        if onRamp and groundY > 0.05 then
+        if isRamp and groundY > 0.05 then
             local climbRate = (groundY - prevY) / math.max(dt, 0.001)
             car.y = groundY
             car.vy = math.max(climbRate, 0.0)
@@ -534,8 +573,12 @@ function onTick(dt)
                 car.boostTimer = math.max(car.boostTimer, 0.55)
                 car.grounded = false
             end
+        elseif overPier then
+            car.y = lerp(car.y, surfY, 18.0 * dt)
+            car.vy = 0.0
+            car.pitch = lerp(car.pitch, accelPitchTarget, 9.0 * dt)
         else
-            if car.y > groundY + 0.16 then
+            if car.y > groundY + 0.18 then
                 car.grounded = false
             else
                 car.y = groundY
@@ -547,7 +590,8 @@ function onTick(dt)
 
     if not car.grounded then
         car.airTime = car.airTime + dt
-        car.vy = car.vy - CONFIG.gravity * dt
+        local effGrav = (inWaterVol and not overPier and car.y < waveSurfaceY) and (CONFIG.gravity * 0.34) or CONFIG.gravity
+        car.vy = car.vy - effGrav * dt
         car.y = car.y + car.vy * dt
         car.pitch = lerp(car.pitch, clamp(-car.vy * 2.1, -26.0, 22.0), 6.0 * dt)
 
@@ -555,7 +599,7 @@ function onTick(dt)
             car.y = groundY
             car.vy = 0.0
             car.grounded = true
-            if car.airTime >= 0.42 then
+            if car.airTime >= 0.42 and not (inWaterVol and not overPier) then
                 stuntJumps = stuntJumps + 1
                 local airBonus = math.floor(car.airTime * 150.0)
                 score = score + airBonus
@@ -566,6 +610,70 @@ function onTick(dt)
                 sage.log(string.format("STUNT JUMP #%d! Air: %.2fs (+%d pts)", stuntJumps, car.airTime, airBonus))
             end
             car.airTime = 0.0
+        end
+    end
+
+    -- Realistic Water Interaction: Hydrodynamic Drag, 3D Splashes & Engine Flooding (NO driving on water!)
+    local wasInWater = car.inWater
+    car.inWater = inWaterVol and (not overPier) and (car.y < waveSurfaceY + 0.12)
+    car.waterDepth = car.inWater and math.max(0.0, waveSurfaceY - car.y) or 0.0
+
+    if not inWaterVol and car.grounded and not car.flooded then
+        car.lastDryX, car.lastDryZ, car.lastDryYaw = car.x, car.z, car.yaw
+    end
+
+    if car.inWater then
+        local spdNow = math.sqrt(car.vx * car.vx + car.vz * car.vz)
+        -- First splash impact burst when hitting the water!
+        if not wasInWater then
+            audio.playImpact(clamp(0.45 + spdNow * 0.03, 0.45, 1.0))
+            world.spawnParticles(car.x, waveSurfaceY + 0.15, car.z, car.vx * 0.25, 5.2 + spdNow * 0.18, car.vz * 0.25, 0.82, 0.94, 1.0, 24, 0.34, 0.85, false, 15.0)
+        end
+
+        -- Heavy hydrodynamic water drag slows vehicle sharply in water
+        local dragFactor = math.exp(-(3.8 + car.waterDepth * 4.5) * dt)
+        car.vx = car.vx * dragFactor
+        car.vz = car.vz * dragFactor
+
+        -- Continuous wheel spray droplets in shallow water
+        car.fxAccum = car.fxAccum + dt
+        if spdNow > 1.2 and car.fxAccum >= 0.07 then
+            car.fxAccum = 0.0
+            world.spawnParticles(car.x, waveSurfaceY + 0.08, car.z, -car.vx * 0.15, 2.8 + spdNow * 0.14, -car.vz * 0.15, 0.86, 0.96, 1.0, 5, 0.22, 0.55, false, 14.0)
+        end
+
+        -- Deep water (>= 0.45m submersion): ENGINE FLOODS & SINKS!
+        if car.waterDepth >= 0.45 and not car.flooded then
+            car.flooded = true
+            car.floodTimer = 2.6
+            car.boostTimer = 0.0
+            car.isBoosting = false
+            audio.playImpact(0.95)
+            world.spawnParticles(car.x, waveSurfaceY + 0.2, car.z, 0.0, 6.2, 0.0, 0.84, 0.95, 1.0, 32, 0.38, 1.0, false, 13.0)
+            sage.log("SPLASH! Engine flooded in deep water — rescuing back to dry shore...")
+        end
+    end
+
+    if car.flooded then
+        -- Nose-heavy sinking tilt & gentle wave bobbing while flooded underwater
+        car.pitch = lerp(car.pitch, 10.5, 4.0 * dt)
+        car.roll = lerp(car.roll, math.sin(timeNow * 2.6) * 5.0, 4.0 * dt)
+        car.floodTimer = car.floodTimer - dt
+        if car.fxAccum >= 0.14 then
+            car.fxAccum = 0.0
+            world.spawnParticles(car.x, waveSurfaceY + 0.05, car.z, 0.0, 2.4, 0.0, 0.85, 0.96, 1.0, 4, 0.22, 0.65, false, 6.0)
+        else
+            car.fxAccum = car.fxAccum + dt
+        end
+        if car.floodTimer <= 0.0 then
+            car.x, car.y, car.z = car.lastDryX, 0.0, car.lastDryZ
+            car.vx, car.vy, car.vz = 0.0, 0.0, 0.0
+            car.yaw, car.pitch, car.roll = car.lastDryYaw, 0.0, 0.0
+            car.grounded = true
+            car.inWater = false
+            car.waterDepth = 0.0
+            car.flooded = false
+            audio.playChime()
         end
     end
 
@@ -585,8 +693,10 @@ function onTick(dt)
     car.x = clamp(car.x, -S, S)
     car.z = clamp(car.z, -S, S)
 
-    local targetRoll = clamp(lateralVel * 0.95 + car.steerSmooth * speedNorm * 2.5, -8.5, 8.5)
-    car.roll = lerp(car.roll, targetRoll, 9.0 * dt)
+    if not car.flooded then
+        local targetRoll = clamp(lateralVel * 0.95 + car.steerSmooth * speedNorm * 2.5, -8.5, 8.5)
+        car.roll = lerp(car.roll, targetRoll, 9.0 * dt)
+    end
 
     -- Sync Jolt Kinematic Car Hull & visual model
     physics.moveKinematic("player_car", car.x, car.y + 0.65, car.z, car.pitch, car.yaw, car.roll, dt)
@@ -602,23 +712,48 @@ function onTick(dt)
         world.setPosition("car_flame", car.x - fwdX * 2.7, car.y + 0.42, car.z - fwdZ * 2.7)
         world.setRotation("car_flame", car.pitch, car.yaw + 180.0, 0.0)
         world.setScale("car_flame", 0.85, 0.6, flicker)
+        -- HDR glowing Nitro sparks!
+        world.spawnParticles(car.x - fwdX * 2.6, car.y + 0.35, car.z - fwdZ * 2.6, -fwdX * 6.0, 1.4, -fwdZ * 6.0, 0.18, 0.88, 1.0, 2, 0.16, 0.35, true, 6.0)
     else
         world.setVisible("car_flame", false)
     end
 
-    -- 6-Gear Transmission & V12 Engine Synth
+    -- Real-Time Dynamic Car Headlight Beam & Tail/Nitro Underglow Point Lights!
+    local headPower = car.flooded and 0.4 or 2.8
+    world.setPointLight(
+        "car_headlight",
+        car.x + fwdX * 5.8, car.y + 1.35, car.z + fwdZ * 5.8,
+        1.0, 0.94, 0.82, 24.0, headPower
+    )
+    if car.isBoosting then
+        world.setPointLight("car_tail", car.x - fwdX * 2.8, car.y + 0.8, car.z - fwdZ * 2.8, 0.15, 0.86, 1.0, 15.0, 2.6)
+    elseif throttle < 0.0 and not car.flooded then
+        world.setPointLight("car_tail", car.x - fwdX * 2.6, car.y + 0.8, car.z - fwdZ * 2.6, 1.0, 0.12, 0.10, 12.0, 2.0)
+    else
+        world.setPointLight("car_tail", car.x - fwdX * 2.6, car.y + 0.8, car.z - fwdZ * 2.6, 0.95, 0.15, 0.12, 8.0, 0.7)
+    end
+
+    -- 6-Gear Transmission & V12 Engine Synth (cuts out cleanly when flooded!)
     local speed = math.sqrt(car.vx * car.vx + car.vz * car.vz)
     local gearSpan = CONFIG.boostSpeed / 6.0
     car.gear = clamp(math.floor(speed / gearSpan) + 1, 1, 6)
     local gearProgress = (speed - (car.gear - 1) * gearSpan) / gearSpan
-    local targetRpm = clamp(0.14 + gearProgress * 0.72 + (car.isBoosting and 0.18 or 0.0), 0.08, 1.0)
-    if not car.grounded and throttle > 0.0 then targetRpm = 0.96 end
+    local targetRpm = car.flooded and 0.0 or clamp(0.14 + gearProgress * 0.72 + (car.isBoosting and 0.18 or 0.0), 0.08, 1.0)
+    if not car.grounded and throttle > 0.0 and not car.flooded then targetRpm = 0.96 end
     car.rpm = lerp(car.rpm, targetRpm, 10.0 * dt)
 
-    local driftIntensity = (car.grounded and math.abs(lateralVel) > 2.4)
+    local driftIntensity = (car.grounded and not car.inWater and not car.flooded and math.abs(lateralVel) > 2.4)
         and clamp((math.abs(lateralVel) - 2.4) / 8.0, 0.0, 1.0)
         or 0.0
-    audio.setVehicleState(car.rpm, throttle > 0.0 and 1.0 or 0.15, driftIntensity, car.isBoosting and 1.0 or 0.0, not car.grounded)
+    if driftIntensity > 0.18 then
+        world.spawnParticles(car.x - fwdX * 1.6 + leftX * 0.85, car.y + 0.22, car.z - fwdZ * 1.6 + leftZ * 0.85, 0.0, 1.6, 0.0, 0.82, 0.84, 0.88, 1, 0.30, 0.55, false, -1.2)
+        world.spawnParticles(car.x - fwdX * 1.6 - leftX * 0.85, car.y + 0.22, car.z - fwdZ * 1.6 - leftZ * 0.85, 0.0, 1.6, 0.0, 0.82, 0.84, 0.88, 1, 0.30, 0.55, false, -1.2)
+    end
+    if car.flooded then
+        audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
+    else
+        audio.setVehicleState(car.rpm, throttle > 0.0 and 1.0 or 0.15, driftIntensity, car.isBoosting and 1.0 or 0.0, not car.grounded)
+    end
 
     -- 3D Chase Camera + Right-Mouse Orbit
     local preset = camPresets[camPresetIdx]
@@ -662,7 +797,7 @@ function onTick(dt)
         local kmh = math.floor(speed * 3.6)
         local biome = getCurrentBiomeName(car.x, car.z)
         sage.setTitle(string.format(
-            "SAGE v0.7 | %s | G%d %d km/h | Score: %d | Esc = Menu | F1 = Editor",
+            "SAGE v0.8 | %s | G%d %d km/h | Score: %d | Esc = Menu | F1 = Editor",
             biome, car.gear, kmh, score
         ))
     end
@@ -676,11 +811,11 @@ function onRenderUI()
 
     -- 1. MAIN MENU (hides completely the moment you click PLAY!)
     if gameState == "MENU" then
-        if ui.beginCenteredWindow("SAGE ENGINE v0.7 — HDR OPEN WORLD SANDBOX", 440, 390) then
+        if ui.beginCenteredWindow("SAGE ENGINE v0.8 — DYNAMIC HDR OPEN WORLD", 440, 390) then
             ui.setFontScale(1.35)
             ui.textCentered("SAGE STUNT & DELIVERY")
             ui.setFontScale(1.0)
-            ui.textCentered("HDR Bloom  |  3D Ocean Waves  |  4 Biomes  |  Jolt Physics")
+            ui.textCentered("Water Physics  |  Dynamic Lights  |  3D Particles  |  HDR Bloom")
             ui.spacing()
             ui.separator()
             ui.spacing()
@@ -771,15 +906,28 @@ function onRenderUI()
         return
     end
 
-    -- 3. COMPACT DRIVING HUD (All menus hidden while playing! Press H to hide HUD too)
+    -- 3. ENGINE FLOODED ALERT BANNER (when vehicle sinks in deep water!)
+    if car.flooded then
+        if ui.beginCenteredWindow("WATER HAZARD", 380, 108) then
+            ui.setFontScale(1.25)
+            ui.textCentered("ENGINE FLOODED!")
+            ui.setFontScale(1.0)
+            ui.spacing()
+            ui.textCentered(string.format("Rescuing vehicle to dry shore in %.1fs... (or press R)", math.max(car.floodTimer, 0.0)))
+        end
+        ui.endWindow()
+    end
+
+    -- 4. COMPACT DRIVING HUD (All menus hidden while playing! Press H to hide HUD too)
     if showHud then
         local speed = math.sqrt(car.vx * car.vx + car.vz * car.vz)
         local kmh = math.floor(speed * 3.6)
         local spot = deliverySpots[activeDeliveryIdx]
         local biome = getCurrentBiomeName(car.x, car.z)
-        local hudW, hudH = 290, 175
+        local statusTag = car.flooded and " [FLOODED]" or (car.inWater and " [SHALLOW WATER]" or "")
+        local hudW, hudH = 296, 178
         if ui.beginWindow("Cockpit HUD (H = Hide, Esc = Menu)", vpW - hudW - 14, vpH - hudH - 14, hudW, hudH, true) then
-            ui.text("Zone: " .. biome)
+            ui.text("Zone: " .. biome .. statusTag)
             ui.text(string.format("Speed: %d km/h   |   Gear: G%d", kmh, car.gear))
             ui.progressBar(car.rpm, string.format("V12 RPM %d%%", math.floor(car.rpm * 100)))
             ui.progressBar(car.boostEnergy / 100.0, string.format("NITRO %d%%", math.floor(car.boostEnergy)))
@@ -793,5 +941,5 @@ end
 
 function onShutdown()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
-    sage.log("v0.7 HDR Multi-Biome Sandbox shutting down cleanly.")
+    sage.log("v0.8 Dynamic HDR Multi-Biome Sandbox shutting down cleanly.")
 end

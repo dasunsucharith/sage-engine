@@ -35,16 +35,16 @@ See [**Getting Started**](docs/getting_started.md) for prerequisite installation
 
 ---
 
-## Core Capabilities (`v0.7.0`)
+## Core Capabilities (`v0.8.0`)
 
 | Pillar | Technology | What You Get Out of the Box |
 | :--- | :--- | :--- |
 | **Native Performance Core** | **C++20** + **CMake** + **SDL3** | Deterministic 60 Hz fixed-timestep loop, cross-platform window/input, standalone binary |
-| **HDR 3D Graphics & Water** | **OpenGL 3.3 Core** + **cgltf** + **GLM** | 6-pass `RGBA16F` HDR Bloom & ACES tone mapping, animated 3D multi-wave ocean water (Fresnel sky reflections, sun glints & shoreline foam), drifting procedural sky clouds, 2048×2048 PCF soft shadows, procedural terrain micro-grain, and animated `.glb` models |
-| **AAA 3D Physics** | **Jolt Physics 5.7** | Multithreaded rigid-body simulation (boxes, rolling spheres, capsules, convex-hull ramps, kinematic collisions, shockwaves, raycasts, declarative JSON auto-colliders) |
+| **HDR 3D Graphics, Lights & FX** | **OpenGL 3.3 Core** + **cgltf** + **GLM** | 6-pass `RGBA16F` HDR Bloom & ACES tone mapping, up to 16 real-time dynamic point lights (casting reflections on waves!), 3D HDR particle bursts, animated 3D multi-wave ocean water, drifting sky clouds, 2048×2048 PCF soft shadows, and animated `.glb` models |
+| **AAA 3D Physics & Buoyancy** | **Jolt Physics 5.7** | Multithreaded rigid-body simulation (boxes, rolling spheres, capsules, convex-hull ramps, drivable pier/bridge decks, Archimedes water buoyancy & drag, kinematic collisions, shockwaves, raycasts, JSON auto-colliders) |
 | **Live Scripting & HUDs** | **Lua 5.4** (`sol2`) + **Dear ImGui 1.92** | FiveM-style `resources/` folders, automatic file-watch & `F5` hot-reload, built-in `F1` Live Scene Inspector (hidden by default), and Lua `ui.*` Main/Pause Menus & custom HUDs |
 | **Real-Time Audio** | **miniaudio 0.11** | Lock-free 48 kHz stereo audio thread with procedural V12 engine synth, drift screech, nitro roar, impacts, chimes & shockwave booms |
-| **AI-Native & Blender Ready** | Plain-text **JSON** + 15 starter `.glb` models | Ships with a playable **320m 4-Biome HDR Open World** (Downtown Metro with neon arches, Pine Highlands, Palm Coast Lagoon & Pier, Red Rock Desert) surrounded by animated 3D ocean |
+| **AI-Native & Blender Ready** | Plain-text **JSON** + 18 starter `.glb` models | Ships with a playable **320m 4-Biome Dynamic HDR Open World** with realistic water submersion/flooding, drivable beach pier, rocking sailboats, neon gas stations, lifeguard towers & live headlights |
 
 ---
 
@@ -55,7 +55,7 @@ sage-engine/
 ├── engine/                 # C++20 core engine (platform, renderer, world, physics, audio, editor, Lua VM)
 │   ├── include/sage/       # Clean public C++ subsystem interfaces
 │   └── src/                # Engine implementation
-├── assets/models/          # 15 ready-to-use static & animated .glb 3D models
+├── assets/models/          # 18 ready-to-use static & animated .glb 3D models
 ├── scenes/                 # Human- & AI-readable JSON 3D worlds (hot-reloadable!)
 ├── resources/              # FiveM-style Lua game resources (hot-reloadable!)
 ├── tools/                  # Blender 5.3 procedural asset & glTF export scripts
@@ -79,7 +79,8 @@ We follow the **Table Tennis Rule** (learned from RAGE's history): prove every c
 - [x] **v0.5 — General-Purpose 3D Expansion:** Real-time soft Shadow Maps (2048px PCF), native glTF 2.0 keyframe animations, Jolt spheres/capsules/convex ramps, Blender animated asset kit, and Lua `ui.*` game HUDs.
 - [x] **v0.6 — Multi-Biome Open World & Game Menus:** Declarative JSON auto-colliders on all world objects (trees, turbines, lamps, rocks, towers), Main/Pause Menu with auto-hidden Inspector (`F1`), and a 320m × 320m 4-biome world with 15 Blender `.glb` assets.
 - [x] **v0.7 — HDR Bloom, Animated 3D Ocean Water & Flicker-Free Roads:** 6-pass `RGBA16F` HDR Bloom + ACES post-processing, multi-wave 3D animated ocean water shader (Fresnel reflections, sun glints & shoreline foam), drifting procedural sky clouds, procedural terrain micro-grain, and zero-flicker layered roads.
-- [ ] **v0.8+ — RAGE-Scale Tech:** Deferred G-Buffer PBR, Multi-Cascade CSM, Jolt 4-Wheel Raycast Suspension & `CharacterVirtual`, skeletal skinning, open-world chunk streaming, and Vulkan/DX12 backend.
+- [x] **v0.8 — Realistic Water Physics, Dynamic Point Lights & 3D Particles:** Synchronized CPU/GPU water volume queries (`world.sampleWater`), Archimedes Jolt buoyancy & drag for floating props, realistic car water submersion & engine flooding (no driving on water!), drivable pier decks, up to 16 real-time dynamic point lights reflecting on water, 3D HDR particle FX (splashes, drift smoke, nitro sparks), and 3 new Blender assets (18 total `.glb` models).
+- [ ] **v0.9+ — RAGE-Scale Tech:** Deferred G-Buffer PBR, Multi-Cascade CSM, Jolt 4-Wheel Raycast Suspension & `CharacterVirtual` (walkable driver), skeletal skinning, open-world chunk streaming, and Vulkan/DX12 backend.
 
 ---
 

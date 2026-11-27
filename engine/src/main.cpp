@@ -4,7 +4,7 @@
 
 int main(int argc, char* argv[]) {
     sage::EngineConfig config;
-    config.appName = "SAGE Engine v0.7 — HDR Open World Sandbox";
+    config.appName = "SAGE Engine v0.8 — Dynamic HDR Open World Sandbox";
     config.windowWidth = 1280;
     config.windowHeight = 720;
 
