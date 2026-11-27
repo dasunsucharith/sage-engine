@@ -10,6 +10,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [002](002-window-loop-and-first-triangle.md) | OS Window, Fixed-Timestep Game Loop & First GPU Triangle | Milestone `v0.1 — Alive` |
 | [003](003-lua-scripting-and-hot-reload.md) | FiveM-Style Lua Scripting & Live Hot-Reload | Milestone `v0.2 — Lua Brain` |
 | [004](004-3d-world-gltf-and-lighting.md) | 3D World, glTF 2.0 (`.glb`) Models, Lighting & Blender Workflow | Milestone `v0.3 — 3D World` |
+| [005](005-jolt-physics-imgui-and-audio.md) | Jolt Physics, Dear ImGui Live Editor & miniaudio Synth | Milestone `v0.4 — Editor, Physics & Audio` |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:

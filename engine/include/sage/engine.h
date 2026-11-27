@@ -1,5 +1,8 @@
 #pragma once
 
+#include "sage/audio/audio_engine.h"
+#include "sage/editor/editor_ui.h"
+#include "sage/physics/physics_world.h"
 #include "sage/platform/input.h"
 #include "sage/platform/window.h"
 #include "sage/renderer/renderer.h"
@@ -13,12 +16,13 @@
 namespace sage {
 
 struct EngineConfig {
-    std::string appName = "SAGE Engine v0.3 — 3D Stunt & Delivery Sandbox";
+    std::string appName = "SAGE Engine v0.4 — 3D Stunt & Delivery Sandbox";
     int windowWidth = 1280;
     int windowHeight = 720;
     bool vsync = true;
-    double fixedTimeStep = 1.0 / 60.0; // 60 Hz deterministic simulation tick
+    double fixedTimeStep = 1.0 / 60.0;
     int maxFrames = 0;                 // 0 = run until window closes (non-zero for --smoke-test)
+    bool silentAudio = false;          // true during --smoke-test
     std::filesystem::path resourcesPath = "resources";
     std::filesystem::path scenePath = "scenes/stunt_city.json";
 };
@@ -28,7 +32,6 @@ public:
     explicit Engine(const EngineConfig& config);
     ~Engine();
 
-    // Initializes Window, 3D Renderer, JSON Scene, and Lua VM, then runs the main loop.
     int run();
 
 private:
@@ -52,15 +55,20 @@ private:
     Window m_window;
     InputState m_input;
     World m_world;
+    PhysicsWorld m_physics;
+    AudioEngine m_audio;
+    EditorUI m_editor;
     LuaEngine m_lua;
     std::unique_ptr<Renderer> m_renderer;
 
-    // Built-in Free-Fly 3D Camera (press Tab anytime to inspect the 3D scene!)
     bool m_freeFlyMode = false;
     Vec3 m_flyPos{0.0f, 12.0f, -24.0f};
     float m_flyYawDeg = 0.0f;
     float m_flyPitchDeg = -20.0f;
     float m_flySpeed = 24.0f;
+
+    float m_smoothedFps = 60.0f;
+    float m_lastFrameMs = 16.6f;
 
     std::string m_scriptTitle;
     double m_startTime = 0.0;

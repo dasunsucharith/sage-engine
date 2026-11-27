@@ -20,7 +20,7 @@ Color3 lerpColor(const Color3& a, const Color3& b, float t) {
 
 } // namespace
 
-Entity* World::findMutable(const std::string& id) {
+Entity* World::findEntity(const std::string& id) {
     const auto it = m_indexById.find(id);
     if (it == m_indexById.end()) {
         return nullptr;
@@ -28,7 +28,7 @@ Entity* World::findMutable(const std::string& id) {
     return &m_entities[it->second];
 }
 
-const Entity* World::findConst(const std::string& id) const {
+const Entity* World::findEntity(const std::string& id) const {
     const auto it = m_indexById.find(id);
     if (it == m_indexById.end()) {
         return nullptr;
@@ -42,10 +42,13 @@ std::string World::spawnEntity(
     Vec3 position,
     Vec3 scale,
     Color3 color) {
-    if (Entity* existing = findMutable(id)) {
+    if (Entity* existing = findEntity(id)) {
         existing->shape = shape;
         existing->modelPath.clear();
         existing->position = position;
+        existing->rotation = {};
+        existing->rotationQuat = {};
+        existing->useQuaternion = false;
         existing->scale = scale;
         existing->color = color;
         existing->emissive = false;
@@ -70,10 +73,13 @@ std::string World::spawnModel(
     const std::string& modelPath,
     Vec3 position,
     Vec3 scale) {
-    if (Entity* existing = findMutable(id)) {
+    if (Entity* existing = findEntity(id)) {
         existing->shape = EntityShape::Model;
         existing->modelPath = modelPath;
         existing->position = position;
+        existing->rotation = {};
+        existing->rotationQuat = {};
+        existing->useQuaternion = false;
         existing->scale = scale;
         existing->color = {1.0f, 1.0f, 1.0f};
         existing->emissive = false;
@@ -95,7 +101,7 @@ std::string World::spawnModel(
 }
 
 bool World::setPosition(const std::string& id, float x, float y, float z) {
-    if (Entity* e = findMutable(id)) {
+    if (Entity* e = findEntity(id)) {
         e->position = {x, y, z};
         return true;
     }
@@ -103,15 +109,25 @@ bool World::setPosition(const std::string& id, float x, float y, float z) {
 }
 
 bool World::setRotation(const std::string& id, float pitch, float yaw, float roll) {
-    if (Entity* e = findMutable(id)) {
+    if (Entity* e = findEntity(id)) {
         e->rotation = {pitch, yaw, roll};
+        e->useQuaternion = false;
+        return true;
+    }
+    return false;
+}
+
+bool World::setRotationQuat(const std::string& id, float x, float y, float z, float w) {
+    if (Entity* e = findEntity(id)) {
+        e->rotationQuat = {x, y, z, w};
+        e->useQuaternion = true;
         return true;
     }
     return false;
 }
 
 bool World::setScale(const std::string& id, float x, float y, float z) {
-    if (Entity* e = findMutable(id)) {
+    if (Entity* e = findEntity(id)) {
         e->scale = {x, y, z};
         return true;
     }
@@ -119,7 +135,7 @@ bool World::setScale(const std::string& id, float x, float y, float z) {
 }
 
 bool World::setColor(const std::string& id, float r, float g, float b) {
-    if (Entity* e = findMutable(id)) {
+    if (Entity* e = findEntity(id)) {
         e->color = {r, g, b};
         return true;
     }
@@ -127,7 +143,7 @@ bool World::setColor(const std::string& id, float r, float g, float b) {
 }
 
 bool World::setEmissive(const std::string& id, bool emissive) {
-    if (Entity* e = findMutable(id)) {
+    if (Entity* e = findEntity(id)) {
         e->emissive = emissive;
         return true;
     }
@@ -135,7 +151,7 @@ bool World::setEmissive(const std::string& id, bool emissive) {
 }
 
 bool World::setVisible(const std::string& id, bool visible) {
-    if (Entity* e = findMutable(id)) {
+    if (Entity* e = findEntity(id)) {
         e->visible = visible;
         return true;
     }
@@ -147,7 +163,7 @@ bool World::hasEntity(const std::string& id) const {
 }
 
 Vec3 World::getPosition(const std::string& id) const {
-    if (const Entity* e = findConst(id)) {
+    if (const Entity* e = findEntity(id)) {
         return e->position;
     }
     return {};
@@ -187,19 +203,16 @@ void World::setTimeOfDay(float hours) {
     }
     m_sky.timeOfDay = h;
 
-    // Sun angle: 6:00 sunrise (0 deg), 12:00 noon (90 deg), 18:00 sunset (180 deg)
     const float sunAngle = ((h - 6.0f) / 12.0f) * kPi;
     const float sunElev = std::sin(sunAngle);
     const float sunHoriz = std::cos(sunAngle);
 
-    // Direction vector pointing toward sun (or moonlight at night)
     const float dirY = sunElev >= -0.05f ? std::max(sunElev, 0.14f) : 0.45f;
     const float dirX = sunHoriz * 0.82f;
     const float dirZ = 0.55f;
     const float len = std::sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
     m_sky.sunDirection = {dirX / len, dirY / len, dirZ / len};
 
-    // Smooth atmospheric color palette (Night <-> Sunset/Sunrise <-> Midday)
     constexpr Color3 kNightZenith{0.02f, 0.04f, 0.10f};
     constexpr Color3 kNightHorizon{0.07f, 0.09f, 0.18f};
     constexpr Color3 kNightSun{0.35f, 0.48f, 0.78f};

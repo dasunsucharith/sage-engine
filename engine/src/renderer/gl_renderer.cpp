@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #ifdef _MSC_VER
@@ -689,9 +690,14 @@ public:
 
             glm::mat4 model(1.0f);
             model = glm::translate(model, glm::vec3(e.position.x, e.position.y, e.position.z));
-            model = glm::rotate(model, glm::radians(e.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(e.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, glm::radians(e.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+            if (e.useQuaternion) {
+                const glm::quat q(e.rotationQuat.w, e.rotationQuat.x, e.rotationQuat.y, e.rotationQuat.z);
+                model *= glm::mat4_cast(glm::normalize(q));
+            } else {
+                model = glm::rotate(model, glm::radians(e.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(e.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::rotate(model, glm::radians(e.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+            }
             model = glm::scale(model, glm::vec3(e.scale.x, e.scale.y, e.scale.z));
             gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(model));
 

@@ -140,11 +140,18 @@ void Window::shutdown() {
     }
 }
 
+void Window::setRawEventCallback(std::function<void(const void*)> callback) {
+    m_rawEventCallback = std::move(callback);
+}
+
 void Window::pollEvents(InputState& input) {
     input.beginFrame();
 
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
+        if (m_rawEventCallback) {
+            m_rawEventCallback(&event);
+        }
         switch (event.type) {
             case SDL_EVENT_QUIT:
             case SDL_EVENT_WINDOW_CLOSE_REQUESTED:

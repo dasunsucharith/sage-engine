@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(SAGEEngine
-    VERSION 0.3.0
+    VERSION 0.4.0
     DESCRIPTION "SAGE — Scriptable AI Game Engine"
     LANGUAGES C CXX
 )
@@ -66,7 +66,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# 5. GLM 1.0.3 (3D Vector & Matrix Math, header-only)
+# 5. GLM 1.0.3 (3D Vector, Quaternion & Matrix Math, header-only)
 set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
@@ -92,6 +92,64 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
+# 8. Jolt Physics 5.7.0 (Multithreaded AAA 3D Rigid Body Physics Engine)
+set(TARGET_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+set(TARGET_HELLO_WORLD OFF CACHE BOOL "" FORCE)
+set(TARGET_PERFORMANCE_TEST OFF CACHE BOOL "" FORCE)
+set(TARGET_SAMPLES OFF CACHE BOOL "" FORCE)
+set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
+set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
+set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+set(GENERATE_DEBUG_SYMBOLS OFF CACHE BOOL "" FORCE)
+set(JPH_USE_DX12 OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    JoltPhysics
+    URL https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.7.0.tar.gz
+    SOURCE_SUBDIR Build
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(JoltPhysics)
+if(MSVC)
+    target_compile_options(Jolt PRIVATE /Z7)
+endif()
+
+# 9. Dear ImGui 1.92.6 (Live In-Game Viewport HUD & Scene Inspector)
+FetchContent_Declare(
+    imgui
+    URL https://github.com/ocornut/imgui/archive/refs/tags/v1.92.6.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(imgui)
+
+add_library(imgui_static STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+)
+target_include_directories(imgui_static
+    PUBLIC
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+)
+target_link_libraries(imgui_static
+    PUBLIC
+        SDL3::SDL3-static
+)
+
+# 10. miniaudio 0.11.26 (Cross-Platform 3D & Procedural Audio Engine, single header)
+FetchContent_Declare(
+    miniaudio
+    URL https://github.com/mackron/miniaudio/archive/refs/tags/0.11.26.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(miniaudio)
+
 find_package(OpenGL REQUIRED)
 
 # ------------------------------------------------------------------------------
@@ -99,6 +157,9 @@ find_package(OpenGL REQUIRED)
 # ------------------------------------------------------------------------------
 add_library(sage_core STATIC
     engine/src/engine.cpp
+    engine/src/audio/audio_engine.cpp
+    engine/src/editor/editor_ui.cpp
+    engine/src/physics/physics_world.cpp
     engine/src/platform/input.cpp
     engine/src/platform/window.cpp
     engine/src/renderer/gl_functions.cpp
@@ -120,6 +181,7 @@ target_include_directories(sage_core
         ${sol2_SOURCE_DIR}/include
         ${cgltf_SOURCE_DIR}
         ${stb_SOURCE_DIR}
+        ${miniaudio_SOURCE_DIR}
 )
 
 target_compile_definitions(sage_core
@@ -135,6 +197,8 @@ target_link_libraries(sage_core
         lua_static
         nlohmann_json::nlohmann_json
         glm::glm
+        Jolt
+        imgui_static
 )
 
 if(MSVC)

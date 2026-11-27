@@ -47,7 +47,7 @@ We follow the **Table Tennis Rule** (learned from RAGE's history): prove every c
 - [x] **v0.1 — Alive:** OS Window (`SDL3`), keyboard/mouse input, fixed-timestep game loop, and first GPU triangle.
 - [x] **v0.2 — Lua Brain:** Embedded Lua VM (`sol2`), FiveM-style `resources/` loader, and live hot-reloading.
 - [x] **v0.3 — 3D World:** Free-fly 3D camera, `.glb`/`.gltf` model loader, PBR lighting, and JSON scene loader.
-- [ ] **v0.4 — Editor & Physics:** Live `Dear ImGui` viewport/inspector + `Jolt Physics` (gravity, collisions, drivable car) + 3D audio (`miniaudio`).
+- [x] **v0.4 — Editor & Physics:** Live `Dear ImGui` viewport/inspector + `Jolt Physics` (gravity, collisions, drivable car) + 3D audio (`miniaudio`).
 - [ ] **v0.5+ — RAGE-Scale Tech:** Deferred G-Buffer renderer, Cascaded Shadow Maps, open-world chunk streaming, active ragdolls, and Vulkan/DX12 backend.
 
 ---

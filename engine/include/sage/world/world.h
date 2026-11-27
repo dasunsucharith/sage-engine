@@ -12,6 +12,13 @@ struct Vec3 {
     float z = 0.0f;
 };
 
+struct Quat {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float w = 1.0f;
+};
+
 struct Color3 {
     float r = 1.0f;
     float g = 1.0f;
@@ -26,13 +33,15 @@ enum class EntityShape {
     Model
 };
 
-// Scene entity rendered in 3D perspective (either a primitive or a .glb/.gltf model).
+// Scene entity rendered in 3D perspective (primitive or .glb/.gltf model).
 struct Entity {
     std::string id;
     EntityShape shape = EntityShape::Box;
     std::string modelPath;           // Used when shape == EntityShape::Model
     Vec3 position{0.0f, 0.0f, 0.0f}; // World meters (+Y up)
     Vec3 rotation{0.0f, 0.0f, 0.0f}; // pitch (X), yaw (Y), roll (Z) in degrees
+    Quat rotationQuat{};             // Used when useQuaternion == true (Jolt Physics 3D bodies)
+    bool useQuaternion = false;
     Vec3 scale{1.0f, 1.0f, 1.0f};
     Color3 color{1.0f, 1.0f, 1.0f};  // Albedo for primitives; tint multiplier for .glb models
     bool emissive = false;
@@ -40,8 +49,8 @@ struct Entity {
 };
 
 struct SkySettings {
-    float timeOfDay = 17.5f;                       // 0..24 hours (17.5 = golden sunset)
-    Vec3 sunDirection{0.48f, 0.42f, 0.77f};        // Unit vector pointing toward the sun
+    float timeOfDay = 17.5f;
+    Vec3 sunDirection{0.48f, 0.42f, 0.77f};
     Color3 sunColor{1.0f, 0.84f, 0.62f};
     Color3 skyZenithColor{0.14f, 0.24f, 0.48f};
     Color3 skyHorizonColor{0.82f, 0.54f, 0.42f};
@@ -76,6 +85,7 @@ public:
 
     bool setPosition(const std::string& id, float x, float y, float z);
     bool setRotation(const std::string& id, float pitch, float yaw, float roll);
+    bool setRotationQuat(const std::string& id, float x, float y, float z, float w);
     bool setScale(const std::string& id, float x, float y, float z);
     bool setColor(const std::string& id, float r, float g, float b);
     bool setEmissive(const std::string& id, bool emissive);
@@ -83,12 +93,14 @@ public:
 
     bool hasEntity(const std::string& id) const;
     Vec3 getPosition(const std::string& id) const;
+    Entity* findEntity(const std::string& id);
+    const Entity* findEntity(const std::string& id) const;
     bool destroy(const std::string& id);
     void clear();
 
-    // Computes realistic sun angle, sky gradient, and fog tint from hour (0..24)
     void setTimeOfDay(float hours);
 
+    std::vector<Entity>& entitiesMutable() { return m_entities; }
     const std::vector<Entity>& entities() const { return m_entities; }
     std::size_t entityCount() const { return m_entities.size(); }
 
@@ -99,9 +111,6 @@ public:
     const SkySettings& sky() const { return m_sky; }
 
 private:
-    Entity* findMutable(const std::string& id);
-    const Entity* findConst(const std::string& id) const;
-
     std::vector<Entity> m_entities;
     std::unordered_map<std::string, std::size_t> m_indexById;
     CameraState m_camera{};

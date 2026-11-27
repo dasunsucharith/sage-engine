@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 
 struct SDL_Window;
@@ -18,7 +19,6 @@ struct WindowConfig {
 };
 
 // Cross-platform OS window and OpenGL context wrapper powered by SDL3.
-// Keeps SDL types encapsulated so the rest of SAGE stays platform-agnostic.
 class Window {
 public:
     Window() = default;
@@ -34,6 +34,12 @@ public:
     void swapBuffers();
     void setTitle(const std::string& title);
 
+    // Optional raw SDL_Event hook (used by Dear ImGui's SDL3 backend)
+    void setRawEventCallback(std::function<void(const void*)> callback);
+
+    SDL_Window* nativeWindow() const { return m_window; }
+    SDL_GLContextState* nativeGLContext() const { return m_glContext; }
+
     bool shouldClose() const { return m_shouldClose; }
     void requestClose() { m_shouldClose = true; }
 
@@ -42,15 +48,13 @@ public:
     bool wasResized() const { return m_wasResized; }
     void clearResizedFlag() { m_wasResized = false; }
 
-    // High-resolution monotonic clock in seconds (powered by SDL3 performance counter)
     static double getTimeSeconds();
-
-    // Loads an OpenGL function pointer from the active graphics driver
     static void* getGLProcAddress(const char* procName);
 
 private:
     SDL_Window* m_window = nullptr;
     SDL_GLContextState* m_glContext = nullptr;
+    std::function<void(const void*)> m_rawEventCallback;
     int m_width = 0;
     int m_height = 0;
     bool m_shouldClose = false;

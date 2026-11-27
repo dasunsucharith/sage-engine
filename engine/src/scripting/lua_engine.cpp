@@ -1,5 +1,7 @@
 #include "sage/scripting/lua_engine.h"
 
+#include "sage/audio/audio_engine.h"
+#include "sage/physics/physics_world.h"
 #include "sage/platform/input.h"
 #include "sage/world/world.h"
 
@@ -7,6 +9,7 @@
 #include <sol/sol.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
@@ -15,6 +18,20 @@
 namespace sage {
 
 namespace fs = std::filesystem;
+
+namespace {
+
+MouseButton mouseButtonFromName(const std::string& name) {
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    if (lower == "right" || lower == "rmb") return MouseButton::Right;
+    if (lower == "middle" || lower == "mmb") return MouseButton::Middle;
+    return MouseButton::Left;
+}
+
+} // namespace
 
 struct LoadedResource {
     std::string name;
@@ -31,6 +48,8 @@ struct LoadedResource {
 struct LuaEngine::Impl {
     fs::path resourcesRoot;
     World* world = nullptr;
+    PhysicsWorld* physics = nullptr;
+    AudioEngine* audio = nullptr;
     const InputState* input = nullptr;
     LuaHostCallbacks callbacks;
 
@@ -57,16 +76,28 @@ struct LuaEngine::Impl {
         // --- input.* namespace ---
         sol::table inputTbl = state.create_named_table("input");
         inputTbl.set_function("isKeyDown", [this](const std::string& keyName) -> bool {
+            if (callbacks.isUiCapturingKeyboard && callbacks.isUiCapturingKeyboard()) {
+                return false;
+            }
             return input ? input->isKeyDown(keyFromName(keyName)) : false;
         });
         inputTbl.set_function("wasKeyPressed", [this](const std::string& keyName) -> bool {
+            if (callbacks.isUiCapturingKeyboard && callbacks.isUiCapturingKeyboard()) {
+                return false;
+            }
             return input ? input->wasKeyPressed(keyFromName(keyName)) : false;
         });
         inputTbl.set_function("wasKeyReleased", [this](const std::string& keyName) -> bool {
             return input ? input->wasKeyReleased(keyFromName(keyName)) : false;
         });
+        inputTbl.set_function("isMouseDown", [this](const std::string& btnName) -> bool {
+            if (callbacks.isUiCapturingMouse && callbacks.isUiCapturingMouse()) {
+                return false;
+            }
+            return input ? input->isMouseButtonDown(mouseButtonFromName(btnName)) : false;
+        });
         inputTbl.set_function("getMouseDelta", [this]() -> std::tuple<float, float> {
-            if (!input) {
+            if (!input || (callbacks.isUiCapturingMouse && callbacks.isUiCapturingMouse())) {
                 return {0.0f, 0.0f};
             }
             return {input->mouseDeltaX(), input->mouseDeltaY()};
@@ -149,6 +180,76 @@ struct LuaEngine::Impl {
         cameraTbl.set_function("setFov", [this](float fovDegrees) {
             if (world) {
                 world->camera().fovDegrees = std::clamp(fovDegrees, 25.0f, 110.0f);
+            }
+        });
+
+        // --- physics.* namespace (Jolt Physics 5.7) ---
+        sol::table physTbl = state.create_named_table("physics");
+        physTbl.set_function("addStaticBox", [this](const std::string& id, float px, float py, float pz, float hx, float hy, float hz) -> bool {
+            return physics ? physics->addStaticBox(id, {px, py, pz}, {hx, hy, hz}) : false;
+        });
+        physTbl.set_function("addDynamicBox", [this](
+            const std::string& id, float px, float py, float pz, float hx, float hy, float hz,
+            sol::optional<float> mass, sol::optional<float> restitution, sol::optional<float> friction) -> bool {
+            return physics ? physics->addDynamicBox(
+                id, {px, py, pz}, {hx, hy, hz},
+                mass.value_or(25.0f), restitution.value_or(0.28f), friction.value_or(0.65f)) : false;
+        });
+        physTbl.set_function("addKinematicBox", [this](const std::string& id, float px, float py, float pz, float hx, float hy, float hz) -> bool {
+            return physics ? physics->addKinematicBox(id, {px, py, pz}, {hx, hy, hz}) : false;
+        });
+        physTbl.set_function("moveKinematic", [this](
+            const std::string& id, float px, float py, float pz, float pitch, float yaw, float roll, float dt) -> bool {
+            return physics ? physics->moveKinematic(id, {px, py, pz}, {pitch, yaw, roll}, dt) : false;
+        });
+        physTbl.set_function("applyImpulse", [this](const std::string& id, float ix, float iy, float iz) -> bool {
+            return physics ? physics->applyImpulse(id, {ix, iy, iz}) : false;
+        });
+        physTbl.set_function("applyExplosion", [this](float cx, float cy, float cz, float radius, float strength) -> int {
+            return physics ? physics->applyExplosion({cx, cy, cz}, radius, strength) : 0;
+        });
+        physTbl.set_function("getSpeed", [this](const std::string& id) -> float {
+            return physics ? physics->getLinearSpeed(id) : 0.0f;
+        });
+        physTbl.set_function("setGravity", [this](float gx, float gy, float gz) {
+            if (physics) {
+                physics->setGravity({gx, gy, gz});
+            }
+        });
+        physTbl.set_function("raycast", [this](float ox, float oy, float oz, float dx, float dy, float dz, float maxDist)
+            -> std::tuple<bool, float, float, float, std::string> {
+            if (!physics) {
+                return {false, 0.0f, 0.0f, 0.0f, ""};
+            }
+            const RaycastHit hit = physics->raycast({ox, oy, oz}, {dx, dy, dz}, maxDist);
+            return {hit.hit, hit.position.x, hit.position.y, hit.position.z, hit.entityId};
+        });
+
+        // --- audio.* namespace (miniaudio 0.11) ---
+        sol::table audioTbl = state.create_named_table("audio");
+        audioTbl.set_function("setVehicleState", [this](float rpm01, float throttle01, float drift01, float boost01, bool airborne) {
+            if (audio) {
+                audio->setVehicleState(rpm01, throttle01, drift01, boost01, airborne);
+            }
+        });
+        audioTbl.set_function("playImpact", [this](sol::optional<float> intensity) {
+            if (audio) {
+                audio->playImpact(intensity.value_or(0.8f));
+            }
+        });
+        audioTbl.set_function("playChime", [this]() {
+            if (audio) {
+                audio->playChime();
+            }
+        });
+        audioTbl.set_function("playExplosion", [this]() {
+            if (audio) {
+                audio->playExplosion();
+            }
+        });
+        audioTbl.set_function("setVolume", [this](float vol) {
+            if (audio) {
+                audio->setMasterVolume(vol);
             }
         });
     }
@@ -321,10 +422,14 @@ LuaEngine::~LuaEngine() {
 bool LuaEngine::initialize(
     const fs::path& resourcesRoot,
     World& world,
+    PhysicsWorld& physics,
+    AudioEngine& audio,
     const InputState& input,
     LuaHostCallbacks callbacks) {
     m_impl->resourcesRoot = resourcesRoot;
     m_impl->world = &world;
+    m_impl->physics = &physics;
+    m_impl->audio = &audio;
     m_impl->input = &input;
     m_impl->callbacks = std::move(callbacks);
 
@@ -333,6 +438,9 @@ bool LuaEngine::initialize(
 
 bool LuaEngine::reloadAll() {
     m_impl->callShutdownHooks();
+    if (m_impl->physics) {
+        m_impl->physics->clearBodies();
+    }
     if (m_impl->world) {
         m_impl->world->clear();
     }
@@ -375,8 +483,9 @@ bool LuaEngine::reloadAll() {
     ++m_impl->reloadCount;
 
     std::cout << "[SAGE][Lua] Active resources: " << m_impl->resources.size()
-              << " | Total world entities: " << (m_impl->world ? m_impl->world->entityCount() : 0)
-              << " (Save any .lua or .json file, or press F5 to hot-reload!)\n";
+              << " | Entities: " << (m_impl->world ? m_impl->world->entityCount() : 0)
+              << " | Jolt bodies: " << (m_impl->physics ? m_impl->physics->bodyCount() : 0)
+              << "\n";
     return true;
 }
 

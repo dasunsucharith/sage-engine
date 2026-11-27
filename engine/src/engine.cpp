@@ -48,14 +48,15 @@ void Engine::syncFreeFlyFromWorldCamera() {
 }
 
 void Engine::updateFreeFlyCamera(float dt) {
-    if (m_input.isMouseButtonDown(MouseButton::Right) || m_input.isMouseButtonDown(MouseButton::Left)) {
-        constexpr float kMouseSensitivity = 0.22f;
-        m_flyYawDeg -= m_input.mouseDeltaX() * kMouseSensitivity;
-        m_flyPitchDeg = std::clamp(m_flyPitchDeg - m_input.mouseDeltaY() * kMouseSensitivity, -85.0f, 85.0f);
-    }
-
-    if (m_input.mouseWheelDelta() != 0.0f) {
-        m_flySpeed = std::clamp(m_flySpeed * (1.0f + m_input.mouseWheelDelta() * 0.15f), 4.0f, 120.0f);
+    if (!m_editor.wantsCaptureMouse()) {
+        if (m_input.isMouseButtonDown(MouseButton::Right) || m_input.isMouseButtonDown(MouseButton::Left)) {
+            constexpr float kMouseSensitivity = 0.22f;
+            m_flyYawDeg -= m_input.mouseDeltaX() * kMouseSensitivity;
+            m_flyPitchDeg = std::clamp(m_flyPitchDeg - m_input.mouseDeltaY() * kMouseSensitivity, -85.0f, 85.0f);
+        }
+        if (m_input.mouseWheelDelta() != 0.0f) {
+            m_flySpeed = std::clamp(m_flySpeed * (1.0f + m_input.mouseWheelDelta() * 0.15f), 4.0f, 120.0f);
+        }
     }
 
     const float yawRad = m_flyYawDeg * kDegToRad;
@@ -65,35 +66,36 @@ void Engine::updateFreeFlyCamera(float dt) {
     const Vec3 forward{std::sin(yawRad) * cp, std::sin(pitchRad), std::cos(yawRad) * cp};
     const Vec3 right{-std::cos(yawRad), 0.0f, std::sin(yawRad)};
 
-    float speed = m_flySpeed;
-    if (m_input.isKeyDown(Key::LeftShift) || m_input.isKeyDown(Key::RightShift)) {
-        speed *= 2.5f;
-    }
-
-    const float step = speed * dt;
-    if (m_input.isKeyDown(Key::W) || m_input.isKeyDown(Key::Up)) {
-        m_flyPos.x += forward.x * step;
-        m_flyPos.y += forward.y * step;
-        m_flyPos.z += forward.z * step;
-    }
-    if (m_input.isKeyDown(Key::S) || m_input.isKeyDown(Key::Down)) {
-        m_flyPos.x -= forward.x * step;
-        m_flyPos.y -= forward.y * step;
-        m_flyPos.z -= forward.z * step;
-    }
-    if (m_input.isKeyDown(Key::D) || m_input.isKeyDown(Key::Right)) {
-        m_flyPos.x += right.x * step;
-        m_flyPos.z += right.z * step;
-    }
-    if (m_input.isKeyDown(Key::A) || m_input.isKeyDown(Key::Left)) {
-        m_flyPos.x -= right.x * step;
-        m_flyPos.z -= right.z * step;
-    }
-    if (m_input.isKeyDown(Key::E) || m_input.isKeyDown(Key::Space)) {
-        m_flyPos.y += step;
-    }
-    if (m_input.isKeyDown(Key::Q) || m_input.isKeyDown(Key::LeftControl)) {
-        m_flyPos.y -= step;
+    if (!m_editor.wantsCaptureKeyboard()) {
+        float speed = m_flySpeed;
+        if (m_input.isKeyDown(Key::LeftShift) || m_input.isKeyDown(Key::RightShift)) {
+            speed *= 2.5f;
+        }
+        const float step = speed * dt;
+        if (m_input.isKeyDown(Key::W) || m_input.isKeyDown(Key::Up)) {
+            m_flyPos.x += forward.x * step;
+            m_flyPos.y += forward.y * step;
+            m_flyPos.z += forward.z * step;
+        }
+        if (m_input.isKeyDown(Key::S) || m_input.isKeyDown(Key::Down)) {
+            m_flyPos.x -= forward.x * step;
+            m_flyPos.y -= forward.y * step;
+            m_flyPos.z -= forward.z * step;
+        }
+        if (m_input.isKeyDown(Key::D) || m_input.isKeyDown(Key::Right)) {
+            m_flyPos.x += right.x * step;
+            m_flyPos.z += right.z * step;
+        }
+        if (m_input.isKeyDown(Key::A) || m_input.isKeyDown(Key::Left)) {
+            m_flyPos.x -= right.x * step;
+            m_flyPos.z -= right.z * step;
+        }
+        if (m_input.isKeyDown(Key::E) || m_input.isKeyDown(Key::Space)) {
+            m_flyPos.y += step;
+        }
+        if (m_input.isKeyDown(Key::Q) || m_input.isKeyDown(Key::LeftControl)) {
+            m_flyPos.y -= step;
+        }
     }
 
     m_world.camera().position = m_flyPos;
@@ -130,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v0.3.0 (3D World)\n";
+    std::cout << "  SAGE Engine v0.4.0 (Editor + Physics + Audio)\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -166,6 +168,20 @@ bool Engine::initialize() {
     std::cout << "[SAGE][GPU] Renderer: " << gpu.gpuRenderer << "\n";
     std::cout << "[SAGE][GPU] Version : " << gpu.apiVersion << "\n";
 
+    if (!m_physics.initialize()) {
+        std::cerr << "[SAGE] Failed to initialize Jolt Physics.\n";
+        shutdown();
+        return false;
+    }
+
+    m_audio.initialize(m_config.silentAudio);
+
+    if (m_editor.initialize(m_window)) {
+        m_window.setRawEventCallback([this](const void* sdlEvent) {
+            m_editor.processEvent(sdlEvent);
+        });
+    }
+
     m_startTime = Window::getTimeSeconds();
 
     if (fs::exists(m_resolvedScenePath)) {
@@ -188,13 +204,23 @@ bool Engine::initialize() {
             SceneLoader::loadFromFile(m_resolvedScenePath, m_world);
         }
     };
+    callbacks.isUiCapturingKeyboard = [this]() -> bool {
+        return m_editor.wantsCaptureKeyboard();
+    };
+    callbacks.isUiCapturingMouse = [this]() -> bool {
+        return m_editor.wantsCaptureMouse();
+    };
 
-    m_lua.initialize(resolvedResources, m_world, m_input, std::move(callbacks));
+    m_lua.initialize(resolvedResources, m_world, m_physics, m_audio, m_input, std::move(callbacks));
     return true;
 }
 
 void Engine::shutdown() {
     m_lua.shutdown();
+    m_window.setRawEventCallback(nullptr);
+    m_editor.shutdown();
+    m_audio.shutdown();
+    m_physics.shutdown();
     m_world.clear();
     if (m_renderer) {
         m_renderer->shutdown();
@@ -207,6 +233,7 @@ void Engine::fixedTick(double dt) {
     if (!m_freeFlyMode) {
         m_lua.tick(dt);
     }
+    m_physics.step(static_cast<float>(dt), m_world);
 }
 
 void Engine::render(double elapsedSeconds) {
@@ -214,6 +241,35 @@ void Engine::render(double elapsedSeconds) {
     m_renderer->beginFrame(clearColor);
     m_renderer->renderWorld(m_world, static_cast<float>(elapsedSeconds));
     m_renderer->endFrame();
+
+    EditorStats stats;
+    stats.fps = m_smoothedFps;
+    stats.frameMs = m_lastFrameMs;
+    stats.gpuRenderer = m_renderer->info().gpuRenderer;
+    stats.loadedModels = m_renderer->loadedModelCount();
+    stats.luaResources = m_lua.activeResourceCount();
+    stats.freeFlyMode = m_freeFlyMode;
+
+    EditorActions actions;
+    actions.onHotReload = [this]() {
+        m_scriptTitle.clear();
+        m_lua.reloadAll();
+    };
+    actions.onToggleFreeFly = [this]() {
+        m_freeFlyMode = !m_freeFlyMode;
+        if (m_freeFlyMode) {
+            syncFreeFlyFromWorldCamera();
+        }
+    };
+    actions.onTriggerShockwave = [this]() {
+        const Vec3 carPos = m_world.hasEntity("player_car")
+            ? m_world.getPosition("player_car")
+            : m_world.camera().target;
+        m_physics.applyExplosion(carPos, 24.0f, 360.0f);
+        m_audio.playExplosion();
+    };
+
+    m_editor.render(m_world, m_physics, m_audio, stats, actions);
     m_window.swapBuffers();
 }
 
@@ -227,7 +283,7 @@ void Engine::updateWindowTitle(double fps) {
     } else {
         oss << m_config.appName
             << " | " << std::fixed << std::setprecision(0) << fps << " FPS"
-            << " | Tab = Free-Fly | F5 = Hot-Reload";
+            << " | F1 Editor | F5 Reload";
     }
     m_window.setTitle(oss.str());
 }
@@ -254,6 +310,7 @@ int Engine::run() {
         const double currentTime = Window::getTimeSeconds();
         const double frameDelta = std::min(currentTime - previousTime, kMaxFrameDelta);
         previousTime = currentTime;
+        m_lastFrameMs = static_cast<float>(frameDelta * 1000.0);
 
         m_window.pollEvents(m_input);
 
@@ -267,11 +324,15 @@ int Engine::run() {
             break;
         }
 
+        if (m_input.wasKeyPressed(Key::F1)) {
+            m_editor.toggleVisible();
+        }
+
         if (m_input.wasKeyPressed(Key::Tab)) {
             m_freeFlyMode = !m_freeFlyMode;
             if (m_freeFlyMode) {
                 syncFreeFlyFromWorldCamera();
-                std::cout << "[SAGE][Camera] Free-Fly 3D Camera ON (Hold Right-Mouse + WASD/Q/E, Scroll = Speed, Tab = Return)\n";
+                std::cout << "[SAGE][Camera] Free-Fly 3D Camera ON\n";
             } else {
                 std::cout << "[SAGE][Camera] Drive Camera ON\n";
             }
@@ -295,7 +356,6 @@ int Engine::run() {
             updateFreeFlyCamera(static_cast<float>(frameDelta));
         }
 
-        // Fixed-timestep simulation loop (deterministic 60 Hz gameplay + Lua ticks)
         accumulator += frameDelta;
         while (accumulator >= m_config.fixedTimeStep) {
             fixedTick(m_config.fixedTimeStep);
@@ -308,17 +368,20 @@ int Engine::run() {
         ++fpsFrames;
         fpsTimer += frameDelta;
         if (fpsTimer >= 0.25) {
-            updateWindowTitle(static_cast<double>(fpsFrames) / fpsTimer);
+            const double fps = static_cast<double>(fpsFrames) / fpsTimer;
+            m_smoothedFps = static_cast<float>(fps);
+            updateWindowTitle(fps);
             fpsTimer = 0.0;
             fpsFrames = 0;
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] 3D Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v0.4 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()
-                      << " .glb model(s) loaded cleanly).\n";
+                      << " .glb model(s), " << m_physics.bodyCount()
+                      << " Jolt bodies).\n";
             break;
         }
     }

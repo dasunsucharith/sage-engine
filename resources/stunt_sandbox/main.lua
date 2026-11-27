@@ -1,72 +1,82 @@
 -- =============================================================================
--- SAGE Engine Showcase Game: 3D Mini Stunt & Delivery Sandbox (v0.3)
+-- SAGE Engine v0.4 Showcase: 3D Aventador SVJ Stunt & Delivery Sandbox
 -- =============================================================================
--- LIVE HOT-RELOAD DEMO:
---   Edit scenes/stunt_city.json OR any setting below and press Ctrl+S!
---   Replace assets/models/sports_car.glb with your own Blender .glb anytime!
+-- Powered by: Jolt Physics 5.7 + miniaudio 0.11 + Dear ImGui 1.92 + Lua 5.4
 --
 -- CONTROLS:
---   W / S (or Up / Down)   : Accelerate / Brake & Reverse
---   A / D (or Left / Right): Steer
---   Space                  : Handbrake Drift
---   Left Shift             : Nitro Boost (widens 3D FOV!)
---   T                      : Cycle Time of Day (Sunset -> Noon -> Night -> Sunrise)
---   Tab                    : Toggle 3D Free-Fly Inspector Camera
---   R                      : Reset car to city center
---   F5                     : Manual Hot-Reload (JSON scene + Lua scripts)
---   Esc                    : Quit
+--   W / S (or Up / Down)   : Accelerate / Brake & Reverse (6-speed auto!)
+--   A / D (or Left / Right): Speed-sensitive Steering
+--   Space                  : Handbrake Drift (GTA-style lateral slide)
+--   Left Shift             : Nitro Boost (V12 roar + wider 3D FOV)
+--   Right-Mouse Drag       : Orbit 3D Chase Camera around car
+--   C                      : Cycle Camera (Far Chase -> Close Action -> Hood Cam)
+--   X                      : Physics Shockwave (blasts nearby crates sky-high!)
+--   B                      : Drop a fresh 6-crate Jolt Physics pyramid ahead
+--   T                      : Cycle Time of Day (Sunset / Noon / Night / Sunrise)
+--   Tab                    : Toggle Free-Fly 3D Inspector Camera
+--   F1                     : Toggle Dear ImGui Live Editor HUD
+--   F5 / Ctrl+S            : Live Hot-Reload (JSON scene + Lua scripts)
+--   R                      : Reset Aventador SVJ to city center
 -- =============================================================================
 
 local CONFIG = {
-    -- Your custom Blender Lamborghini Aventador SVJ!
     carModel      = "assets/models/aventador_svj.glb",
     crateModel    = "assets/models/crate.glb",
-    carTint       = { 1.0, 1.0, 1.0 }, -- {1,1,1} keeps original .glb PBR paint colors!
-    maxSpeed      = 27.0,              -- Base top speed (m/s)
-    boostSpeed    = 40.0,              -- Nitro top speed (m/s)
-    acceleration  = 24.0,
-    reverseAccel  = 16.0,
-    turnSpeed     = 135.0,             -- Degrees/sec
-    normalGrip    = 8.5,
-    driftGrip     = 2.0,               -- Lower = wider GTA-style power slides!
-    gravity       = 26.0,              -- 3D stunt jump gravity (m/s^2)
-    chaseDistance = 10.5,              -- 3D chase camera distance behind car
-    chaseHeight   = 4.6,               -- 3D chase camera height
+    carTint       = { 1.0, 1.0, 1.0 },
+    maxSpeed      = 32.0,   -- Base top speed (~115 km/h in city scale)
+    boostSpeed    = 46.0,   -- Nitro top speed (~165 km/h)
+    acceleration  = 27.0,
+    brakeForce    = 38.0,
+    reverseAccel  = 18.0,
+    lowSpeedTurn  = 160.0,  -- Agile low-speed turning (deg/s)
+    highSpeedTurn = 82.0,   -- Stable high-speed steering (deg/s)
+    normalGrip    = 9.5,
+    driftGrip     = 2.2,    -- Smooth controllable GTA-style drifts
+    gravity       = 26.0,
     arenaHalfSize = 42.5,
 }
 
 -- -----------------------------------------------------------------------------
--- 3D Game State
+-- Vehicle, Camera & Mission State
 -- -----------------------------------------------------------------------------
 local car = {
     x = 0.0, y = 0.0, z = -4.0,
     vx = 0.0, vy = 0.0, vz = 0.0,
-    yaw = 0.0,        -- Degrees around +Y (0 = facing +Z)
-    pitch = 0.0,      -- Jump pitch tilt (negative = nose up)
-    roll = 0.0,       -- Drift body roll
+    yaw = 0.0,
+    pitch = 0.0,
+    roll = 0.0,
+    steerSmooth = 0.0,
     grounded = true,
     airTime = 0.0,
     boostEnergy = 100.0,
     boostTimer = 0.0,
     isDrifting = false,
     isBoosting = false,
+    gear = 1,
+    rpm = 0.12,
 }
 
+local camPresets = {
+    { name = "Far Chase",    dist = 10.2, height = 4.2, lookAhead = 5.0, fov = 60.0 },
+    { name = "Close Action", dist =  7.2, height = 2.9, lookAhead = 6.5, fov = 66.0 },
+    { name = "Hood Cam",     dist = -0.7, height = 1.48, lookAhead = 18.0, fov = 72.0 },
+}
+local camPresetIdx = 1
 local cam = {
-    x = 0.0, y = 6.0, z = -15.0,
-    tx = 0.0, ty = 1.5, tz = 0.0,
+    x = 0.0, y = 5.0, z = -14.0,
+    tx = 0.0, ty = 1.4, tz = 0.0,
     fov = 60.0,
+    orbitYaw = 0.0,
+    orbitPitch = 0.0,
 }
 
--- Matches the 4 city blocks in scenes/stunt_city.json
 local buildings = {
-    { x =  14.5, z =  14.5, w = 11.8, h = 11.8 },
-    { x = -14.5, z =  14.5, w = 11.8, h = 11.8 },
-    { x = -14.5, z = -14.5, w = 11.8, h = 11.8 },
-    { x =  14.5, z = -14.5, w = 11.8, h = 11.8 },
+    { id = "col_bldg_ne", x =  14.5, z =  14.5, w = 11.8, h = 11.8 },
+    { id = "col_bldg_nw", x = -14.5, z =  14.5, w = 11.8, h = 11.8 },
+    { id = "col_bldg_sw", x = -14.5, z = -14.5, w = 11.8, h = 11.8 },
+    { id = "col_bldg_se", x =  14.5, z = -14.5, w = 11.8, h = 11.8 },
 }
 
--- Matches the 4 placed assets/models/stunt_ramp.glb jump ramps in scenes/stunt_city.json
 local ramps = {
     { x =   0.0, z =  14.5, yaw =   0.0, width = 5.0, length = 7.5, height = 2.2 },
     { x =   0.0, z = -14.5, yaw = 180.0, width = 5.0, length = 7.5, height = 2.2 },
@@ -92,13 +102,19 @@ local timePresets = {
     { hour =  6.4, name = "Early Sunrise" },
 }
 local timePresetIdx = 1
-local tKeyWasDown = false
+
+-- Debounce latches for one-shot hotkeys inside 60 Hz fixed tick
+local keyLatch = { T = false, C = false, X = false, B = false, R = false }
 
 local crates = {}
+local nextCrateSeq = 0
+local impactSoundCooldown = 0.0
+
 local activeDeliveryIdx = 1
 local deliveriesDone = 0
 local score = 0
 local stuntJumps = 0
+local cratesSmashed = 0
 local deliveryTimer = 0.0
 local titleUpdateAccum = 0.0
 
@@ -119,11 +135,70 @@ local function degToRad(deg)
     return deg * (math.pi / 180.0)
 end
 
+local function keyJustPressed(name)
+    local down = input.isKeyDown(name)
+    local triggered = down and (not keyLatch[name])
+    keyLatch[name] = down
+    return triggered
+end
+
 -- -----------------------------------------------------------------------------
--- Spawn Dynamic 3D Game Entities (.glb Car, .glb Crates, Road Markings, Beacon)
+-- Jolt Physics Setup & Dynamic Crate Pyramids
 -- -----------------------------------------------------------------------------
-local function spawnDynamicWorld()
-    -- Dashed yellow road lines along both main avenues
+local function spawnCrate(x, y, z)
+    nextCrateSeq = nextCrateSeq + 1
+    local id = "phys_crate_" .. nextCrateSeq
+    world.spawnModel(id, CONFIG.crateModel, x, y, z)
+    physics.addDynamicBox(id, x, y, z, 0.64, 0.64, 0.64, 18.0, 0.32, 0.62)
+    table.insert(crates, { id = id, smashed = false })
+end
+
+-- Builds a real 3-tier Jolt Physics stacked pyramid (3 + 2 + 1 = 6 tumbling crates!)
+local function spawnCratePyramid(cx, cz, yawDeg)
+    local rad = degToRad(yawDeg or 0.0)
+    local rightX, rightZ = math.cos(rad), -math.sin(rad)
+    local step = 1.32
+
+    -- Bottom row (3 crates)
+    for i = -1, 1 do
+        spawnCrate(cx + rightX * (i * step), 0.66, cz + rightZ * (i * step))
+    end
+    -- Middle row (2 crates)
+    for _, off in ipairs({ -0.5, 0.5 }) do
+        spawnCrate(cx + rightX * (off * step), 1.96, cz + rightZ * (off * step))
+    end
+    -- Top crate
+    spawnCrate(cx, 3.26, cz)
+end
+
+local function setupJoltPhysicsWorld()
+    -- 1. Static ground plane collider (top face at y = 0.0)
+    physics.addStaticBox("col_ground", 0.0, -1.0, 0.0, 120.0, 1.0, 120.0)
+
+    -- 2. Static perimeter walls (so flying crates bounce back into the arena!)
+    physics.addStaticBox("col_wall_n",   0.0, 4.0,  44.5, 46.0, 5.0, 1.0)
+    physics.addStaticBox("col_wall_s",   0.0, 4.0, -44.5, 46.0, 5.0, 1.0)
+    physics.addStaticBox("col_wall_e",  44.5, 4.0,   0.0,  1.0, 5.0, 46.0)
+    physics.addStaticBox("col_wall_w", -44.5, 4.0,   0.0,  1.0, 5.0, 46.0)
+
+    -- 3. Static skyscraper colliders
+    for _, b in ipairs(buildings) do
+        physics.addStaticBox(b.id, b.x, 12.0, b.z, b.w * 0.5, 12.0, b.h * 0.5)
+    end
+
+    -- 4. Kinematic Jolt hull for the Lamborghini Aventador SVJ (transfers true collision momentum!)
+    physics.addKinematicBox("player_car", car.x, car.y + 0.65, car.z, 1.05, 0.62, 2.25)
+
+    -- 5. Four 3-tier tumbling Jolt Physics crate pyramids (24 rigid bodies!)
+    crates = {}
+    spawnCratePyramid(  0.0,  26.0,   0.0)
+    spawnCratePyramid(  0.0, -26.0,   0.0)
+    spawnCratePyramid( 26.0,   0.0,  90.0)
+    spawnCratePyramid(-26.0,   0.0,  90.0)
+end
+
+local function spawnDynamicVisuals()
+    -- Dashed yellow road markings
     local dashId = 0
     for d = -38, 38, 6 do
         if math.abs(d) > 7 and math.abs(math.abs(d) - 14.5) > 4.5 then
@@ -140,56 +215,33 @@ local function spawnDynamicWorld()
         end
     end
 
-    -- Player 3D Sports Car (.glb)
+    -- Player Lamborghini Aventador SVJ (.glb)
     world.spawnModel("player_car", CONFIG.carModel, car.x, car.y, car.z)
     world.setColor("player_car", CONFIG.carTint[1], CONFIG.carTint[2], CONFIG.carTint[3])
 
-    -- Glowing cyan nitro exhaust flame behind car
-    world.spawnTriangle("car_flame", car.x, car.y + 0.45, car.z)
-    world.setScale("car_flame", 0.95, 0.7, 2.2)
+    -- Nitro exhaust flame
+    world.spawnTriangle("car_flame", car.x, car.y + 0.42, car.z)
+    world.setScale("car_flame", 0.95, 0.65, 2.4)
     world.setColor("car_flame", 0.15, 0.88, 1.0)
     world.setEmissive("car_flame", true)
     world.setVisible("car_flame", false)
 
-    -- Floating golden 3D navigation chevron above car
-    world.spawnTriangle("nav_arrow", car.x, car.y + 2.7, car.z)
-    world.setScale("nav_arrow", 1.0, 0.65, 1.45)
+    -- Floating 3D nav arrow above car
+    world.spawnTriangle("nav_arrow", car.x, car.y + 2.6, car.z)
+    world.setScale("nav_arrow", 0.95, 0.6, 1.4)
     world.setColor("nav_arrow", 1.0, 0.86, 0.18)
     world.setEmissive("nav_arrow", true)
 
     -- Glowing 3D Delivery Checkpoint Beacon Ring
     local spot = deliverySpots[activeDeliveryIdx]
     world.spawnRing("delivery_ring", spot.x, 0.05, spot.z)
-    world.setScale("delivery_ring", 6.5, 4.2, 6.5)
+    world.setScale("delivery_ring", 6.5, 4.4, 6.5)
     world.setColor("delivery_ring", 1.0, 0.82, 0.14)
     world.setEmissive("delivery_ring", true)
-
-    -- 16 Smashable 3D .glb Crates around the city!
-    crates = {}
-    local crateCoords = {
-        {  5.0,  28.0 }, {  7.0,  28.0 }, {  6.0,  26.0 },
-        { -5.0, -28.0 }, { -7.0, -28.0 }, { -6.0, -26.0 },
-        { 28.0,  -6.0 }, { 28.0,  -8.0 }, { 26.0,  -7.0 },
-        {-28.0,   6.0 }, {-28.0,   8.0 }, {-26.0,   7.0 },
-        {  4.5,   4.5 }, { -4.5,   4.5 }, {  4.5,  -4.5 }, { -4.5, -4.5 },
-    }
-    for i, pos in ipairs(crateCoords) do
-        local c = {
-            id = "crate_" .. i,
-            x = pos[1], y = 0.65, z = pos[2],
-            vx = 0.0, vy = 0.0, vz = 0.0,
-            yaw = (i * 29) % 90,
-            angVel = 0.0,
-            smashed = false,
-        }
-        world.spawnModel(c.id, CONFIG.crateModel, c.x, c.y, c.z)
-        world.setRotation(c.id, 0.0, c.yaw, 0.0)
-        table.insert(crates, c)
-    end
 end
 
 -- -----------------------------------------------------------------------------
--- 3D Ramp Surface Height & Jump Launch
+-- Ramp Surface Sampling & Building Collisions
 -- -----------------------------------------------------------------------------
 local function sampleGroundHeightAndSlope(x, z)
     local groundY = 0.0
@@ -199,11 +251,10 @@ local function sampleGroundHeightAndSlope(x, z)
         local rad = degToRad(r.yaw)
         local dx = x - r.x
         local dz = z - r.z
-        -- Transform car position into ramp local space (+Z = up the ramp)
-        local localZ =  dx * math.sin(rad) + dz * math.cos(rad)
-        local localX =  dx * math.cos(rad) - dz * math.sin(rad)
+        local localZ = dx * math.sin(rad) + dz * math.cos(rad)
+        local localX = dx * math.cos(rad) - dz * math.sin(rad)
 
-        if math.abs(localX) <= (r.width * 0.5 + 0.6) and math.abs(localZ) <= (r.length * 0.5 + 0.2) then
+        if math.abs(localX) <= (r.width * 0.5 + 0.65) and math.abs(localZ) <= (r.length * 0.5 + 0.25) then
             local t = clamp((localZ + r.length * 0.5) / r.length, 0.0, 1.0)
             local h = t * r.height
             if h > groundY then
@@ -212,21 +263,18 @@ local function sampleGroundHeightAndSlope(x, z)
             end
         end
     end
-
     return groundY, onRamp
 end
 
--- -----------------------------------------------------------------------------
--- Collisions, Crates & Delivery Mission
--- -----------------------------------------------------------------------------
-local function resolveBuildingCollisions()
-    local carRadius = 1.6
+local function resolveCarBuildingCollisions()
+    local carRadius = 1.65
     local S = CONFIG.arenaHalfSize - carRadius
+    local hitWall = false
 
-    if car.x > S then car.x = S; car.vx = -car.vx * 0.4 end
-    if car.x < -S then car.x = -S; car.vx = -car.vx * 0.4 end
-    if car.z > S then car.z = S; car.vz = -car.vz * 0.4 end
-    if car.z < -S then car.z = -S; car.vz = -car.vz * 0.4 end
+    if car.x > S then car.x = S; car.vx = -car.vx * 0.35; hitWall = true end
+    if car.x < -S then car.x = -S; car.vx = -car.vx * 0.35; hitWall = true end
+    if car.z > S then car.z = S; car.vz = -car.vz * 0.35; hitWall = true end
+    if car.z < -S then car.z = -S; car.vz = -car.vz * 0.35; hitWall = true end
 
     for _, b in ipairs(buildings) do
         local halfW = b.w * 0.5 + carRadius
@@ -243,54 +291,36 @@ local function resolveBuildingCollisions()
                 car.z = car.z + (dz >= 0 and penZ or -penZ)
                 car.vz = -car.vz * 0.35
             end
+            hitWall = true
         end
+    end
+
+    local speed = math.sqrt(car.vx * car.vx + car.vz * car.vz)
+    if hitWall and speed > 4.0 and impactSoundCooldown <= 0.0 then
+        audio.playImpact(clamp(speed / 24.0, 0.3, 1.0))
+        impactSoundCooldown = 0.22
     end
 end
 
-local function updateCrates(dt)
-    local S = CONFIG.arenaHalfSize - 1.0
-    for _, c in ipairs(crates) do
-        local dx = c.x - car.x
-        local dz = c.z - car.z
-        local dy = math.abs(c.y - (car.y + 0.6))
-        local distSq = dx * dx + dz * dz
-        if distSq < 5.0 and dy < 2.0 and distSq > 0.0001 then
-            local dist = math.sqrt(distSq)
-            local nx = dx / dist
-            local nz = dz / dist
-            local carSpeed = math.sqrt(car.vx * car.vx + car.vz * car.vz)
-            local impulse = math.max(12.0, carSpeed * 1.45)
-            c.vx = nx * impulse + car.vx * 0.45
-            c.vz = nz * impulse + car.vz * 0.45
-            c.vy = math.max(c.vy, 5.5 + carSpeed * 0.22)
-            c.angVel = (math.random() > 0.5 and 1 or -1) * (200.0 + carSpeed * 14.0)
+local function checkPhysicsCrateSmashes(dt)
+    if impactSoundCooldown > 0.0 then
+        impactSoundCooldown = impactSoundCooldown - dt
+    end
 
-            if not c.smashed then
+    for _, c in ipairs(crates) do
+        if not c.smashed then
+            local spd = physics.getSpeed(c.id)
+            if spd > 2.2 then
                 c.smashed = true
+                cratesSmashed = cratesSmashed + 1
                 score = score + 25
-                world.setColor(c.id, 1.0, 0.55, 0.35)
-                sage.log("CRATE SMASH! +25 pts | Score: " .. score)
+                world.setColor(c.id, 1.0, 0.65, 0.42)
+                if impactSoundCooldown <= 0.0 then
+                    audio.playImpact(clamp(spd / 18.0, 0.35, 1.0))
+                    impactSoundCooldown = 0.11
+                end
             end
         end
-
-        c.vy = c.vy - CONFIG.gravity * dt
-        c.x = clamp(c.x + c.vx * dt, -S, S)
-        c.z = clamp(c.z + c.vz * dt, -S, S)
-        c.y = c.y + c.vy * dt
-        if c.y < 0.65 then
-            c.y = 0.65
-            c.vy = -c.vy * 0.35
-            if math.abs(c.vy) < 0.8 then c.vy = 0.0 end
-        end
-
-        c.yaw = c.yaw + c.angVel * dt
-        local drag = math.exp(-3.2 * dt)
-        c.vx = c.vx * drag
-        c.vz = c.vz * drag
-        c.angVel = c.angVel * drag
-
-        world.setPosition(c.id, c.x, c.y, c.z)
-        world.setRotation(c.id, 0.0, c.yaw, 0.0)
     end
 end
 
@@ -299,27 +329,28 @@ local function updateDeliveryMission(dt, timeNow)
     local spot = deliverySpots[activeDeliveryIdx]
 
     local ringRadius = 6.2 + 0.7 * math.sin(timeNow * 4.5)
-    world.setScale("delivery_ring", ringRadius, 4.4, ringRadius)
-    world.setRotation("delivery_ring", 0.0, timeNow * 50.0, 0.0)
+    world.setScale("delivery_ring", ringRadius, 4.5, ringRadius)
+    world.setRotation("delivery_ring", 0.0, timeNow * 55.0, 0.0)
 
-    -- Point floating 3D nav arrow above car toward active drop-off
     local dx = spot.x - car.x
     local dz = spot.z - car.z
     local dist = math.sqrt(dx * dx + dz * dz)
 
     if dist > 0.05 then
-        local bob = 0.25 * math.sin(timeNow * 5.0)
-        world.setPosition("nav_arrow", car.x, car.y + 2.75 + bob, car.z)
+        local bob = 0.22 * math.sin(timeNow * 5.0)
+        world.setPosition("nav_arrow", car.x, car.y + 2.55 + bob, car.z)
         local angleDeg = math.atan(dx, dz) * (180.0 / math.pi)
         world.setRotation("nav_arrow", 0.0, angleDeg, 0.0)
     end
 
-    if dist < 4.2 then
+    if dist < 4.4 then
         deliveriesDone = deliveriesDone + 1
         local speedBonus = math.floor(math.max(0.0, 20.0 - deliveryTimer) * 10.0)
         local earned = 100 + speedBonus
         score = score + earned
         car.boostEnergy = 100.0
+        audio.playChime()
+
         sage.log(string.format(
             "DELIVERY #%d at %s! +%d pts (Speed Bonus: +%d) | Score: %d",
             deliveriesDone, spot.label, earned, speedBonus, score
@@ -343,42 +374,64 @@ end
 -- -----------------------------------------------------------------------------
 function onStart()
     math.randomseed(42)
-    spawnDynamicWorld()
+    nextCrateSeq = 0
+    spawnDynamicVisuals()
+    setupJoltPhysicsWorld()
 
     camera.setPosition(cam.x, cam.y, cam.z)
     camera.setTarget(cam.tx, cam.ty, cam.tz)
     camera.setFov(cam.fov)
 
-    sage.log("==============================================================")
-    sage.log("  SAGE 3D Showcase: Stunt & Delivery Sandbox (v0.3)")
-    sage.log("  WASD/Arrows: Drive | Space: Drift | Shift: Nitro Boost")
-    sage.log("  Hit the 4 neon 3D ramps for Stunt Jumps!")
-    sage.log("  T: Cycle Time of Day | Tab: Free-Fly 3D Camera | F5: Reload")
+    sage.log("=================================================================")
+    sage.log("  SAGE v0.4 Showcase: Aventador SVJ + Jolt Physics + V12 Audio")
+    sage.log("  WASD: Drive | Space: Drift | Shift: Nitro | C: Camera Mode")
+    sage.log("  Right-Mouse Drag: Orbit Camera | X: Shockwave | B: Drop Crates")
+    sage.log("  F1: Dear ImGui Live Editor | Tab: Free-Fly | T: Time of Day")
     sage.log("  First drop-off -> " .. deliverySpots[activeDeliveryIdx].label)
-    sage.log("==============================================================")
+    sage.log("=================================================================")
 end
 
 function onTick(dt)
     local timeNow = sage.getTime()
 
-    -- Cycle time of day on T key press
-    local tDown = input.isKeyDown("T")
-    if tDown and not tKeyWasDown then
+    -- One-shot hotkeys
+    if keyJustPressed("T") then
         timePresetIdx = (timePresetIdx % #timePresets) + 1
         local preset = timePresets[timePresetIdx]
         world.setTimeOfDay(preset.hour)
-        sage.log("Sky Time of Day -> " .. preset.name .. " (" .. preset.hour .. ":00)")
+        sage.log("Sky Time of Day -> " .. preset.name)
     end
-    tKeyWasDown = tDown
 
-    -- Reset car on R
-    if input.isKeyDown("R") then
+    if keyJustPressed("C") then
+        camPresetIdx = (camPresetIdx % #camPresets) + 1
+        cam.orbitYaw = 0.0
+        cam.orbitPitch = 0.0
+        sage.log("Camera View -> " .. camPresets[camPresetIdx].name)
+    end
+
+    if keyJustPressed("X") then
+        local hitCount = physics.applyExplosion(car.x, car.y + 0.5, car.z, 24.0, 380.0)
+        audio.playExplosion()
+        sage.log("SHOCKWAVE! Blasted " .. hitCount .. " Jolt Physics objects!")
+    end
+
+    if keyJustPressed("B") then
+        local rad = degToRad(car.yaw)
+        local spawnX = clamp(car.x + math.sin(rad) * 14.0, -38.0, 38.0)
+        local spawnZ = clamp(car.z + math.cos(rad) * 14.0, -38.0, 38.0)
+        spawnCratePyramid(spawnX, spawnZ, car.yaw)
+        audio.playChime()
+        sage.log("Dropped fresh 6-crate Jolt Physics pyramid ahead!")
+    end
+
+    if keyJustPressed("R") then
         car.x, car.y, car.z = 0.0, 0.0, -4.0
         car.vx, car.vy, car.vz = 0.0, 0.0, 0.0
         car.yaw, car.pitch, car.roll = 0.0, 0.0, 0.0
         car.grounded = true
         car.airTime = 0.0
         car.boostEnergy = 100.0
+        cam.orbitYaw, cam.orbitPitch = 0.0, 0.0
     end
 
     -- Driving inputs
@@ -386,9 +439,11 @@ function onTick(dt)
     if input.isKeyDown("W") or input.isKeyDown("Up") then throttle = throttle + 1.0 end
     if input.isKeyDown("S") or input.isKeyDown("Down") then throttle = throttle - 1.0 end
 
-    local steer = 0.0
-    if input.isKeyDown("A") or input.isKeyDown("Left") then steer = steer + 1.0 end
-    if input.isKeyDown("D") or input.isKeyDown("Right") then steer = steer - 1.0 end
+    local rawSteer = 0.0
+    if input.isKeyDown("A") or input.isKeyDown("Left") then rawSteer = rawSteer + 1.0 end
+    if input.isKeyDown("D") or input.isKeyDown("Right") then rawSteer = rawSteer - 1.0 end
+    -- Smooth analog-style steering response (crisp yet never jerky!)
+    car.steerSmooth = lerp(car.steerSmooth, rawSteer, 13.0 * dt)
 
     car.isDrifting = input.isKeyDown("Space")
 
@@ -396,26 +451,27 @@ function onTick(dt)
     if car.boostTimer > 0.0 then car.boostTimer = car.boostTimer - dt end
     car.isBoosting = (shiftHeld and car.boostEnergy > 1.0) or (car.boostTimer > 0.0)
     if shiftHeld and car.boostEnergy > 0.0 then
-        car.boostEnergy = math.max(0.0, car.boostEnergy - 38.0 * dt)
+        car.boostEnergy = math.max(0.0, car.boostEnergy - 36.0 * dt)
     else
         car.boostEnergy = math.min(100.0, car.boostEnergy + 18.0 * dt)
     end
 
-    -- Right-handed 3D basis (+Y up, +Z forward at yaw = 0, +X left)
     local rad = degToRad(car.yaw)
-    local fwdX = math.sin(rad)
-    local fwdZ = math.cos(rad)
-    local leftX = math.cos(rad)
-    local leftZ = -math.sin(rad)
+    local fwdX, fwdZ = math.sin(rad), math.cos(rad)
+    local leftX, leftZ = math.cos(rad), -math.sin(rad)
 
     local forwardVel = car.vx * fwdX + car.vz * fwdZ
     local lateralVel = car.vx * leftX + car.vz * leftZ
+    local speedNorm = clamp(math.abs(forwardVel) / CONFIG.maxSpeed, 0.0, 1.0)
 
+    local accelPitchTarget = 0.0
     if car.grounded then
-        local speedFactor = clamp(math.abs(forwardVel) / 6.0, 0.0, 1.0)
-        local reverseSign = forwardVel >= -0.2 and 1.0 or -1.0
-        local driftBoost = car.isDrifting and 1.25 or 1.0
-        car.yaw = car.yaw + steer * CONFIG.turnSpeed * driftBoost * speedFactor * reverseSign * dt
+        -- Progressive speed-sensitive steering (agile slow, rock-steady fast!)
+        local turnRate = lerp(CONFIG.lowSpeedTurn, CONFIG.highSpeedTurn, speedNorm)
+        local speedFactor = clamp(math.abs(forwardVel) / 4.5, 0.0, 1.0)
+        local reverseSign = forwardVel >= -0.25 and 1.0 or -1.0
+        local driftBonus = car.isDrifting and 1.32 or 1.0
+        car.yaw = car.yaw + car.steerSmooth * turnRate * driftBonus * speedFactor * reverseSign * dt
 
         rad = degToRad(car.yaw)
         fwdX, fwdZ = math.sin(rad), math.cos(rad)
@@ -423,22 +479,25 @@ function onTick(dt)
 
         local topSpeed = car.isBoosting and CONFIG.boostSpeed or CONFIG.maxSpeed
         if throttle > 0.0 then
-            local accel = car.isBoosting and (CONFIG.acceleration * 1.85) or CONFIG.acceleration
+            local accel = car.isBoosting and (CONFIG.acceleration * 1.95) or CONFIG.acceleration
             forwardVel = forwardVel + accel * dt
+            accelPitchTarget = car.isBoosting and -3.2 or -1.4
         elseif throttle < 0.0 then
-            if forwardVel > 1.0 then
-                forwardVel = forwardVel - CONFIG.acceleration * 1.65 * dt
+            if forwardVel > 0.8 then
+                forwardVel = forwardVel - CONFIG.brakeForce * dt
+                accelPitchTarget = 2.6
             else
                 forwardVel = forwardVel - CONFIG.reverseAccel * dt
+                accelPitchTarget = 0.8
             end
         else
-            forwardVel = forwardVel * math.exp(-2.0 * dt)
+            forwardVel = forwardVel * math.exp(-1.7 * dt)
         end
 
         if car.isBoosting and throttle >= 0.0 then
             forwardVel = math.max(forwardVel, topSpeed * 0.72)
         end
-        forwardVel = clamp(forwardVel, -10.0, topSpeed)
+        forwardVel = clamp(forwardVel, -12.0, topSpeed)
 
         local grip = car.isDrifting and CONFIG.driftGrip or CONFIG.normalGrip
         lateralVel = lateralVel * math.exp(-grip * dt)
@@ -446,8 +505,7 @@ function onTick(dt)
         car.vx = fwdX * forwardVel + leftX * lateralVel
         car.vz = fwdZ * forwardVel + leftZ * lateralVel
     else
-        -- Slight mid-air steering control
-        car.yaw = car.yaw + steer * 35.0 * dt
+        car.yaw = car.yaw + car.steerSmooth * 38.0 * dt
     end
 
     local prevY = car.y
@@ -461,20 +519,19 @@ function onTick(dt)
             local climbRate = (groundY - prevY) / math.max(dt, 0.001)
             car.y = groundY
             car.vy = math.max(climbRate, 0.0)
-            car.pitch = lerp(car.pitch, -17.0, 14.0 * dt)
-            -- Extra arcade launch kick near ramp lip!
-            if groundY > ramp.height * 0.80 and math.abs(forwardVel) > 10.0 then
-                car.vy = math.max(car.vy, math.abs(forwardVel) * 0.42 + 4.5)
-                car.boostTimer = math.max(car.boostTimer, 0.5)
+            car.pitch = lerp(car.pitch, -17.5, 14.0 * dt)
+            if groundY > ramp.height * 0.78 and math.abs(forwardVel) > 10.0 then
+                car.vy = math.max(car.vy, math.abs(forwardVel) * 0.44 + 4.8)
+                car.boostTimer = math.max(car.boostTimer, 0.55)
                 car.grounded = false
             end
         else
-            if car.y > groundY + 0.15 then
+            if car.y > groundY + 0.16 then
                 car.grounded = false
             else
                 car.y = groundY
                 car.vy = 0.0
-                car.pitch = lerp(car.pitch, 0.0, 10.0 * dt)
+                car.pitch = lerp(car.pitch, accelPitchTarget, 9.0 * dt)
             end
         end
     end
@@ -483,18 +540,21 @@ function onTick(dt)
         car.airTime = car.airTime + dt
         car.vy = car.vy - CONFIG.gravity * dt
         car.y = car.y + car.vy * dt
-        local targetAirPitch = clamp(-car.vy * 2.2, -26.0, 22.0)
-        car.pitch = lerp(car.pitch, targetAirPitch, 6.0 * dt)
+        car.pitch = lerp(car.pitch, clamp(-car.vy * 2.1, -26.0, 22.0), 6.0 * dt)
 
         if car.y <= groundY then
             car.y = groundY
             car.vy = 0.0
             car.grounded = true
-            if car.airTime >= 0.45 then
+            if car.airTime >= 0.42 then
                 stuntJumps = stuntJumps + 1
                 local airBonus = math.floor(car.airTime * 150.0)
                 score = score + airBonus
-                car.boostEnergy = math.min(100.0, car.boostEnergy + 40.0)
+                car.boostEnergy = math.min(100.0, car.boostEnergy + 45.0)
+                audio.playImpact(0.75)
+                audio.playChime()
+                -- Landing shockwave jostles nearby crates!
+                physics.applyExplosion(car.x, car.y + 0.3, car.z, 10.0, 110.0)
                 sage.log(string.format(
                     "STUNT JUMP #%d! Air time: %.2fs (+%d pts) | Score: %d",
                     stuntJumps, car.airTime, airBonus, score
@@ -504,51 +564,91 @@ function onTick(dt)
         end
     end
 
-    -- Subtle suspension body roll while drifting/turning
-    local targetRoll = clamp(lateralVel * 1.1, -9.0, 9.0)
+    -- Suspension body roll
+    local targetRoll = clamp(lateralVel * 0.95 + car.steerSmooth * speedNorm * 2.5, -8.5, 8.5)
     car.roll = lerp(car.roll, targetRoll, 9.0 * dt)
 
-    resolveBuildingCollisions()
-    updateCrates(dt)
+    resolveCarBuildingCollisions()
+
+    -- Drive Jolt Kinematic Hull so the Aventador SVJ physically smashes & scatters crate stacks!
+    physics.moveKinematic("player_car", car.x, car.y + 0.65, car.z, car.pitch, car.yaw, car.roll, dt)
+    checkPhysicsCrateSmashes(dt)
     updateDeliveryMission(dt, timeNow)
 
-    -- Sync 3D .glb car & nitro exhaust flame
+    -- Sync visual .glb Aventador & nitro exhaust flame
     world.setPosition("player_car", car.x, car.y, car.z)
     world.setRotation("player_car", car.pitch, car.yaw, car.roll)
 
     if car.isBoosting then
-        local flicker = 1.6 + 0.55 * math.sin(timeNow * 45.0)
+        local flicker = 1.65 + 0.55 * math.sin(timeNow * 48.0)
         world.setVisible("car_flame", true)
-        world.setPosition("car_flame", car.x - fwdX * 2.75, car.y + 0.45, car.z - fwdZ * 2.75)
+        world.setPosition("car_flame", car.x - fwdX * 2.7, car.y + 0.42, car.z - fwdZ * 2.7)
         world.setRotation("car_flame", car.pitch, car.yaw + 180.0, 0.0)
-        world.setScale("car_flame", 0.85, 0.65, flicker)
+        world.setScale("car_flame", 0.85, 0.6, flicker)
     else
         world.setVisible("car_flame", false)
     end
 
-    -- GTA/RAGE-style smooth 3D chase camera behind car
+    -- 6-Gear Transmission & miniaudio V12 Engine Synth!
     local speed = math.sqrt(car.vx * car.vx + car.vz * car.vz)
-    local desiredCamX = car.x - fwdX * CONFIG.chaseDistance
-    local desiredCamY = car.y + CONFIG.chaseHeight + clamp(speed * 0.04, 0.0, 1.4)
-    local desiredCamZ = car.z - fwdZ * CONFIG.chaseDistance
-    local desiredTargetX = car.x + fwdX * 4.0
-    local desiredTargetY = car.y + 1.4
-    local desiredTargetZ = car.z + fwdZ * 4.0
-    local desiredFov = 60.0 + clamp(speed * 0.35, 0.0, 14.0) + (car.isBoosting and 6.0 or 0.0)
+    local gearSpan = CONFIG.boostSpeed / 6.0
+    car.gear = clamp(math.floor(speed / gearSpan) + 1, 1, 6)
+    local gearProgress = (speed - (car.gear - 1) * gearSpan) / gearSpan
+    local targetRpm = clamp(0.14 + gearProgress * 0.72 + (car.isBoosting and 0.18 or 0.0), 0.08, 1.0)
+    if not car.grounded and throttle > 0.0 then
+        targetRpm = 0.96
+    end
+    car.rpm = lerp(car.rpm, targetRpm, 10.0 * dt)
 
-    cam.x = lerp(cam.x, desiredCamX, 5.5 * dt)
-    cam.y = lerp(cam.y, desiredCamY, 5.5 * dt)
-    cam.z = lerp(cam.z, desiredCamZ, 5.5 * dt)
-    cam.tx = lerp(cam.tx, desiredTargetX, 10.0 * dt)
-    cam.ty = lerp(cam.ty, desiredTargetY, 10.0 * dt)
-    cam.tz = lerp(cam.tz, desiredTargetZ, 10.0 * dt)
-    cam.fov = lerp(cam.fov, desiredFov, 5.0 * dt)
+    local driftIntensity = (car.grounded and math.abs(lateralVel) > 2.4)
+        and clamp((math.abs(lateralVel) - 2.4) / 8.0, 0.0, 1.0)
+        or 0.0
+    audio.setVehicleState(
+        car.rpm,
+        throttle > 0.0 and 1.0 or 0.15,
+        driftIntensity,
+        car.isBoosting and 1.0 or 0.0,
+        not car.grounded
+    )
+
+    -- 3D Chase Camera with GTA V-style Right-Mouse Orbit & 3 View Modes (C)
+    local preset = camPresets[camPresetIdx]
+    if input.isMouseDown("Right") then
+        local mdx, mdy = input.getMouseDelta()
+        cam.orbitYaw = cam.orbitYaw - mdx * 0.35
+        cam.orbitPitch = clamp(cam.orbitPitch + mdy * 0.22, -12.0, 35.0)
+    elseif speed > 2.5 then
+        -- Gently recenter orbit behind car while driving
+        cam.orbitYaw = lerp(cam.orbitYaw, 0.0, 2.4 * dt)
+        cam.orbitPitch = lerp(cam.orbitPitch, 0.0, 2.4 * dt)
+    end
+
+    local totalYawRad = degToRad(car.yaw + cam.orbitYaw)
+    local camFwdX, camFwdZ = math.sin(totalYawRad), math.cos(totalYawRad)
+    local orbitElev = math.sin(degToRad(cam.orbitPitch)) * math.max(preset.dist, 0.0)
+
+    local desiredCamX = car.x - camFwdX * preset.dist
+    local desiredCamY = math.max(0.8, car.y + preset.height + orbitElev + clamp(speed * 0.03, 0.0, 1.2))
+    local desiredCamZ = car.z - camFwdZ * preset.dist
+    local desiredTargetX = car.x + camFwdX * preset.lookAhead
+    local desiredTargetY = car.y + 1.35
+    local desiredTargetZ = car.z + camFwdZ * preset.lookAhead
+    local desiredFov = preset.fov + clamp(speed * 0.32, 0.0, 14.0) + (car.isBoosting and 6.0 or 0.0)
+
+    local camSmooth = (camPresetIdx == 3) and 28.0 or 6.5
+    cam.x = lerp(cam.x, desiredCamX, camSmooth * dt)
+    cam.y = lerp(cam.y, desiredCamY, camSmooth * dt)
+    cam.z = lerp(cam.z, desiredCamZ, camSmooth * dt)
+    cam.tx = lerp(cam.tx, desiredTargetX, 14.0 * dt)
+    cam.ty = lerp(cam.ty, desiredTargetY, 14.0 * dt)
+    cam.tz = lerp(cam.tz, desiredTargetZ, 14.0 * dt)
+    cam.fov = lerp(cam.fov, desiredFov, 5.5 * dt)
 
     camera.setPosition(cam.x, cam.y, cam.z)
     camera.setTarget(cam.tx, cam.ty, cam.tz)
     camera.setFov(cam.fov)
 
-    -- Update window title HUD 4x/sec
+    -- Update HUD window title 4x/sec
     titleUpdateAccum = titleUpdateAccum + dt
     if titleUpdateAccum >= 0.25 then
         titleUpdateAccum = 0.0
@@ -558,16 +658,17 @@ function onTick(dt)
             tag = " | [AIR TIME!]"
         elseif car.isBoosting then
             tag = " | [NITRO!]"
-        elseif car.isDrifting and math.abs(lateralVel) > 2.5 then
+        elseif driftIntensity > 0.25 then
             tag = " | [DRIFT!]"
         end
         sage.setTitle(string.format(
-            "SAGE 3D Stunt & Delivery | %d km/h | Nitro: %d%% | Deliveries: %d | Score: %d%s",
-            kmh, math.floor(car.boostEnergy), deliveriesDone, score, tag
+            "SAGE Aventador SVJ | G%d %d km/h | Nitro: %d%% | Deliveries: %d | Score: %d%s",
+            car.gear, kmh, math.floor(car.boostEnergy), deliveriesDone, score, tag
         ))
     end
 end
 
 function onShutdown()
-    sage.log("3D Stunt & Delivery Sandbox shutting down cleanly.")
+    audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
+    sage.log("v0.4 Stunt & Delivery Sandbox shutting down cleanly.")
 end
