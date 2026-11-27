@@ -1,0 +1,31 @@
+{
+  "name": "Starter Sandbox",
+  "version": 1,
+  "sky": {
+    "timeOfDay": 17.5,
+    "sunColor": [1.0, 0.85, 0.65],
+    "ambientIntensity": 0.35
+  },
+  "camera": {
+    "position": [0.0, 2.5, 8.0],
+    "target": [0.0, 1.0, 0.0],
+    "fov": 60.0
+  },
+  "entities": [
+    {
+      "id": "ground_plane",
+      "type": "primitive_plane",
+      "position": [0.0, 0.0, 0.0],
+      "scale": [50.0, 1.0, 50.0],
+      "color": [0.22, 0.24, 0.28]
+    },
+    {
+      "id": "demo_cube",
+      "type": "primitive_box",
+      "position": [0.0, 1.0, 0.0],
+      "rotation": [0.0, 45.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "color": [0.9, 0.25, 0.2]
+    }
+  ]
+}

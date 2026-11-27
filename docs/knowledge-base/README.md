@@ -1,0 +1,15 @@
+# SAGE Living Knowledge Base
+
+This folder is the **engineering brain** of SAGE Engine. Every time we study a game engine video, paper, graphics technique, or finish a milestone, we document what we learned here in plain English — so both beginners and AI agents share the same growing knowledge.
+
+## Entries
+
+| # | Topic | Source / Milestone |
+| :--- | :--- | :--- |
+| [001](001-rage-and-gtavi.md) | Inside RAGE & GTA VI + AI-Native Engine Design | Speclizer (*Inside the Engine Behind GTA VI*) & Adrian Courrèges (*GTA V Graphics Study*) |
+
+## How to Add a New Entry
+Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:
+1. **Plain-English Summary** (beginner-friendly analogy + what it does)
+2. **Technical Deep Dive** (how AAA engines like RAGE implement it)
+3. **How SAGE Uses This** (exact impact on our C++20 + Lua architecture)
