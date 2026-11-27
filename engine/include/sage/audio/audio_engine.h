@@ -19,7 +19,10 @@ public:
     bool initialize(bool silentMode = false);
     void shutdown();
 
+    // profile: 0 = Supercar V12, 1 = Superbike I4, 2 = Marine Speedboat V8, 3 = Sports Coupe V8
+    void setVehicleProfile(int profile);
     void setVehicleState(float rpm01, float throttle01, float drift01, float boost01, bool airborne);
+    void playShiftPop(float intensity01 = 0.75f);
     void playImpact(float intensity01 = 0.8f);
     void playChime();
     void playExplosion();

@@ -122,7 +122,9 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 ### `audio` *(miniaudio 0.11)*
 | Function | Description |
 | :--- | :--- |
-| `audio.setVehicleState(rpm01, throttle01, drift01, boost01, airborne)` | Drives the real-time V12 harmonic engine synth, tire drift screech, and nitro afterburner roar. |
+| `audio.setVehicleProfile(profile)` | Selects the active combustion engine profile (`0` = Supercar V12, `1` = Superbike I4, `2` = Marine Speedboat V8 + water wake, `3` = Sports Coupe V8). |
+| `audio.setVehicleState(rpm01, throttle01, drift01, boost01, airborne)` | Drives the real-time combustion engine + exhaust formant synth, turbo whine, aerodynamic wind/wake rush, and filtered tire drift squeal (fades cleanly to silence when idle/off). |
+| `audio.playShiftPop([intensity01])` | Triggers a crisp exhaust gear-upshift crackle / backfire pop (`0.2`–`1.0`). |
 | `audio.playImpact([intensity01])` | Plays a dynamic collision thud/smash SFX (`0.1`–`1.0`). |
 | `audio.playChime()` | Plays an ascending harmonic reward chord (deliveries & stunt jumps). |
 | `audio.playExplosion()` | Plays a sub-bass shockwave boom SFX. |

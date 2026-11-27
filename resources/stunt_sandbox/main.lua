@@ -48,9 +48,9 @@ local CONFIG = {
 }
 
 local vehicles = {
-    { name = "Lamborghini Aventador SVJ", model = "assets/models/aventador_svj.glb", isBike = false },
-    { name = "Cyberpunk Superbike",       model = "assets/models/superbike.glb",     isBike = true  },
-    { name = "SAGE Sports Coupe",         model = "assets/models/sports_car.glb",    isBike = false },
+    { name = "Lamborghini Aventador SVJ", model = "assets/models/aventador_svj.glb", isBike = false, soundProfile = 0 },
+    { name = "Cyberpunk Superbike",       model = "assets/models/superbike.glb",     isBike = true,  soundProfile = 1 },
+    { name = "SAGE Sports Coupe",         model = "assets/models/sports_car.glb",    isBike = false, soundProfile = 3 },
 }
 local selectedVehicleIdx = 1
 
@@ -267,6 +267,7 @@ local function applySelectedVehicle()
     local v = vehicles[selectedVehicleIdx]
     world.spawnModel("player_car", v.model, car.x, car.y, car.z)
     world.setRotation("player_car", car.pitch, car.yaw, car.roll)
+    audio.setVehicleProfile(v.soundProfile or 0)
 end
 
 -- Maps a 1D perimeter progress along a square highway ring (±R) into (x, z, yawDeg)
@@ -719,12 +720,14 @@ function onTick(dt)
                 player.mode = "BOAT"
                 player.onFoot = false
                 world.setVisible("player_char", false)
+                audio.setVehicleProfile(2) -- Twin Marine V8 + Water Wake!
                 audio.playChime()
                 sage.log("Boarded Luxury Racing Speedboat! WASD to cruise the 72m Marina Lagoon!")
             elseif dCar < 8.0 then
                 player.mode = "CAR"
                 player.onFoot = false
                 world.setVisible("player_char", false)
+                audio.setVehicleProfile(vehicles[selectedVehicleIdx].soundProfile or 0)
                 audio.playChime()
                 sage.log("Entered " .. vehicles[selectedVehicleIdx].name .. "!")
             else
@@ -1230,10 +1233,14 @@ function onTick(dt)
         world.setPointLight("car_tail", car.x - fwdX * 2.6, car.y + 0.8, car.z - fwdZ * 2.6, 0.95, 0.15, 0.12, 8.0, 0.7)
     end
 
-    -- 6-Gear Transmission & V12 Synth
+    -- 6-Gear Transmission & Combustion Synth (with realistic gear-shift exhaust pops!)
     local speed = math.sqrt(car.vx * car.vx + car.vz * car.vz)
     local gearSpan = CONFIG.boostSpeed / 6.0
+    local prevGear = car.gear
     car.gear = clamp(math.floor(speed / gearSpan) + 1, 1, 6)
+    if car.gear > prevGear and throttle > 0.0 and not car.flooded then
+        audio.playShiftPop(car.isBoosting and 0.95 or 0.72)
+    end
     local gearProgress = (speed - (car.gear - 1) * gearSpan) / gearSpan
     local targetRpm = car.flooded and 0.0 or clamp(0.14 + gearProgress * 0.72 + (car.isBoosting and 0.18 or 0.0), 0.08, 1.0)
     if not car.grounded and throttle > 0.0 and not car.flooded then targetRpm = 0.96 end

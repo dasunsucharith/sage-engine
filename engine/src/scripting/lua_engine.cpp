@@ -367,9 +367,19 @@ struct LuaEngine::Impl {
 
         // --- audio.* namespace (miniaudio 0.11) ---
         sol::table audioTbl = state.create_named_table("audio");
+        audioTbl.set_function("setVehicleProfile", [this](int profile) {
+            if (audio) {
+                audio->setVehicleProfile(profile);
+            }
+        });
         audioTbl.set_function("setVehicleState", [this](float rpm01, float throttle01, float drift01, float boost01, bool airborne) {
             if (audio) {
                 audio->setVehicleState(rpm01, throttle01, drift01, boost01, airborne);
+            }
+        });
+        audioTbl.set_function("playShiftPop", [this](sol::optional<float> intensity) {
+            if (audio) {
+                audio->playShiftPop(intensity.value_or(0.75f));
             }
         });
         audioTbl.set_function("playImpact", [this](sol::optional<float> intensity) {
