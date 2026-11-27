@@ -1,17 +1,20 @@
--- SAGE Engine Starter Lua Resource (Target API — wired up in Milestone v0.2!)
--- Designed with FiveM-style clarity so humans and AI can script effortlessly.
+-- SAGE Engine Starter Lua Resource Template (v0.2)
+-- Enable this in manifest.json ("enabled": true) to test a minimal spinning box!
 
 local angle = 0.0
 
 function onStart()
+    world.spawnBox("demo_cube", 0.0, 0.0, 0.0)
+    world.setScale("demo_cube", 4.0, 1.0, 4.0)
+    world.setColor("demo_cube", 0.9, 0.25, 0.2)
+    camera.setTarget(0.0, 0.0)
+    camera.setZoom(20.0)
     sage.log("Starter sandbox Lua resource loaded!")
 end
 
 function onTick(dt)
-    -- Slowly spin the demo cube every frame
     angle = angle + (45.0 * dt)
-    -- Coming in v0.2/v0.3:
-    -- world.setRotation("demo_cube", 0.0, angle, 0.0)
+    world.setRotation("demo_cube", 0.0, angle, 0.0)
 end
 
 function onShutdown()

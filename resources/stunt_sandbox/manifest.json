@@ -1,0 +1,10 @@
+{
+  "name": "stunt_sandbox",
+  "version": "0.3.0",
+  "author": "Dasun Sucharith",
+  "enabled": true,
+  "description": "SAGE 3D Showcase Game — Mini Stunt & Delivery Sandbox with .glb models, 3D chase camera, jump ramps, and live Lua hot-reload.",
+  "scripts": [
+    "main.lua"
+  ]
+}

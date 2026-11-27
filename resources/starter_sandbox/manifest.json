@@ -1,8 +1,9 @@
 {
   "name": "starter_sandbox",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Dasun Sucharith",
-  "description": "Starter FiveM-style Lua resource demonstrating SAGE Engine scripting.",
+  "enabled": false,
+  "description": "Minimal FiveM-style Lua resource template (set enabled: true to run instead of stunt_sandbox).",
   "scripts": [
     "main.lua"
   ]

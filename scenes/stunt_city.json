@@ -1,0 +1,363 @@
+{
+  "name": "SAGE 3D Stunt City (Blender Assets)",
+  "version": 1,
+  "sky": {
+    "timeOfDay": 17.5,
+    "ambientIntensity": 0.38
+  },
+  "camera": {
+    "position": [0.0, 10.0, -22.0],
+    "target": [0.0, 2.0, 0.0],
+    "fov": 60.0
+  },
+  "entities": [
+    {
+      "id": "ground_base",
+      "type": "primitive_plane",
+      "position": [0.0, -0.04, 0.0],
+      "scale": [220.0, 1.0, 220.0],
+      "color": [0.14, 0.21, 0.16]
+    },
+    {
+      "id": "asphalt_plaza",
+      "type": "primitive_plane",
+      "position": [0.0, -0.02, 0.0],
+      "scale": [92.0, 1.0, 92.0],
+      "color": [0.16, 0.17, 0.20]
+    },
+    {
+      "id": "road_ns",
+      "type": "primitive_plane",
+      "position": [0.0, 0.0, 0.0],
+      "scale": [12.0, 1.0, 88.0],
+      "color": [0.11, 0.12, 0.14]
+    },
+    {
+      "id": "road_ew",
+      "type": "primitive_plane",
+      "position": [0.0, 0.0, 0.0],
+      "scale": [88.0, 1.0, 12.0],
+      "color": [0.11, 0.12, 0.14]
+    },
+    {
+      "id": "road_ring_n",
+      "type": "primitive_plane",
+      "position": [0.0, 0.0, 28.0],
+      "scale": [68.0, 1.0, 10.0],
+      "color": [0.11, 0.12, 0.14]
+    },
+    {
+      "id": "road_ring_s",
+      "type": "primitive_plane",
+      "position": [0.0, 0.0, -28.0],
+      "scale": [68.0, 1.0, 10.0],
+      "color": [0.11, 0.12, 0.14]
+    },
+    {
+      "id": "road_ring_e",
+      "type": "primitive_plane",
+      "position": [28.0, 0.0, 0.0],
+      "scale": [10.0, 1.0, 68.0],
+      "color": [0.11, 0.12, 0.14]
+    },
+    {
+      "id": "road_ring_w",
+      "type": "primitive_plane",
+      "position": [-28.0, 0.0, 0.0],
+      "scale": [10.0, 1.0, 68.0],
+      "color": [0.11, 0.12, 0.14]
+    },
+
+    {
+      "id": "wall_north",
+      "type": "primitive_box",
+      "position": [0.0, 0.9, 44.5],
+      "scale": [91.0, 1.8, 1.4],
+      "color": [0.28, 0.31, 0.36]
+    },
+    {
+      "id": "wall_south",
+      "type": "primitive_box",
+      "position": [0.0, 0.9, -44.5],
+      "scale": [91.0, 1.8, 1.4],
+      "color": [0.28, 0.31, 0.36]
+    },
+    {
+      "id": "wall_east",
+      "type": "primitive_box",
+      "position": [44.5, 0.9, 0.0],
+      "scale": [1.4, 1.8, 91.0],
+      "color": [0.28, 0.31, 0.36]
+    },
+    {
+      "id": "wall_west",
+      "type": "primitive_box",
+      "position": [-44.5, 0.9, 0.0],
+      "scale": [1.4, 1.8, 91.0],
+      "color": [0.28, 0.31, 0.36]
+    },
+
+    {
+      "id": "bldg_ne_sidewalk",
+      "type": "primitive_box",
+      "position": [14.5, 0.12, 14.5],
+      "scale": [14.4, 0.24, 14.4],
+      "color": [0.36, 0.38, 0.42]
+    },
+    {
+      "id": "bldg_ne",
+      "type": "model",
+      "model": "assets/models/city_tower.glb",
+      "position": [14.5, 0.24, 14.5],
+      "rotation": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0],
+      "color": [0.95, 1.0, 1.05]
+    },
+
+    {
+      "id": "bldg_nw_sidewalk",
+      "type": "primitive_box",
+      "position": [-14.5, 0.12, 14.5],
+      "scale": [14.4, 0.24, 14.4],
+      "color": [0.36, 0.38, 0.42]
+    },
+    {
+      "id": "bldg_nw",
+      "type": "model",
+      "model": "assets/models/city_tower.glb",
+      "position": [-14.5, 0.24, 14.5],
+      "rotation": [0.0, 90.0, 0.0],
+      "scale": [1.0, 1.28, 1.0],
+      "color": [1.05, 0.88, 0.96]
+    },
+
+    {
+      "id": "bldg_sw_sidewalk",
+      "type": "primitive_box",
+      "position": [-14.5, 0.12, -14.5],
+      "scale": [14.4, 0.24, 14.4],
+      "color": [0.36, 0.38, 0.42]
+    },
+    {
+      "id": "bldg_sw",
+      "type": "model",
+      "model": "assets/models/city_tower.glb",
+      "position": [-14.5, 0.24, -14.5],
+      "rotation": [0.0, 180.0, 0.0],
+      "scale": [1.0, 0.82, 1.0],
+      "color": [0.90, 1.04, 0.96]
+    },
+
+    {
+      "id": "bldg_se_sidewalk",
+      "type": "primitive_box",
+      "position": [14.5, 0.12, -14.5],
+      "scale": [14.4, 0.24, 14.4],
+      "color": [0.36, 0.38, 0.42]
+    },
+    {
+      "id": "bldg_se",
+      "type": "model",
+      "model": "assets/models/city_tower.glb",
+      "position": [14.5, 0.24, -14.5],
+      "rotation": [0.0, -90.0, 0.0],
+      "scale": [1.0, 1.12, 1.0],
+      "color": [1.05, 0.96, 0.86]
+    },
+
+    {
+      "id": "ramp_north",
+      "type": "model",
+      "model": "assets/models/stunt_ramp.glb",
+      "position": [0.0, 0.0, 14.5],
+      "rotation": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "ramp_south",
+      "type": "model",
+      "model": "assets/models/stunt_ramp.glb",
+      "position": [0.0, 0.0, -14.5],
+      "rotation": [0.0, 180.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "ramp_east",
+      "type": "model",
+      "model": "assets/models/stunt_ramp.glb",
+      "position": [14.5, 0.0, 0.0],
+      "rotation": [0.0, 90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "ramp_west",
+      "type": "model",
+      "model": "assets/models/stunt_ramp.glb",
+      "position": [-14.5, 0.0, 0.0],
+      "rotation": [0.0, -90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+
+    {
+      "id": "palm_1",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [7.5, 0.0, 22.0],
+      "rotation": [0.0, 25.0, 0.0],
+      "scale": [1.05, 1.05, 1.05]
+    },
+    {
+      "id": "palm_2",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [-7.5, 0.0, 22.0],
+      "rotation": [0.0, 145.0, 0.0],
+      "scale": [0.95, 1.0, 0.95]
+    },
+    {
+      "id": "palm_3",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [7.5, 0.0, -22.0],
+      "rotation": [0.0, -55.0, 0.0],
+      "scale": [1.0, 1.1, 1.0]
+    },
+    {
+      "id": "palm_4",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [-7.5, 0.0, -22.0],
+      "rotation": [0.0, 75.0, 0.0],
+      "scale": [1.08, 1.0, 1.08]
+    },
+    {
+      "id": "palm_5",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [22.0, 0.0, 7.5],
+      "rotation": [0.0, 210.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "palm_6",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [22.0, 0.0, -7.5],
+      "rotation": [0.0, 35.0, 0.0],
+      "scale": [1.1, 1.15, 1.1]
+    },
+    {
+      "id": "palm_7",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [-22.0, 0.0, 7.5],
+      "rotation": [0.0, -110.0, 0.0],
+      "scale": [0.92, 0.96, 0.92]
+    },
+    {
+      "id": "palm_8",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [-22.0, 0.0, -7.5],
+      "rotation": [0.0, 15.0, 0.0],
+      "scale": [1.04, 1.04, 1.04]
+    },
+    {
+      "id": "palm_outer_ne",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [36.5, 0.0, 36.5],
+      "rotation": [0.0, 40.0, 0.0],
+      "scale": [1.25, 1.25, 1.25]
+    },
+    {
+      "id": "palm_outer_nw",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [-36.5, 0.0, 36.5],
+      "rotation": [0.0, 130.0, 0.0],
+      "scale": [1.2, 1.2, 1.2]
+    },
+    {
+      "id": "palm_outer_sw",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [-36.5, 0.0, -36.5],
+      "rotation": [0.0, -40.0, 0.0],
+      "scale": [1.3, 1.25, 1.3]
+    },
+    {
+      "id": "palm_outer_se",
+      "type": "model",
+      "model": "assets/models/palm_tree.glb",
+      "position": [36.5, 0.0, -36.5],
+      "rotation": [0.0, 210.0, 0.0],
+      "scale": [1.18, 1.22, 1.18]
+    },
+
+    {
+      "id": "lamp_ne",
+      "type": "model",
+      "model": "assets/models/street_lamp.glb",
+      "position": [7.4, 0.0, 7.4],
+      "rotation": [0.0, -90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "lamp_nw",
+      "type": "model",
+      "model": "assets/models/street_lamp.glb",
+      "position": [-7.4, 0.0, 7.4],
+      "rotation": [0.0, 90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "lamp_sw",
+      "type": "model",
+      "model": "assets/models/street_lamp.glb",
+      "position": [-7.4, 0.0, -7.4],
+      "rotation": [0.0, 90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "lamp_se",
+      "type": "model",
+      "model": "assets/models/street_lamp.glb",
+      "position": [7.4, 0.0, -7.4],
+      "rotation": [0.0, -90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "lamp_ring_n",
+      "type": "model",
+      "model": "assets/models/street_lamp.glb",
+      "position": [0.0, 0.0, 34.5],
+      "rotation": [0.0, 180.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "lamp_ring_s",
+      "type": "model",
+      "model": "assets/models/street_lamp.glb",
+      "position": [0.0, 0.0, -34.5],
+      "rotation": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "lamp_ring_e",
+      "type": "model",
+      "model": "assets/models/street_lamp.glb",
+      "position": [34.5, 0.0, 0.0],
+      "rotation": [0.0, -90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    },
+    {
+      "id": "lamp_ring_w",
+      "type": "model",
+      "model": "assets/models/street_lamp.glb",
+      "position": [-34.5, 0.0, 0.0],
+      "rotation": [0.0, 90.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    }
+  ]
+}
