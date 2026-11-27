@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE v0.8 Showcase — Realistic Water Submersion & Buoyancy, Dynamic Point Lights (Car Headlights, Neon Arches, Lighthouse Beam), 3D Particle FX (Splashes, Drift Smoke, Nitro Sparks), 18 Blender .glb Models & HDR 4-Biome Open World.",
+  "description": "SAGE v0.9 Showcase — 560m Grand 4-Biome Open World, GTA-Style Exit/Enter Supercar (F) + Walkable/Swimmable Character, 6 Autonomous AI Traffic Cruisers, Patrol Helicopter, Spinning Ferris Wheel, 2-Cascade Soft Shadows, HDR Bloom & 24 Blender .glb Models.",
   "scripts": [
     "main.lua"
   ]

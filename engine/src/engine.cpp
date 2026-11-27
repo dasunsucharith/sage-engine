@@ -132,7 +132,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v0.8.0 (Dynamic Point Lights + 3D Particles + Realistic Water Buoyancy)\n";
+    std::cout << "  SAGE Engine v0.9.0 (2-Cascade CSM + 560m Open World + Walk/Drive + AI Traffic + 24 Models)\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -385,7 +385,7 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v0.8.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v0.9.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()

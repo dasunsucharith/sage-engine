@@ -110,7 +110,7 @@ struct CameraState {
     Vec3 target{0.0f, 1.5f, 0.0f};
     float fovDegrees = 60.0f;
     float nearPlane = 0.50f;
-    float farPlane = 850.0f;
+    float farPlane = 1250.0f;
 };
 
 class World {

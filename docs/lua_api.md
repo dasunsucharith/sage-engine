@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (`v0.8.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **Dynamic Point Lights**, **3D Particles**, **Realistic Water Submersion & Jolt Buoyancy**, **HDR Bloom & Animated 3D Ocean Water**, **Soft Shadows & Animated glTF 2.0 (`.glb`)**, **Jolt Physics 5.7 + JSON Auto-Colliders**, **miniaudio 0.11**, and **Lua Menus & HUDs (`ui.*`)**.
+> **Status:** Live (`v0.9.0`) — **Lua 5.4.9** + **`sol2` 3.5.0**, **2-Cascade PCF Soft Shadows (CSM)**, **Nearest-16 Dynamic Point Lights**, **3D Particles**, **Realistic Water Submersion & Jolt Buoyancy**, **HDR Bloom & Animated 3D Ocean Water**, **Starry Night Sky**, **24 Blender `.glb` Models**, **Jolt Physics 5.7 + JSON Auto-Colliders**, **miniaudio 0.11**, and **Lua Menus & HUDs (`ui.*`)**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -39,7 +39,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 
 ---
 
-## Implemented Namespaces (`v0.8`)
+## Implemented Namespaces (`v0.9`)
 
 ### `sage`
 | Function | Description |

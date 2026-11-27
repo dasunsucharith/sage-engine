@@ -130,19 +130,32 @@ void main() {
     vec3 sunN = normalize(uSunDir);
     float sunDot = max(dot(rayDir, sunN), 0.0);
 
-    // Warm atmospheric scattering glow around the sun
-    sky += uSunColor * pow(sunDot, 12.0) * 0.35;
-    sky += uSunColor * smoothstep(0.9982, 0.9995, sunDot) * 3.8;
+    // Warm atmospheric scattering glow around the sun + twilight horizon warmth
+    sky += uSunColor * pow(sunDot, 10.0) * 0.40;
+    sky += uSunColor * smoothstep(0.9982, 0.9995, sunDot) * 4.0;
 
-    // Drifting procedural clouds overhead (projected onto high sky dome plane)
-    if (rayDir.y > 0.035) {
+    // Night starfield (appears smoothly when sky zenith darkens into Neon Night!)
+    float nightFactor = clamp(1.0 - (uSkyZenith.r + uSkyZenith.g + uSkyZenith.b) * 3.8, 0.0, 1.0);
+    if (nightFactor > 0.02 && rayDir.y > 0.06) {
+        vec2 starCell = floor((rayDir.xz / (rayDir.y + 0.35)) * 120.0);
+        float rnd = hash21(starCell);
+        if (rnd > 0.992) {
+            float twinkle = 0.65 + 0.35 * sin(uTime * 3.5 + rnd * 120.0);
+            sky += vec3(0.85, 0.92, 1.0) * (rnd - 0.992) * 260.0 * twinkle * nightFactor * smoothstep(0.06, 0.28, rayDir.y);
+        }
+    }
+
+    // Drifting multi-layered procedural clouds overhead (projected onto high sky dome plane)
+    if (rayDir.y > 0.030) {
         vec2 cloudUV = (rayDir.xz / (rayDir.y + 0.14)) * 1.35 + vec2(uTime * 0.012, uTime * 0.006);
         float c = fbm(cloudUV);
-        float density = smoothstep(0.47, 0.78, c) * smoothstep(0.035, 0.22, rayDir.y);
-        vec3 cloudLit = mix(uSkyHorizon * 0.95, uSunColor * 1.35, 0.45 + 0.55 * pow(sunDot, 4.0));
-        vec3 cloudShadow = mix(uSkyZenith * 0.65, uSkyHorizon * 0.75, 0.5);
-        vec3 cloudColor = mix(cloudShadow, cloudLit, clamp(c * 1.25, 0.0, 1.0));
-        sky = mix(sky, cloudColor, density * 0.72);
+        float cDetail = fbm(cloudUV * 2.3 - vec2(uTime * 0.008, 0.0));
+        float cloudShape = mix(c, cDetail, 0.28);
+        float density = smoothstep(0.46, 0.78, cloudShape) * smoothstep(0.030, 0.22, rayDir.y);
+        vec3 cloudLit = mix(uSkyHorizon * 0.95, uSunColor * 1.42, 0.45 + 0.55 * pow(sunDot, 4.0));
+        vec3 cloudShadow = mix(uSkyZenith * 0.62, uSkyHorizon * 0.72, 0.45);
+        vec3 cloudColor = mix(cloudShadow, cloudLit, clamp(cloudShape * 1.28, 0.0, 1.0));
+        sky = mix(sky, cloudColor, density * 0.76);
     }
 
     // Outputs linear HDR color for post-processing Bloom + ACES Tone Mapping
@@ -193,7 +206,9 @@ uniform int uIsGround;
 
 uniform int uShadowsEnabled;
 uniform mat4 uLightViewProj;
+uniform mat4 uLightViewProjFar;
 uniform sampler2DShadow uShadowMap;
+uniform sampler2DShadow uShadowMapFar;
 uniform float uShadowTexelSize;
 
 uniform vec3 uCameraPos;
@@ -230,33 +245,46 @@ float groundNoise(vec2 p) {
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-float computeShadowVisibility(vec3 worldPos, vec3 N, vec3 L) {
-    if (uShadowsEnabled == 0) {
-        return 1.0;
-    }
-
+float sampleCascadePcf(sampler2DShadow smap, mat4 lvp, vec3 worldPos, vec3 N, vec3 L, float biasScale, out float edgeFade) {
     float ndotl = max(dot(N, L), 0.0);
-    float normalOffset = (0.06 + 0.14 * (1.0 - ndotl));
-    vec4 lightClip = uLightViewProj * vec4(worldPos + N * normalOffset, 1.0);
+    float normalOffset = (0.045 + 0.12 * (1.0 - ndotl)) * biasScale;
+    vec4 lightClip = lvp * vec4(worldPos + N * normalOffset, 1.0);
     vec3 proj = lightClip.xyz / lightClip.w;
     proj = proj * 0.5 + 0.5;
 
     if (proj.z > 1.0 || proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0) {
+        edgeFade = 0.0;
         return 1.0;
     }
 
     vec2 edgeDist = min(proj.xy, 1.0 - proj.xy);
-    float edgeFade = smoothstep(0.0, 0.08, min(edgeDist.x, edgeDist.y));
+    edgeFade = smoothstep(0.0, 0.10, min(edgeDist.x, edgeDist.y));
 
     float visibility = 0.0;
     for (int x = -1; x <= 1; ++x) {
         for (int y = -1; y <= 1; ++y) {
             vec2 offset = vec2(float(x), float(y)) * uShadowTexelSize * 1.35;
-            visibility += texture(uShadowMap, vec3(proj.xy + offset, proj.z - 0.0006));
+            visibility += texture(smap, vec3(proj.xy + offset, proj.z - 0.0005 * biasScale));
         }
     }
-    visibility /= 9.0;
-    return mix(1.0, visibility, edgeFade);
+    return visibility / 9.0;
+}
+
+float computeShadowVisibility(vec3 worldPos, vec3 N, vec3 L) {
+    if (uShadowsEnabled == 0) {
+        return 1.0;
+    }
+
+    // 2-Cascade Shadow Maps (CSM): ultra-crisp 32m Near Cascade seamlessly blended into 135m Far Cascade!
+    float nearFade = 0.0;
+    float nearVis = sampleCascadePcf(uShadowMap, uLightViewProj, worldPos, N, L, 0.85, nearFade);
+    if (nearFade > 0.99) {
+        return nearVis;
+    }
+    float farFade = 0.0;
+    float farVis = sampleCascadePcf(uShadowMapFar, uLightViewProjFar, worldPos, N, L, 2.2, farFade);
+    float farResult = mix(1.0, farVis, farFade);
+    return mix(farResult, nearVis, nearFade);
 }
 
 void main() {
@@ -296,8 +324,15 @@ void main() {
     vec3 specTint = mix(vec3(1.0), albedo, uMetallic);
     vec3 specular = specTint * uSunColor * pow(max(dot(N, H), 0.0), shininess) * specStrength * step(0.001, ndotl) * shadowVis;
 
-    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * (1.0 - rough) * 0.32;
-    vec3 rim = skyFill * fresnel;
+    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * (1.0 - rough) * 0.36;
+    // Glossy sky-dome clearcoat reflection on metallic & smooth surfaces (supercar paint, glass, chrome!)
+    vec3 R = reflect(-V, N);
+    vec3 envSky = mix(uSkyHorizon, uSkyZenith, clamp(R.y * 1.2 + 0.15, 0.0, 1.0));
+    float envStrength = mix(0.08, 0.52, uMetallic) * (1.0 - rough * 0.85);
+    vec3 rim = envSky * (fresnel + envStrength * 0.55);
+
+    // Subtle ground-contact ambient occlusion for grounded 3D buildings & cars near y=0
+    float contactAO = (uIsGround == 0) ? mix(0.76, 1.0, smoothstep(0.0, 0.65, max(vWorldPos.y, 0.0))) : 1.0;
 
     // Emissive values exceed 1.0 in HDR so Bloom picks up headlights, neon & beacons!
     vec3 emissiveTerm = uEmissive * 1.55;
@@ -306,7 +341,7 @@ void main() {
         emissiveTerm *= p * 1.35;
     }
 
-    vec3 color = hemiAmbient + directDiffuse + specular + rim + emissiveTerm;
+    vec3 color = (hemiAmbient * contactAO) + directDiffuse + specular + rim + emissiveTerm;
 
     // Real-time Dynamic Point Lights (headlights, neon arches, pier lanterns, lighthouse beam!)
     for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
@@ -984,7 +1019,7 @@ public:
     bool initialize(int viewportWidth, int viewportHeight) override {
         if (!gl::loadFunctions()) return false;
 
-        m_info.backendName = "OpenGL 3.3 Core (HDR Bloom + Point Lights + 3D Ocean + Particles + Soft Shadows)";
+        m_info.backendName = "OpenGL 3.3 Core (2-Cascade CSM + HDR Bloom + 16 Nearest Lights + 3D Ocean + Stars)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
@@ -1005,32 +1040,36 @@ public:
 
         gl::genVertexArrays(1, &m_fullscreenVao);
 
-        // 2048x2048 hardware-PCF shadow map FBO
-        gl::genFramebuffers(1, &m_shadowFbo);
-        glGenTextures(1, &m_shadowTex);
-        glBindTexture(GL_TEXTURE_2D, m_shadowTex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, kShadowMapSize, kShadowMapSize, 0,
-                     GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-        constexpr float kBorder[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, kBorder);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+        // Dual 2048x2048 hardware-PCF Cascaded Shadow Map FBOs (Cascade 0 = Near 32m, Cascade 1 = Far 135m!)
+        auto createShadowCascade = [](GLuint& fboOut, GLuint& texOut) {
+            gl::genFramebuffers(1, &fboOut);
+            glGenTextures(1, &texOut);
+            glBindTexture(GL_TEXTURE_2D, texOut);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, kShadowMapSize, kShadowMapSize, 0,
+                         GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+            constexpr float kBorder[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+            glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, kBorder);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 
-        gl::bindFramebuffer(GL_FRAMEBUFFER, m_shadowFbo);
-        gl::framebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_shadowTex, 0);
-        glDrawBuffer(GL_NONE);
-        glReadBuffer(GL_NONE);
-        if (gl::checkFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            gl::deleteFramebuffers(1, &m_shadowFbo);
-            glDeleteTextures(1, &m_shadowTex);
-            m_shadowFbo = m_shadowTex = 0;
-        }
-        gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
-        glBindTexture(GL_TEXTURE_2D, 0);
+            gl::bindFramebuffer(GL_FRAMEBUFFER, fboOut);
+            gl::framebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texOut, 0);
+            glDrawBuffer(GL_NONE);
+            glReadBuffer(GL_NONE);
+            if (gl::checkFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                gl::deleteFramebuffers(1, &fboOut);
+                glDeleteTextures(1, &texOut);
+                fboOut = texOut = 0;
+            }
+            gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        };
+        createShadowCascade(m_shadowFbo, m_shadowTex);
+        createShadowCascade(m_shadowFboFar, m_shadowTexFar);
 
         // Cache uniform locations
         m_shadowModel = gl::getUniformLocation(m_shadowProgram, "uModel");
@@ -1058,7 +1097,9 @@ public:
         m_uIsGround = gl::getUniformLocation(m_litProgram, "uIsGround");
         m_uShadowsEnabled = gl::getUniformLocation(m_litProgram, "uShadowsEnabled");
         m_uLightViewProj = gl::getUniformLocation(m_litProgram, "uLightViewProj");
+        m_uLightViewProjFar = gl::getUniformLocation(m_litProgram, "uLightViewProjFar");
         m_uShadowMap = gl::getUniformLocation(m_litProgram, "uShadowMap");
+        m_uShadowMapFar = gl::getUniformLocation(m_litProgram, "uShadowMapFar");
         m_uShadowTexelSize = gl::getUniformLocation(m_litProgram, "uShadowTexelSize");
         m_uCameraPos = gl::getUniformLocation(m_litProgram, "uCameraPos");
         m_uSunDir = gl::getUniformLocation(m_litProgram, "uSunDir");
@@ -1185,6 +1226,8 @@ public:
         m_ringMesh.destroy();
 
         destroyPostBuffers();
+        if (m_shadowTexFar) { glDeleteTextures(1, &m_shadowTexFar); m_shadowTexFar = 0; }
+        if (m_shadowFboFar) { gl::deleteFramebuffers(1, &m_shadowFboFar); m_shadowFboFar = 0; }
         if (m_shadowTex) { glDeleteTextures(1, &m_shadowTex); m_shadowTex = 0; }
         if (m_shadowFbo) { gl::deleteFramebuffers(1, &m_shadowFbo); m_shadowFbo = 0; }
         if (m_fullscreenVao) { gl::deleteVertexArrays(1, &m_fullscreenVao); m_fullscreenVao = 0; }
@@ -1237,69 +1280,80 @@ public:
         const glm::mat4 viewProj = proj * view;
         const glm::mat4 invViewProj = glm::inverse(viewProj);
 
-        // --- Pass 0: Texel-Snapped 2048x2048 Directional Shadow Map ---
-        const bool useShadows = sky.shadowsEnabled && (m_shadowFbo != 0);
+        // --- Pass 0: Texel-Snapped 2-Cascade 2048x2048 Directional Shadow Maps (Near 32m + Far 135m!) ---
+        const bool useShadows = sky.shadowsEnabled && (m_shadowFbo != 0) && (m_shadowFboFar != 0);
         glm::mat4 lightViewProj(1.0f);
+        glm::mat4 lightViewProjFar(1.0f);
         if (useShadows) {
             const glm::vec3 sunDir = glm::normalize(glm::vec3(sky.sunDirection.x, sky.sunDirection.y, sky.sunDirection.z));
-            constexpr float kShadowRadius = 64.0f;
             const glm::vec3 focusPoint(camTarget.x, 0.0f, camTarget.z);
             const glm::vec3 upAxis = std::abs(sunDir.y) > 0.98f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
-            glm::mat4 lightView = glm::lookAt(focusPoint + sunDir * 95.0f, focusPoint, upAxis);
 
-            const float texelWorld = (kShadowRadius * 2.0f) / static_cast<float>(kShadowMapSize);
-            const glm::vec4 originLS = lightView * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-            lightView[3][0] += std::floor(originLS.x / texelWorld) * texelWorld - originLS.x;
-            lightView[3][1] += std::floor(originLS.y / texelWorld) * texelWorld - originLS.y;
+            auto renderShadowCascade = [&](GLuint fbo, float radius, float backDist, float farDist) -> glm::mat4 {
+                glm::mat4 lightView = glm::lookAt(focusPoint + sunDir * backDist, focusPoint, upAxis);
+                const float texelWorld = (radius * 2.0f) / static_cast<float>(kShadowMapSize);
+                const glm::vec4 originLS = lightView * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+                lightView[3][0] += std::floor(originLS.x / texelWorld) * texelWorld - originLS.x;
+                lightView[3][1] += std::floor(originLS.y / texelWorld) * texelWorld - originLS.y;
 
-            const glm::mat4 lightProj = glm::ortho(-kShadowRadius, kShadowRadius, -kShadowRadius, kShadowRadius, 5.0f, 220.0f);
-            lightViewProj = lightProj * lightView;
+                const glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, 5.0f, farDist);
+                const glm::mat4 lvp = lightProj * lightView;
 
-            gl::bindFramebuffer(GL_FRAMEBUFFER, m_shadowFbo);
-            glViewport(0, 0, kShadowMapSize, kShadowMapSize);
-            glClear(GL_DEPTH_BUFFER_BIT);
-            glEnable(GL_DEPTH_TEST);
-            glEnable(GL_POLYGON_OFFSET_FILL);
-            glPolygonOffset(2.0f, 4.0f);
+                gl::bindFramebuffer(GL_FRAMEBUFFER, fbo);
+                glViewport(0, 0, kShadowMapSize, kShadowMapSize);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                glEnable(GL_DEPTH_TEST);
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(2.0f, 4.0f);
 
-            gl::useProgram(m_shadowProgram);
-            gl::uniformMatrix4fv(m_shadowLightVP, 1, GL_FALSE, glm::value_ptr(lightViewProj));
+                gl::useProgram(m_shadowProgram);
+                gl::uniformMatrix4fv(m_shadowLightVP, 1, GL_FALSE, glm::value_ptr(lvp));
 
-            for (const Entity& e : world.entities()) {
-                if (!e.visible || e.shape == EntityShape::Plane || e.shape == EntityShape::Water || e.shape == EntityShape::Ring) {
-                    continue;
-                }
-                const glm::mat4 entityMat = buildEntityMatrix(e);
-                if (e.shape == EntityShape::Model) {
-                    const GpuModel* gpuModel = getOrLoadModel(e.modelPath);
-                    if (!gpuModel) continue;
-                    if (gpuModel->hasAnimations) {
-                        evaluateModelNodeMatrices(*gpuModel, e, m_nodeWorldScratch);
-                        for (std::size_t ni = 0; ni < gpuModel->nodes.size(); ++ni) {
-                            if (gpuModel->nodes[ni].subMeshIndices.empty()) continue;
-                            const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
-                            gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(fullMat));
-                            for (const std::size_t smIdx : gpuModel->nodes[ni].subMeshIndices) {
-                                gl::bindVertexArray(gpuModel->subMeshes[smIdx].vao);
-                                glDrawElements(GL_TRIANGLES, gpuModel->subMeshes[smIdx].indexCount, GL_UNSIGNED_INT, nullptr);
+                const float cullDistSq = (radius + 32.0f) * (radius + 32.0f);
+                for (const Entity& e : world.entities()) {
+                    if (!e.visible || e.shape == EntityShape::Plane || e.shape == EntityShape::Water || e.shape == EntityShape::Ring) {
+                        continue;
+                    }
+                    const float dx = e.position.x - focusPoint.x;
+                    const float dz = e.position.z - focusPoint.z;
+                    if (dx * dx + dz * dz > cullDistSq) {
+                        continue;
+                    }
+                    const glm::mat4 entityMat = buildEntityMatrix(e);
+                    if (e.shape == EntityShape::Model) {
+                        const GpuModel* gpuModel = getOrLoadModel(e.modelPath);
+                        if (!gpuModel) continue;
+                        if (gpuModel->hasAnimations) {
+                            evaluateModelNodeMatrices(*gpuModel, e, m_nodeWorldScratch);
+                            for (std::size_t ni = 0; ni < gpuModel->nodes.size(); ++ni) {
+                                if (gpuModel->nodes[ni].subMeshIndices.empty()) continue;
+                                const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
+                                gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(fullMat));
+                                for (const std::size_t smIdx : gpuModel->nodes[ni].subMeshIndices) {
+                                    gl::bindVertexArray(gpuModel->subMeshes[smIdx].vao);
+                                    glDrawElements(GL_TRIANGLES, gpuModel->subMeshes[smIdx].indexCount, GL_UNSIGNED_INT, nullptr);
+                                }
+                            }
+                        } else {
+                            gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
+                            for (const GpuSubMesh& sm : gpuModel->subMeshes) {
+                                gl::bindVertexArray(sm.vao);
+                                glDrawElements(GL_TRIANGLES, sm.indexCount, GL_UNSIGNED_INT, nullptr);
                             }
                         }
                     } else {
+                        const GpuSubMesh* prim = getPrimitiveMesh(e.shape);
                         gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
-                        for (const GpuSubMesh& sm : gpuModel->subMeshes) {
-                            gl::bindVertexArray(sm.vao);
-                            glDrawElements(GL_TRIANGLES, sm.indexCount, GL_UNSIGNED_INT, nullptr);
-                        }
+                        gl::bindVertexArray(prim->vao);
+                        glDrawElements(GL_TRIANGLES, prim->indexCount, GL_UNSIGNED_INT, nullptr);
                     }
-                } else {
-                    const GpuSubMesh* prim = getPrimitiveMesh(e.shape);
-                    gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
-                    gl::bindVertexArray(prim->vao);
-                    glDrawElements(GL_TRIANGLES, prim->indexCount, GL_UNSIGNED_INT, nullptr);
                 }
-            }
+                glDisable(GL_POLYGON_OFFSET_FILL);
+                return lvp;
+            };
 
-            glDisable(GL_POLYGON_OFFSET_FILL);
+            lightViewProj = renderShadowCascade(m_shadowFbo, 32.0f, 85.0f, 200.0f);
+            lightViewProjFar = renderShadowCascade(m_shadowFboFar, 135.0f, 165.0f, 380.0f);
             gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, m_viewportWidth, m_viewportHeight);
         }
@@ -1347,21 +1401,45 @@ public:
         gl::uniform1i(m_uAlbedoTex, 0);
         gl::uniform1i(m_uShadowsEnabled, useShadows ? 1 : 0);
         gl::uniformMatrix4fv(m_uLightViewProj, 1, GL_FALSE, glm::value_ptr(lightViewProj));
+        gl::uniformMatrix4fv(m_uLightViewProjFar, 1, GL_FALSE, glm::value_ptr(lightViewProjFar));
         gl::uniform1i(m_uShadowMap, 1);
+        gl::uniform1i(m_uShadowMapFar, 3);
         gl::uniform1f(m_uShadowTexelSize, 1.0f / static_cast<float>(kShadowMapSize));
         if (useShadows) {
             gl::activeTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, m_shadowTex);
+            gl::activeTexture(GL_TEXTURE3);
+            glBindTexture(GL_TEXTURE_2D, m_shadowTexFar);
         }
 
-        // Pack up to 16 nearest/active dynamic point lights for HDR lit + water shaders
+        // Select the 16 NEAREST active dynamic point lights to camera target (scales to massive open worlds!)
         constexpr int kMaxPointLights = 16;
         glm::vec4 lightPosRad[kMaxPointLights]{};
         glm::vec4 lightColInt[kMaxPointLights]{};
         const auto& allLights = world.pointLights();
-        const int lightCount = static_cast<int>(std::min<std::size_t>(allLights.size(), kMaxPointLights));
+        std::vector<const PointLight*> sortedLights;
+        sortedLights.reserve(allLights.size());
+        for (const PointLight& pl : allLights) {
+            if (pl.intensity > 0.001f) {
+                sortedLights.push_back(&pl);
+            }
+        }
+        if (sortedLights.size() > kMaxPointLights) {
+            std::partial_sort(
+                sortedLights.begin(),
+                sortedLights.begin() + kMaxPointLights,
+                sortedLights.end(),
+                [&](const PointLight* a, const PointLight* b) {
+                    const float da = (a->position.x - camTarget.x) * (a->position.x - camTarget.x)
+                                   + (a->position.z - camTarget.z) * (a->position.z - camTarget.z);
+                    const float db = (b->position.x - camTarget.x) * (b->position.x - camTarget.x)
+                                   + (b->position.z - camTarget.z) * (b->position.z - camTarget.z);
+                    return da < db;
+                });
+        }
+        const int lightCount = static_cast<int>(std::min<std::size_t>(sortedLights.size(), kMaxPointLights));
         for (int i = 0; i < lightCount; ++i) {
-            const PointLight& pl = allLights[static_cast<std::size_t>(i)];
+            const PointLight& pl = *sortedLights[static_cast<std::size_t>(i)];
             lightPosRad[i] = glm::vec4(pl.position.x, pl.position.y, pl.position.z, pl.radius);
             lightColInt[i] = glm::vec4(pl.color.r, pl.color.g, pl.color.b, pl.intensity);
         }
@@ -1762,7 +1840,7 @@ private:
     ClearColor m_clearColor{};
 
     GLuint m_fullscreenVao = 0;
-    GLuint m_shadowProgram = 0, m_shadowFbo = 0, m_shadowTex = 0;
+    GLuint m_shadowProgram = 0, m_shadowFbo = 0, m_shadowTex = 0, m_shadowFboFar = 0, m_shadowTexFar = 0;
     GLint m_shadowModel = -1, m_shadowLightVP = -1;
 
     GLuint m_hdrFbo = 0, m_hdrColorTex = 0, m_hdrDepthRbo = 0;
@@ -1777,7 +1855,7 @@ private:
     GLint m_uModel = -1, m_uViewProj = -1, m_uBaseColor = -1, m_uEmissive = -1;
     GLint m_uMetallic = -1, m_uRoughness = -1, m_uHasTexture = -1, m_uAlbedoTex = -1;
     GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1;
-    GLint m_uShadowsEnabled = -1, m_uLightViewProj = -1, m_uShadowMap = -1, m_uShadowTexelSize = -1;
+    GLint m_uShadowsEnabled = -1, m_uLightViewProj = -1, m_uLightViewProjFar = -1, m_uShadowMap = -1, m_uShadowMapFar = -1, m_uShadowTexelSize = -1;
     GLint m_uCameraPos = -1, m_uSunDir = -1, m_uSunColor = -1;
     GLint m_uSkyZenith = -1, m_uSkyHorizon = -1, m_uGroundAmbient = -1, m_uAmbientIntensity = -1;
     GLint m_uFogStart = -1, m_uFogEnd = -1;

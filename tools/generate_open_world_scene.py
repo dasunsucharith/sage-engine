@@ -1,15 +1,12 @@
 """
-Generates scenes/stunt_city.json — SAGE Engine v0.8 HDR Dynamic Open World!
-Features:
-- Carved Jolt Physics dry-land ground slabs + sunken lagoon seabed (-1.15m) so dynamic
-  crates & stunt balls genuinely splash into the lagoon and float with real buoyancy!
-- Drivable Wooden Beach Pier ("type": "deck") with wooden entry ramp over the waves —
-  drive onto the pier or launch off into the lagoon and splash/sink realistically!
-- 18 total Blender .glb models including 3 new v0.8 assets:
-  * sailboat.glb (animated wave-rocking coastal sailboats!)
-  * gas_station.glb (neon roadside service stations with dynamic canopy lights!)
-  * lifeguard_tower.glb (Palm Coast wooden lifeguard towers!)
-- Declarative JSON dynamic point lights ("lights": [...]) illuminating roads & water!
+Generates scenes/stunt_city.json — SAGE Engine v0.9 MASSIVE 560m x 560m 4-Biome Open World!
+More than 3x the playable area of v0.8, featuring:
+- 4-lane 540m Cross Expressways + Inner Hub Loop (±64m) + Mid Boulevard (±148m) + Grand Coastal Ring (±236m)
+- Carved 72m x 72m Turquoise Palm Lagoon Marina with sunken seabed (-1.35m), 32m Drivable Wooden Pier,
+  animated rocking Sailboats, Rotating Lighthouse, 3 Lifeguard Towers & a 24m Spinning Neon Ferris Wheel!
+- 24 total Blender .glb models in catalog including Alpine Cabins, Desert Saguaro Cacti, Neon Gas Stations,
+  Skyscrapers, Wind Turbines, Ferris Wheel, Sailboats, Patrol Helicopter, AI Traffic & Playable Character!
+- Declarative JSON auto-colliders on every world object + 18+ dynamic point lights (nearest-16 sorted on GPU!).
 """
 
 import json
@@ -22,7 +19,7 @@ entities = []
 lights = []
 
 
-def add_light(lid, x, y, z, color, radius=20.0, intensity=2.2):
+def add_light(lid, x, y, z, color, radius=24.0, intensity=2.4):
     lights.append({
         "id": lid,
         "position": [x, y, z],
@@ -45,7 +42,7 @@ def add_plane(eid, x, y, z, sx, sz, color, emissive=False):
     entities.append(e)
 
 
-def add_water(eid, x, y, z, sx, sz, shallow_color, seabed_y=-1.25):
+def add_water(eid, x, y, z, sx, sz, shallow_color, seabed_y=-1.35):
     entities.append({
         "id": eid,
         "type": "water",
@@ -91,125 +88,137 @@ def add_model(eid, model, x, y, z, yaw=0.0, scale=(1.0, 1.0, 1.0), color=None, c
 
 
 def add_neon_arch(prefix, x, z, along_ns, glow_color):
-    """Wide 16.8m clearance highway portal arch with HDR Bloom neon strips + dynamic point light."""
     dark_steel = [0.14, 0.16, 0.20]
-    span = 16.8
+    span = 18.4
     half_span = span * 0.5
-    height = 7.4
-
+    height = 7.8
     if along_ns:
-        add_box(f"{prefix}_pil_l", x - half_span, height * 0.5, z, 0.9, height, 0.9, dark_steel,
+        add_box(f"{prefix}_pil_l", x - half_span, height * 0.5, z, 0.95, height, 0.95, dark_steel,
                 collider={"type": "box", "halfExtents": [0.55, height * 0.5, 0.55]})
-        add_box(f"{prefix}_pil_r", x + half_span, height * 0.5, z, 0.9, height, 0.9, dark_steel,
+        add_box(f"{prefix}_pil_r", x + half_span, height * 0.5, z, 0.95, height, 0.95, dark_steel,
                 collider={"type": "box", "halfExtents": [0.55, height * 0.5, 0.55]})
         add_box(f"{prefix}_beam", x, height, z, span + 1.4, 0.75, 1.0, dark_steel)
-        add_box(f"{prefix}_neon", x, height - 0.36, z, span - 0.4, 0.22, 0.35, glow_color, emissive=True)
-        add_box(f"{prefix}_neon_l", x - half_span + 0.50, height * 0.55, z, 0.16, height * 0.72, 0.28, glow_color, emissive=True)
-        add_box(f"{prefix}_neon_r", x + half_span - 0.50, height * 0.55, z, 0.16, height * 0.72, 0.28, glow_color, emissive=True)
+        add_box(f"{prefix}_neon", x, height - 0.36, z, span - 0.4, 0.24, 0.38, glow_color, emissive=True)
+        add_box(f"{prefix}_neon_l", x - half_span + 0.52, height * 0.55, z, 0.18, height * 0.72, 0.30, glow_color, emissive=True)
+        add_box(f"{prefix}_neon_r", x + half_span - 0.52, height * 0.55, z, 0.18, height * 0.72, 0.30, glow_color, emissive=True)
     else:
-        add_box(f"{prefix}_pil_l", x, height * 0.5, z - half_span, 0.9, height, 0.9, dark_steel,
+        add_box(f"{prefix}_pil_l", x, height * 0.5, z - half_span, 0.95, height, 0.95, dark_steel,
                 collider={"type": "box", "halfExtents": [0.55, height * 0.5, 0.55]})
-        add_box(f"{prefix}_pil_r", x, height * 0.5, z + half_span, 0.9, height, 0.9, dark_steel,
+        add_box(f"{prefix}_pil_r", x, height * 0.5, z + half_span, 0.95, height, 0.95, dark_steel,
                 collider={"type": "box", "halfExtents": [0.55, height * 0.5, 0.55]})
         add_box(f"{prefix}_beam", x, height, z, 1.0, 0.75, span + 1.4, dark_steel)
-        add_box(f"{prefix}_neon", x, height - 0.36, z, 0.35, 0.22, span - 0.4, glow_color, emissive=True)
-        add_box(f"{prefix}_neon_l", x, height * 0.55, z - half_span + 0.50, 0.28, height * 0.72, 0.16, glow_color, emissive=True)
-        add_box(f"{prefix}_neon_r", x, height * 0.55, z + half_span - 0.50, 0.28, height * 0.72, 0.16, glow_color, emissive=True)
-
-    add_light(f"{prefix}_light", x, height - 1.2, z, glow_color, radius=24.0, intensity=2.4)
+        add_box(f"{prefix}_neon", x, height - 0.36, z, 0.38, 0.24, span - 0.4, glow_color, emissive=True)
+        add_box(f"{prefix}_neon_l", x, height * 0.55, z - half_span + 0.52, 0.30, height * 0.72, 0.18, glow_color, emissive=True)
+        add_box(f"{prefix}_neon_r", x, height * 0.55, z + half_span - 0.52, 0.30, height * 0.72, 0.18, glow_color, emissive=True)
+    add_light(f"{prefix}_light", x, height - 1.2, z, glow_color, radius=28.0, intensity=2.6)
 
 
 def build_world():
     # =========================================================================
-    # 1. CARVED JOLT FLOOR COLLIDERS + FOUR NON-OVERLAPPING BIOME GROUNDS
+    # 1. 560m x 560m ISLAND GROUNDS + CARVED 72m x 72m LAGOON JOLT FLOOR SLABS
+    #    Lagoon cutout cleanly spans x: [156..228], z: [-228..-156]
     # =========================================================================
-    # Invisible Jolt Physics dry-land floor slabs cleanly framing the lagoon cutout (x: 66..110, z: -110..-66)
-    # so dynamic crates & stunt balls drop into the water and float with Archimedes buoyancy!
-    add_box("ground_col_west",  -72.0, -1.0,    0.0, 276.0, 2.0, 420.0, [0.1, 0.1, 0.1],
-            collider={"type": "box", "halfExtents": [138.0, 1.0, 210.0]}, visible=False)
-    add_box("ground_col_east",  160.0, -1.0,    0.0, 100.0, 2.0, 420.0, [0.1, 0.1, 0.1],
-            collider={"type": "box", "halfExtents": [50.0, 1.0, 210.0]}, visible=False)
-    add_box("ground_col_north",  88.0, -1.0,   72.0,  44.0, 2.0, 276.0, [0.1, 0.1, 0.1],
-            collider={"type": "box", "halfExtents": [22.0, 1.0, 138.0]}, visible=False)
-    add_box("ground_col_south",  88.0, -1.0, -160.0,  44.0, 2.0, 100.0, [0.1, 0.1, 0.1],
-            collider={"type": "box", "halfExtents": [22.0, 1.0, 50.0]}, visible=False)
-    # Sunken seabed Jolt floor beneath the Palm Lagoon (top face at y = -1.25m!)
-    add_box("lagoon_seabed_col", 88.0, -2.25, -88.0,  48.0, 2.0,  48.0, [0.1, 0.1, 0.1],
-            collider={"type": "box", "halfExtents": [24.0, 1.0, 24.0]}, visible=False)
+    # Dry-land Jolt floor slabs framing [156..228, -228..-156] (invisible so zero Z-fighting!)
+    add_box("ground_col_west",  -82.0, -1.0,    0.0, 476.0, 2.0, 640.0, [0.1, 0.1, 0.1],
+            collider={"type": "box", "halfExtents": [238.0, 1.0, 320.0]}, visible=False)
+    add_box("ground_col_east",  274.0, -1.0,    0.0,  92.0, 2.0, 640.0, [0.1, 0.1, 0.1],
+            collider={"type": "box", "halfExtents": [46.0, 1.0, 320.0]}, visible=False)
+    add_box("ground_col_north", 192.0, -1.0,   82.0,  72.0, 2.0, 476.0, [0.1, 0.1, 0.1],
+            collider={"type": "box", "halfExtents": [36.0, 1.0, 238.0]}, visible=False)
+    add_box("ground_col_south", 192.0, -1.0, -274.0,  72.0, 2.0,  92.0, [0.1, 0.1, 0.1],
+            collider={"type": "box", "halfExtents": [36.0, 1.0, 46.0]}, visible=False)
+    add_box("lagoon_seabed_col",192.0, -2.35,-192.0,  76.0, 2.0,  76.0, [0.1, 0.1, 0.1],
+            collider={"type": "box", "halfExtents": [38.0, 1.0, 38.0]}, visible=False)
 
-    # Visual 4-biome ground tiles (y = 0.00, zero overlap!)
-    add_plane("biome_downtown",  -79.0, 0.00,   79.0, 158.0, 158.0, [0.18, 0.19, 0.23])
-    add_plane("biome_highlands",  79.0, 0.00,   79.0, 158.0, 158.0, [0.15, 0.27, 0.16])
-    add_plane("biome_desert",    -79.0, 0.00,  -79.0, 158.0, 158.0, [0.64, 0.37, 0.21])
+    # 4 Non-Overlapping Biome Ground Planes (y = 0.00, 560m x 560m total island!)
+    add_plane("biome_downtown",  -140.0, 0.00,  140.0, 280.0, 280.0, [0.18, 0.19, 0.23])
+    add_plane("biome_highlands",  140.0, 0.00,  140.0, 280.0, 280.0, [0.15, 0.28, 0.16])
+    add_plane("biome_desert",    -140.0, 0.00, -140.0, 280.0, 280.0, [0.65, 0.37, 0.21])
 
-    sand_col = [0.78, 0.68, 0.45]
-    add_plane("biome_beach_w",    33.0, 0.00,  -79.0,  66.0, 158.0, sand_col)
-    add_plane("biome_beach_e",   134.0, 0.00,  -79.0,  48.0, 158.0, sand_col)
-    add_plane("biome_beach_n",    88.0, 0.00,  -33.0,  44.0,  66.0, sand_col)
-    add_plane("biome_beach_s",    88.0, 0.00, -134.0,  44.0,  48.0, sand_col)
-    add_plane("lagoon_seabed",    88.0, -1.25, -88.0,  46.0,  46.0, [0.30, 0.34, 0.27])
+    # SE Palm Coast Beach (4 clean non-overlapping sand slabs framing [156..228, -228..-156]!)
+    sand_col = [0.79, 0.69, 0.45]
+    add_plane("biome_beach_w",     78.0, 0.00, -140.0, 156.0, 280.0, sand_col)
+    add_plane("biome_beach_e",    254.0, 0.00, -140.0,  52.0, 280.0, sand_col)
+    add_plane("biome_beach_n",    192.0, 0.00,  -78.0,  72.0, 156.0, sand_col)
+    add_plane("biome_beach_s",    192.0, 0.00, -254.0,  72.0,  52.0, sand_col)
+    add_plane("lagoon_seabed",    192.0, -1.35,-192.0,  74.0,  74.0, [0.28, 0.34, 0.28])
 
     # =========================================================================
-    # 1B. ANIMATED 3D OCEAN WATER (Real Seabed Depth + Buoyancy Volumes!)
+    # 1B. ANIMATED 3D OCEAN WATER (72m Turquoise Marina Lagoon + Endless Ocean!)
     # =========================================================================
-    add_water("palm_lagoon_water", 88.0, -0.26, -88.0, 44.0, 44.0, [0.06, 0.58, 0.70], seabed_y=-1.25)
+    add_water("palm_lagoon_water", 192.0, -0.26, -192.0, 72.0, 72.0, [0.06, 0.59, 0.72], seabed_y=-1.35)
 
     ocean_col = [0.04, 0.44, 0.62]
-    add_water("ocean_east",   278.0, -0.40,    0.0, 240.0, 796.0, ocean_col, seabed_y=-3.5)
-    add_water("ocean_west",  -278.0, -0.40,    0.0, 240.0, 796.0, ocean_col, seabed_y=-3.5)
-    add_water("ocean_north",    0.0, -0.40,  278.0, 316.0, 240.0, ocean_col, seabed_y=-3.5)
-    add_water("ocean_south",    0.0, -0.40, -278.0, 316.0, 240.0, ocean_col, seabed_y=-3.5)
+    add_water("ocean_east",   440.0, -0.42,    0.0, 320.0, 1200.0, ocean_col, seabed_y=-4.0)
+    add_water("ocean_west",  -440.0, -0.42,    0.0, 320.0, 1200.0, ocean_col, seabed_y=-4.0)
+    add_water("ocean_north",    0.0, -0.42,  440.0, 560.0,  320.0, ocean_col, seabed_y=-4.0)
+    add_water("ocean_south",    0.0, -0.42, -440.0, 560.0,  320.0, ocean_col, seabed_y=-4.0)
 
     # =========================================================================
-    # 2. LAYERED FLICKER-FREE HIGHWAY & CITY ROAD NETWORK
-    #    NS roads at y = 0.04 | EW roads at y = 0.07 (Zero coplanar Z-fighting!)
+    # 2. GRAND 560m MULTI-RING HIGHWAY NETWORK (ZERO Z-FIGHTING!)
+    #    NS Highways at y = 0.04 | EW Highways at y = 0.07
     # =========================================================================
     asphalt_ns = [0.105, 0.115, 0.138]
     asphalt_ew = [0.108, 0.118, 0.140]
 
-    add_plane("hwy_ns",      0.0, 0.04, 0.0, 14.0, 310.0, asphalt_ns)
-    add_plane("loop_in_e",  54.0, 0.04, 0.0, 11.0, 120.0, asphalt_ns)
-    add_plane("loop_in_w", -54.0, 0.04, 0.0, 11.0, 120.0, asphalt_ns)
-    add_plane("ring_out_e",120.0, 0.04, 0.0, 12.0, 254.0, asphalt_ns)
-    add_plane("ring_out_w",-120.0,0.04, 0.0, 12.0, 254.0, asphalt_ns)
+    # North-South Expressways & Loops (y = 0.04)
+    add_plane("hwy_ns",        0.0, 0.04, 0.0, 16.0, 548.0, asphalt_ns)
+    add_plane("loop_in_e",    64.0, 0.04, 0.0, 11.0, 140.0, asphalt_ns)
+    add_plane("loop_in_w",   -64.0, 0.04, 0.0, 11.0, 140.0, asphalt_ns)
+    add_plane("mid_e",       148.0, 0.04, 0.0, 12.0, 310.0, asphalt_ns)
+    add_plane("mid_w",      -148.0, 0.04, 0.0, 12.0, 310.0, asphalt_ns)
+    add_plane("ring_out_e",  236.0, 0.04, 0.0, 13.0, 486.0, asphalt_ns)
+    add_plane("ring_out_w", -236.0, 0.04, 0.0, 13.0, 486.0, asphalt_ns)
 
-    add_plane("hwy_ew",      0.0, 0.07,   0.0, 310.0, 14.0, asphalt_ew)
-    add_plane("loop_in_n",   0.0, 0.07,  54.0, 120.0, 11.0, asphalt_ew)
-    add_plane("loop_in_s",   0.0, 0.07, -54.0, 120.0, 11.0, asphalt_ew)
-    add_plane("ring_out_n",  0.0, 0.07, 120.0, 254.0, 12.0, asphalt_ew)
-    add_plane("ring_out_s",  0.0, 0.07,-120.0, 254.0, 12.0, asphalt_ew)
+    # East-West Expressways & Loops (y = 0.07)
+    add_plane("hwy_ew",        0.0, 0.07,    0.0, 548.0, 16.0, asphalt_ew)
+    add_plane("loop_in_n",     0.0, 0.07,   64.0, 140.0, 11.0, asphalt_ew)
+    add_plane("loop_in_s",     0.0, 0.07,  -64.0, 140.0, 11.0, asphalt_ew)
+    add_plane("mid_n",         0.0, 0.07,  148.0, 310.0, 12.0, asphalt_ew)
+    add_plane("mid_s",         0.0, 0.07, -148.0, 310.0, 12.0, asphalt_ew)
+    add_plane("ring_out_n",    0.0, 0.07,  236.0, 486.0, 13.0, asphalt_ew)
+    add_plane("ring_out_s",    0.0, 0.07, -236.0, 486.0, 13.0, asphalt_ew)
 
     # =========================================================================
-    # 3. PERIMETER COASTAL PROMENADE SEAWALLS
+    # 3. PERIMETER COASTAL PROMENADE SEAWALLS (±278m!)
     # =========================================================================
     wall_col = [0.34, 0.37, 0.42]
-    add_box("wall_north",   0.0, 0.85,  157.0, 316.0, 1.7, 2.0, wall_col,
-            collider={"type": "box", "halfExtents": [158.0, 3.0, 1.2]})
-    add_box("wall_south",   0.0, 0.70, -157.0, 316.0, 1.4, 2.0, [0.58, 0.54, 0.46],
-            collider={"type": "box", "halfExtents": [158.0, 3.0, 1.2]})
-    add_box("wall_east",  157.0, 0.70,    0.0, 2.0, 1.4, 316.0, [0.58, 0.54, 0.46],
-            collider={"type": "box", "halfExtents": [1.2, 3.0, 158.0]})
-    add_box("wall_west", -157.0, 0.85,    0.0, 2.0, 1.7, 316.0, wall_col,
-            collider={"type": "box", "halfExtents": [1.2, 3.0, 158.0]})
+    sand_wall = [0.58, 0.54, 0.46]
+    add_box("wall_north",   0.0, 0.85,  278.0, 558.0, 1.7, 2.2, wall_col,
+            collider={"type": "box", "halfExtents": [280.0, 3.0, 1.3]})
+    add_box("wall_south",   0.0, 0.70, -278.0, 558.0, 1.4, 2.2, sand_wall,
+            collider={"type": "box", "halfExtents": [280.0, 3.0, 1.3]})
+    add_box("wall_east",  278.0, 0.70,    0.0, 2.2, 1.4, 558.0, sand_wall,
+            collider={"type": "box", "halfExtents": [1.3, 3.0, 280.0]})
+    add_box("wall_west", -278.0, 0.85,    0.0, 2.2, 1.7, 558.0, wall_col,
+            collider={"type": "box", "halfExtents": [1.3, 3.0, 280.0]})
 
     # =========================================================================
-    # 4. BIOME 1 — DOWNTOWN METRO (Central Hub + Neon Arches + Gas Station!)
+    # 4. BIOME 1 — EXPANDED DOWNTOWN METRO SKYLINE (Central Hub + North-West)
     # =========================================================================
-    add_neon_arch("arch_n",   0.0,  16.0, True,  [0.12, 0.88, 1.00])
-    add_neon_arch("arch_s",   0.0, -16.0, True,  [1.00, 0.25, 0.68])
-    add_neon_arch("arch_e",  16.0,   0.0, False, [0.18, 1.00, 0.58])
-    add_neon_arch("arch_w", -16.0,   0.0, False, [1.00, 0.72, 0.14])
+    add_neon_arch("arch_n",   0.0,  20.0, True,  [0.12, 0.88, 1.00])
+    add_neon_arch("arch_s",   0.0, -20.0, True,  [1.00, 0.25, 0.68])
+    add_neon_arch("arch_e",  20.0,   0.0, False, [0.18, 1.00, 0.58])
+    add_neon_arch("arch_w", -20.0,   0.0, False, [1.00, 0.72, 0.14])
 
     towers = [
-        ("tower_nw_hub", -24.0,  24.0,   0.0, (1.0, 1.25, 1.0), [0.95, 1.00, 1.08]),
-        ("tower_ne_hub",  24.0,  24.0,  90.0, (1.0, 1.05, 1.0), [0.92, 1.04, 0.98]),
-        ("tower_sw_hub", -24.0, -24.0, 180.0, (1.0, 0.95, 1.0), [1.06, 0.94, 0.88]),
-        ("tower_se_hub",  24.0, -24.0, -90.0, (1.0, 1.15, 1.0), [1.05, 0.90, 0.98]),
-        ("tower_dt_1",   -84.0,  28.0,   0.0, (1.1, 1.50, 1.1), [0.90, 0.96, 1.10]),
-        ("tower_dt_2",   -28.0,  84.0,  90.0, (1.1, 1.40, 1.1), [1.08, 0.90, 1.02]),
-        ("tower_dt_3",   -86.0,  86.0, 180.0, (1.2, 1.75, 1.2), [0.88, 1.02, 1.12]),
-        ("tower_dt_4",   -64.0,  98.0, -90.0, (0.95, 1.18, 0.95), [1.04, 0.96, 0.90]),
-        ("tower_dt_5",   -98.0,  62.0,  45.0, (0.95, 1.22, 0.95), [0.96, 0.92, 1.08]),
+        # Central Hub Plaza
+        ("tower_nw_hub",  -28.0,  28.0,   0.0, (1.05, 1.30, 1.05), [0.95, 1.00, 1.08]),
+        ("tower_ne_hub",   28.0,  28.0,  90.0, (1.05, 1.15, 1.05), [0.92, 1.04, 0.98]),
+        ("tower_sw_hub",  -28.0, -28.0, 180.0, (1.05, 1.05, 1.05), [1.06, 0.94, 0.88]),
+        ("tower_se_hub",   28.0, -28.0, -90.0, (1.05, 1.20, 1.05), [1.05, 0.90, 0.98]),
+        # Mid Downtown District
+        ("tower_dt_1",   -104.0,  32.0,   0.0, (1.15, 1.65, 1.15), [0.90, 0.96, 1.10]),
+        ("tower_dt_2",    -32.0, 104.0,  90.0, (1.15, 1.50, 1.15), [1.08, 0.90, 1.02]),
+        ("tower_dt_3",   -106.0, 106.0, 180.0, (1.30, 1.95, 1.30), [0.88, 1.02, 1.12]),
+        ("tower_dt_4",    -84.0, 122.0, -90.0, (1.00, 1.35, 1.00), [1.04, 0.96, 0.90]),
+        ("tower_dt_5",   -122.0,  82.0,  45.0, (1.00, 1.40, 1.00), [0.96, 0.92, 1.08]),
+        # Outer Financial Skyline (between Mid ±148 and Ring ±236!)
+        ("tower_dt_6",   -186.0,  44.0,   0.0, (1.20, 1.85, 1.20), [0.90, 1.00, 1.12]),
+        ("tower_dt_7",   -190.0, 104.0,  90.0, (1.15, 1.60, 1.15), [1.02, 0.92, 1.06]),
+        ("tower_dt_8",   -188.0, 188.0, 180.0, (1.35, 2.15, 1.35), [0.86, 0.98, 1.14]),
+        ("tower_dt_9",   -104.0, 188.0, -90.0, (1.15, 1.65, 1.15), [1.06, 0.94, 0.92]),
+        ("tower_dt_10",   -40.0, 188.0,  45.0, (1.10, 1.55, 1.10), [0.94, 1.04, 1.06]),
     ]
     for tid, tx, tz, yaw, scl, tint in towers:
         add_box(tid + "_pad", tx, 0.14, tz, 13.8 * scl[0], 0.28, 13.8 * scl[2], [0.35, 0.37, 0.42])
@@ -219,10 +228,12 @@ def build_world():
             collider={"type": "box", "halfExtents": [5.9 * scl[0], 12.0 * scl[1], 5.9 * scl[2]], "offsetY": 12.0 * scl[1]},
         )
 
-    # NEW v0.8 Neon Roadside Gas Stations (Downtown & Desert Highway!)
+    # Neon Roadside Gas Stations across Metro, Desert & Outer Highway!
     gas_stations = [
-        ("gas_station_metro",  -36.0,  36.0,   0.0, [0.15, 0.90, 1.00]),
-        ("gas_station_desert", -36.0, -36.0, 180.0, [1.00, 0.38, 0.65]),
+        ("gas_station_metro",  -42.0,   42.0,   0.0, [0.15, 0.90, 1.00]),
+        ("gas_station_north",  -82.0,  212.0, 180.0, [0.22, 1.00, 0.65]),
+        ("gas_station_desert", -42.0,  -42.0, 180.0, [1.00, 0.38, 0.65]),
+        ("gas_station_canyon",-192.0, -104.0,  90.0, [1.00, 0.65, 0.18]),
     ]
     for gid, gx, gz, yaw, lcol in gas_stations:
         add_model(
@@ -230,13 +241,13 @@ def build_world():
             yaw=yaw, scale=(1.0, 1.0, 1.0),
             collider={"type": "box", "halfExtents": [6.5, 2.8, 4.2], "offsetY": 2.8},
         )
-        add_light(f"{gid}_light", gx, 4.5, gz, lcol, radius=24.0, intensity=2.6)
+        add_light(f"{gid}_light", gx, 4.5, gz, lcol, radius=26.0, intensity=2.6)
 
     warehouses = [
-        ("warehouse_dt_w",   -86.0,  60.0,   0.0),
-        ("warehouse_dt_n",   -32.0, 138.0, 180.0),
-        ("warehouse_desert", -86.0, -86.0,  90.0),
-        ("warehouse_alpine",  86.0,  86.0, -90.0),
+        ("warehouse_dt_w",   -110.0,  172.0,   0.0),
+        ("warehouse_dt_n",    -42.0,  258.0, 180.0),
+        ("warehouse_desert", -110.0, -110.0,  90.0),
+        ("warehouse_alpine",  110.0,  110.0, -90.0),
     ]
     for wid, wx, wz, yaw in warehouses:
         add_model(
@@ -245,16 +256,13 @@ def build_world():
             collider={"type": "box", "halfExtents": [7.2, 3.6, 5.2], "offsetY": 3.6},
         )
 
-    lamp_spots = [
-        ( 9.5,  36.0, -90.0), (-9.5,  36.0,  90.0),
-        ( 9.5, -36.0, -90.0), (-9.5, -36.0,  90.0),
-        ( 9.5,  72.0, -90.0), (-9.5,  72.0,  90.0),
-        ( 9.5, -72.0, -90.0), (-9.5, -72.0,  90.0),
-        ( 36.0,  9.5, 180.0), ( 36.0, -9.5,   0.0),
-        (-36.0,  9.5, 180.0), (-36.0, -9.5,   0.0),
-        (-74.0,  9.5, 180.0), (-74.0, -9.5,   0.0),
-        ( 74.0,  9.5, 180.0), ( 74.0, -9.5,   0.0),
-    ]
+    # Street Lamps lining main avenues
+    lamp_spots = []
+    for d in (-200.0, -112.0, -42.0, 42.0, 112.0, 200.0):
+        lamp_spots.append(( 10.5, d, -90.0))
+        lamp_spots.append((-10.5, d,  90.0))
+        lamp_spots.append((d,  10.5, 180.0))
+        lamp_spots.append((d, -10.5,   0.0))
     for idx, (lx, lz, yaw) in enumerate(lamp_spots, 1):
         add_model(
             f"lamp_{idx}", "assets/models/street_lamp.glb", lx, 0.0, lz,
@@ -263,15 +271,32 @@ def build_world():
         )
 
     # =========================================================================
-    # 5. BIOME 2 — PINE HIGHLANDS & WIND RIDGE (North-East: +X, +Z)
+    # 5. BIOME 2 — PINE HIGHLANDS, ALPINE CABIN VILLAGE & WIND RIDGE (NE)
     # =========================================================================
+    # NEW v0.9 Warm-Lit A-Frame Alpine Cabins!
+    cabins = [
+        ("alpine_cabin_1", 104.0,  86.0, -135.0),
+        ("alpine_cabin_2", 188.0, 108.0,  -90.0),
+        ("alpine_cabin_3", 184.0, 192.0, -155.0),
+    ]
+    for cid, cx, cz, yaw in cabins:
+        add_model(
+            cid, "assets/models/alpine_cabin.glb", cx, 0.0, cz,
+            yaw=yaw, scale=(1.05, 1.05, 1.05),
+            collider={"type": "box", "halfExtents": [4.5, 3.4, 5.6], "offsetY": 3.4},
+        )
+        add_light(f"{cid}_light", cx, 3.2, cz, [1.0, 0.72, 0.30], radius=24.0, intensity=2.4)
+
     pine_spots = [
-        (36.0, 68.0, 1.05), (46.0, 82.0, 1.20), (30.0, 96.0, 0.95),
-        (68.0, 32.0, 1.10), (82.0, 42.0, 1.25), (96.0, 26.0, 1.00),
-        (72.0, 68.0, 1.15), (98.0, 66.0, 1.30), (66.0, 102.0, 1.05),
-        (104.0, 98.0, 1.22), (138.0, 34.0, 1.18), (140.0, 74.0, 1.30),
-        (136.0, 104.0, 1.12), (42.0, 138.0, 1.25), (84.0, 140.0, 1.15),
-        (110.0, 138.0, 1.05), (140.0, 140.0, 1.35), (34.0, 40.0, 0.95),
+        (38.0, 88.0, 1.10), (50.0, 112.0, 1.25), (32.0, 128.0, 1.00),
+        (88.0, 36.0, 1.15), (108.0, 48.0, 1.30), (126.0, 30.0, 1.05),
+        (82.0, 122.0, 1.20), (124.0, 84.0, 1.35), (84.0, 174.0, 1.15),
+        (118.0, 184.0, 1.30), (124.0, 214.0, 1.18), (44.0, 186.0, 1.25),
+        (48.0, 214.0, 1.12), (176.0, 44.0, 1.28), (212.0, 52.0, 1.35),
+        (178.0, 76.0, 1.18), (216.0, 96.0, 1.24), (214.0, 172.0, 1.38),
+        (172.0, 214.0, 1.26), (258.0, 48.0, 1.30), (258.0, 120.0, 1.35),
+        (258.0, 198.0, 1.22), (82.0, 258.0, 1.30), (178.0, 258.0, 1.35),
+        (42.0, 42.0, 1.05), (96.0, 208.0, 1.20), (210.0, 214.0, 1.32),
     ]
     for idx, (px, pz, s) in enumerate(pine_spots, 1):
         add_model(
@@ -281,73 +306,87 @@ def build_world():
         )
 
     turbines = [
-        ("wind_turbine_ne_1",  94.0,  104.0, -135.0),
-        ("wind_turbine_ne_2", 138.0,   52.0, -110.0),
-        ("wind_turbine_ne_3",  66.0,  140.0, -150.0),
-        ("wind_turbine_sw_1", -96.0, -104.0,   45.0),
-        ("wind_turbine_sw_2",-140.0,  -62.0,   70.0),
-        ("wind_turbine_sw_3", -66.0, -140.0,   30.0),
+        ("wind_turbine_ne_1", 118.0,  196.0, -135.0),
+        ("wind_turbine_ne_2", 214.0,   72.0, -110.0),
+        ("wind_turbine_ne_3", 258.0,  166.0, -145.0),
+        ("wind_turbine_ne_4", 136.0,  258.0, -120.0),
+        ("wind_turbine_sw_1",-196.0, -196.0,   45.0),
+        ("wind_turbine_sw_2",-258.0,  -96.0,   70.0),
+        ("wind_turbine_sw_3",-118.0, -258.0,   30.0),
     ]
     for tid, tx, tz, yaw in turbines:
         add_model(
             tid, "assets/models/wind_turbine.glb", tx, 0.0, tz,
-            yaw=yaw, scale=(1.2, 1.2, 1.2),
-            collider={"type": "cylinder", "radius": 0.95, "height": 18.0},
+            yaw=yaw, scale=(1.35, 1.35, 1.35),
+            collider={"type": "cylinder", "radius": 1.05, "height": 20.0},
         )
 
     # =========================================================================
-    # 6. BIOME 3 — PALM COAST BEACH, LAGOON, DRIVABLE PIER, SAILBOATS & TOWERS
+    # 6. BIOME 3 — PALM COAST RESORT, FERRIS WHEEL, 72m MARINA LAGOON & PIER
     # =========================================================================
-    add_box("lighthouse_quay", 102.0, 0.25, -102.0, 11.0, 1.5, 11.0, [0.46, 0.44, 0.40],
-            collider={"type": "box", "halfExtents": [5.5, 1.5, 5.5]})
+    # NEW v0.9 24m Glowing Spinning Coastal Boardwalk Ferris Wheel!
     add_model(
-        "coastal_lighthouse", "assets/models/lighthouse.glb", 102.0, 1.0, -102.0,
-        yaw=-45.0, scale=(1.15, 1.15, 1.15),
-        collider={"type": "cylinder", "radius": 3.5, "height": 22.0},
+        "coastal_ferris_wheel", "assets/models/ferris_wheel.glb", 118.0, 0.0, -192.0,
+        yaw=90.0, scale=(1.15, 1.15, 1.15),
+        collider={"type": "box", "halfExtents": [4.2, 12.0, 8.2], "offsetY": 12.0},
+    )
+    add_light("ferris_light_c", 118.0, 14.0, -192.0, [0.15, 0.90, 1.0], radius=38.0, intensity=3.2)
+    add_light("ferris_light_p", 118.0,  5.5, -192.0, [1.0, 0.25, 0.70], radius=32.0, intensity=2.6)
+
+    # Lighthouse Point inside SE Marina Corner!
+    add_box("lighthouse_quay", 214.0, 0.25, -214.0, 12.0, 1.6, 12.0, [0.46, 0.44, 0.40],
+            collider={"type": "box", "halfExtents": [6.0, 1.6, 6.0]})
+    add_model(
+        "coastal_lighthouse", "assets/models/lighthouse.glb", 214.0, 1.05, -214.0,
+        yaw=-45.0, scale=(1.25, 1.25, 1.25),
+        collider={"type": "cylinder", "radius": 3.8, "height": 24.0},
     )
 
-    # Drivable Wooden Beach Pier ("type": "deck") + Smooth Wooden Entry Ramp from dry sand!
+    # 32m Drivable Wooden Beach Pier ("type": "deck") + Smooth Wooden Entry Ramp from dry sand!
     wood_col = [0.44, 0.28, 0.16]
     post_col = [0.28, 0.18, 0.10]
-    add_box("beach_pier_ramp", 63.0, 0.0, -88.0, 4.4, 0.10, 4.8, wood_col,
+    add_box("beach_pier_ramp", 155.0, 0.0, -192.0, 4.4, 0.10, 5.2, wood_col,
             yaw=90.0, visible=False,
-            collider={"type": "ramp", "width": 4.8, "height": 0.54, "length": 4.4})
-    add_box("beach_pier_ramp_vis", 63.0, 0.22, -88.0, 4.6, 0.22, 4.8, wood_col)
-    add_box("beach_pier_deck", 76.0, 0.42, -88.0, 22.0, 0.24, 4.8, wood_col,
-            collider={"type": "deck", "halfExtents": [11.0, 0.12, 2.4]})
-    for idx, px in enumerate([68.0, 74.0, 80.0, 86.0], 1):
-        for side_name, pz in [("n", -85.4), ("s", -90.6)]:
+            collider={"type": "ramp", "width": 5.2, "height": 0.54, "length": 4.4})
+    add_box("beach_pier_ramp_vis", 155.0, 0.22, -192.0, 4.6, 0.22, 5.2, wood_col)
+    add_box("beach_pier_deck", 173.0, 0.42, -192.0, 32.0, 0.24, 5.2, wood_col,
+            collider={"type": "deck", "halfExtents": [16.0, 0.12, 2.6]})
+    for idx, px in enumerate([161.0, 169.0, 177.0, 185.0], 1):
+        for side_name, pz in [("n", -189.2), ("s", -194.8)]:
             add_box(f"pier_post_{idx}_{side_name}", px, 0.20, pz, 0.34, 2.2, 0.34, post_col,
                     collider={"type": "cylinder", "radius": 0.22, "height": 2.2})
             if idx in (2, 4):
                 add_box(f"pier_lamp_{idx}_{side_name}", px, 1.45, pz, 0.38, 0.38, 0.38, [1.0, 0.80, 0.34], emissive=True)
-    # Warm golden dynamic pier point lights reflecting on the lagoon waves!
-    add_light("pier_light_mid", 74.0, 2.2, -88.0, [1.0, 0.78, 0.36], radius=22.0, intensity=2.4)
-    add_light("pier_light_end", 86.0, 2.2, -88.0, [1.0, 0.80, 0.38], radius=24.0, intensity=2.8)
+    add_light("pier_light_mid", 169.0, 2.4, -192.0, [1.0, 0.78, 0.36], radius=24.0, intensity=2.4)
+    add_light("pier_light_end", 185.0, 2.4, -192.0, [1.0, 0.80, 0.38], radius=28.0, intensity=2.8)
 
-    # NEW v0.8 Animated Wave-Rocking Sailboats floating in the Lagoon & Offshore Ocean!
-    add_model("sailboat_lagoon",  "assets/models/sailboat.glb",  94.0, -0.34, -75.0, yaw=125.0, scale=(1.05, 1.05, 1.05))
-    add_model("sailboat_offshore","assets/models/sailboat.glb", 184.0, -0.42, -55.0, yaw=-35.0, scale=(1.35, 1.35, 1.35))
+    # 3 Animated Wave-Rocking Sailboats (2 in big Marina Lagoon + 1 Offshore!)
+    add_model("sailboat_lagoon_1", "assets/models/sailboat.glb", 204.0, -0.34, -172.0, yaw=125.0, scale=(1.10, 1.10, 1.10))
+    add_model("sailboat_lagoon_2", "assets/models/sailboat.glb", 176.0, -0.34, -214.0, yaw= 40.0, scale=(1.00, 1.00, 1.00))
+    add_model("sailboat_offshore", "assets/models/sailboat.glb", 312.0, -0.44,  -95.0, yaw=-35.0, scale=(1.45, 1.45, 1.45))
 
-    # NEW v0.8 Coastal Lifeguard Towers overlooking the Palm Coast Lagoon!
-    add_model(
-        "lifeguard_tower_1", "assets/models/lifeguard_tower.glb", 62.0, 0.0, -72.0,
-        yaw=-65.0, scale=(1.0, 1.0, 1.0),
-        collider={"type": "box", "halfExtents": [1.8, 3.0, 1.8], "offsetY": 3.0},
-    )
-    add_model(
-        "lifeguard_tower_2", "assets/models/lifeguard_tower.glb", 78.0, 0.0, -61.0,
-        yaw=180.0, scale=(1.0, 1.0, 1.0),
-        collider={"type": "box", "halfExtents": [1.8, 3.0, 1.8], "offsetY": 3.0},
-    )
-    add_light("lifeguard_light_1", 62.0, 5.2, -72.0, [1.0, 0.82, 0.42], radius=18.0, intensity=1.8)
+    # 3 Coastal Lifeguard Towers overlooking the Beach & Lagoon
+    lifeguards = [
+        ("lifeguard_tower_1", 132.0, -172.0, -70.0),
+        ("lifeguard_tower_2", 186.0, -134.0, 180.0),
+        ("lifeguard_tower_3", 258.0, -192.0,  90.0),
+    ]
+    for lid, lx, lz, yaw in lifeguards:
+        add_model(
+            lid, "assets/models/lifeguard_tower.glb", lx, 0.0, lz,
+            yaw=yaw, scale=(1.0, 1.0, 1.0),
+            collider={"type": "box", "halfExtents": [1.8, 3.0, 1.8], "offsetY": 3.0},
+        )
+    add_light("lifeguard_light_1", 132.0, 5.2, -172.0, [1.0, 0.82, 0.42], radius=20.0, intensity=2.0)
 
     palm_spots = [
-        (36.0, -40.0, 1.05), (42.0, -72.0, 1.15), (28.0, -96.0, 1.00),
-        (68.0, -28.0, 1.10), (88.0, -34.0, 1.22), (72.0, -56.0, 1.05),
-        (100.0, -56.0, 1.18), (58.0, -102.0, 1.12), (46.0, -138.0, 1.20),
-        (82.0, -138.0, 1.10), (138.0, -30.0, 1.25), (138.0, -72.0, 1.15),
-        (22.0, -70.0, 0.98), (74.0, -42.0, 1.08), (38.0, -104.0, 1.14),
+        (42.0, -42.0, 1.08), (44.0, -88.0, 1.18), (34.0, -124.0, 1.02),
+        (88.0, -34.0, 1.15), (118.0, -44.0, 1.25), (96.0, -96.0, 1.12),
+        (124.0, -118.0, 1.20), (88.0, -176.0, 1.15), (56.0, -188.0, 1.22),
+        (76.0, -216.0, 1.14), (176.0, -42.0, 1.25), (212.0, -56.0, 1.18),
+        (182.0, -98.0, 1.20), (216.0, -118.0, 1.14), (258.0, -44.0, 1.28),
+        (258.0, -114.0, 1.20), (258.0, -220.0, 1.25), (86.0, -258.0, 1.18),
+        (178.0, -258.0, 1.24), (36.0, -210.0, 1.12), (118.0, -218.0, 1.16),
     ]
     for idx, (px, pz, s) in enumerate(palm_spots, 1):
         add_model(
@@ -357,19 +396,16 @@ def build_world():
         )
 
     # =========================================================================
-    # 7. BIOME 4 — RED ROCK DESERT CANYON (South-West: -X, -Z)
+    # 7. BIOME 4 — RED ROCK DESERT CANYON & SAGUARO CACTUS VALLEY (SW)
     # =========================================================================
     rock_spots = [
-        (-36.0,  -76.0, 1.15,  15.0),
-        (-74.0,  -34.0, 1.30,  70.0),
-        (-96.0,  -38.0, 1.50, 140.0),
-        (-68.0,  -96.0, 1.25, 210.0),
-        (-36.0, -102.0, 1.10, 300.0),
-        (-138.0, -30.0, 1.60,  40.0),
-        (-138.0, -94.0, 1.75, 110.0),
-        (-136.0,-138.0, 1.85, 200.0),
-        (-92.0, -140.0, 1.45, 250.0),
-        (-34.0, -140.0, 1.35,  85.0),
+        (-42.0,  -92.0, 1.20,  15.0), (-92.0,  -40.0, 1.35,  70.0),
+        (-118.0, -46.0, 1.55, 140.0), (-84.0, -118.0, 1.30, 210.0),
+        (-42.0, -124.0, 1.15, 300.0), (-188.0, -42.0, 1.70,  40.0),
+        (-204.0,-168.0, 1.85, 110.0), (-174.0,-206.0, 1.95, 200.0),
+        (-104.0,-196.0, 1.55, 250.0), (-42.0, -196.0, 1.40,  85.0),
+        (-258.0, -44.0, 1.75, 130.0), (-258.0,-176.0, 1.90,  25.0),
+        (-192.0,-258.0, 1.65, 275.0), (-58.0, -258.0, 1.50, 160.0),
     ]
     for idx, (rx, rz, s, yaw) in enumerate(rock_spots, 1):
         add_model(
@@ -378,18 +414,38 @@ def build_world():
             collider={"type": "cylinder", "radius": 4.2 * s, "height": 7.5 * s},
         )
 
+    # NEW v0.9 Desert Saguaro Cacti (ALL with solid cylinder colliders!)
+    cactus_spots = [
+        (-30.0, -82.0, 1.05), (-82.0, -78.0, 1.20), (-124.0, -84.0, 0.95),
+        (-174.0,-78.0, 1.15), (-212.0,-82.0, 1.25), (-178.0,-124.0, 1.00),
+        (-120.0,-176.0, 1.18), (-82.0,-182.0, 1.10), (-36.0, -172.0, 0.98),
+        (-182.0,-186.0, 1.22), (-216.0,-210.0, 1.15), (-86.0, -214.0, 1.08),
+        (-256.0,-126.0, 1.20), (-142.0,-258.0, 1.12), (-32.0, -218.0, 1.05),
+        (-104.0, -26.0, 1.10), (-172.0, -24.0, 1.16), (-214.0, -26.0, 1.02),
+    ]
+    for idx, (cx, cz, s) in enumerate(cactus_spots, 1):
+        add_model(
+            f"cactus_{idx}", "assets/models/cactus.glb", cx, 0.0, cz,
+            yaw=(idx * 53.0) % 360.0, scale=(s, s, s),
+            collider={"type": "cylinder", "radius": 0.45 * s, "height": 4.8 * s},
+        )
+
     # =========================================================================
-    # 8. EIGHT NEON 3D STUNT RAMPS ACROSS ALL 4 BIOMES
+    # 8. TWELVE NEON 3D STUNT RAMPS ACROSS THE 560m 4-BIOME ISLAND!
     # =========================================================================
     ramps = [
-        ("ramp_hub_n",     0.0,   28.0,    0.0, 1.0),
-        ("ramp_hub_s",     0.0,  -28.0,  180.0, 1.0),
-        ("ramp_hub_e",    28.0,    0.0,   90.0, 1.0),
-        ("ramp_hub_w",   -28.0,    0.0,  -90.0, 1.0),
-        ("ramp_metro",   -54.0,   86.0,    0.0, 1.2),
-        ("ramp_pine",     86.0,   54.0,   90.0, 1.2),
-        ("ramp_beach",    54.0,  -86.0,  180.0, 1.2),
-        ("ramp_desert",  -86.0,  -54.0,  -90.0, 1.25),
+        ("ramp_hub_n",     0.0,   36.0,    0.0, 1.05),
+        ("ramp_hub_s",     0.0,  -36.0,  180.0, 1.05),
+        ("ramp_hub_e",    36.0,    0.0,   90.0, 1.05),
+        ("ramp_hub_w",   -36.0,    0.0,  -90.0, 1.05),
+        ("ramp_metro",   -64.0,  104.0,    0.0, 1.25),
+        ("ramp_pine",    104.0,   64.0,   90.0, 1.25),
+        ("ramp_beach",    64.0, -104.0,  180.0, 1.25),
+        ("ramp_desert", -104.0,  -64.0,  -90.0, 1.25),
+        ("ramp_ring_n",    0.0,  196.0,    0.0, 1.35),
+        ("ramp_ring_s",    0.0, -196.0,  180.0, 1.35),
+        ("ramp_ring_e",  196.0,    0.0,   90.0, 1.35),
+        ("ramp_ring_w", -196.0,    0.0,  -90.0, 1.35),
     ]
     for rid, rx, rz, yaw, s in ramps:
         add_model(
@@ -399,13 +455,13 @@ def build_world():
         )
 
     scene = {
-        "name": "SAGE v0.8 — Dynamic HDR Open World (Realistic Water Buoyancy, Point Lights, 3D Particles & 18 Models)",
+        "name": "SAGE v0.9 — 560m Grand 4-Biome Open World (2-Cascade CSM, Walk/Drive, AI Traffic & 24 Models)",
         "version": 2,
         "sky": {
             "timeOfDay": 17.4,
             "ambientIntensity": 0.40,
-            "fogStart": 140.0,
-            "fogEnd": 460.0,
+            "fogStart": 185.0,
+            "fogEnd": 640.0,
         },
         "camera": {
             "position": [10.0, 5.5, -14.0],

@@ -16,6 +16,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [008](008-auto-colliders-menus-and-multi-biome-worlds.md) | Declarative JSON Auto-Colliders, Game Menus & Multi-Biome Worlds | Milestone `v0.6` Implementation |
 | [009](009-hdr-bloom-water-shader-and-zfighting-fix.md) | Eliminating Road Z-Fighting, HDR Bloom Post-Processing & Animated 3D Ocean Water | Milestone `v0.7` Implementation |
 | [010](010-realistic-water-physics-point-lights-and-particles.md) | Realistic Water Physics, Archimedes Buoyancy, Dynamic Point Lights & 3D Particles | Milestone `v0.8` Implementation |
+| [011](011-cascaded-shadows-560m-world-and-walk-drive-ai.md) | 2-Cascade Soft Shadow Maps (CSM), 560m Open World, Walk/Drive Mode & AI Traffic | Milestone `v0.9` Implementation |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:
