@@ -166,6 +166,9 @@ add_library(sage_core STATIC
     engine/src/platform/window.cpp
     engine/src/renderer/gl_functions.cpp
     engine/src/renderer/gl_renderer.cpp
+    engine/src/renderer/gl_shaders.cpp
+    engine/src/renderer/gl_model.cpp
+    engine/src/renderer/gl_animation.cpp
     engine/src/scripting/lua_engine.cpp
     engine/src/world/scene_loader.cpp
     engine/src/world/world.cpp

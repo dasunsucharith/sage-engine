@@ -32,6 +32,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [024](024-gpu-pass-timing.md) | Non-Blocking GPU Timer Queries per Render Pass | Foundation Fix (post-`v1.6.0`) |
 | [025](025-cpu-frame-timing.md) | CPU Frame Sections, Per-Pass Submission Cost & Why SAGE Is Actually GPU/Driver-Bound | Foundation Fix (post-`v1.6.0`) |
 | [027](027-opaque-pass-draw-order.md) | Opaque Pass: Pixel-Bound Diagnosis, Terrain-Last & Front-to-Back Draw Order (Same Image, -8 to -15% GPU) | Foundation Fix (post-`v1.6.0`) |
+| [030](030-renderer-split-and-shader-hot-reload.md) | Renderer Split into Modules & GLSL Shaders as Files with Safe Hot-Reload | Foundation (post-`v1.6.0`) |
 | [029](029-entity-handles-and-components.md) | Entity Handles (Generational, Stale-Safe) & Components (Sparse-Set Stores; Ragdoll & Look-At Moved Out) | Foundation (post-`v1.6.0`) |
 | [028](028-point-light-cost-analysis.md) | Point-Light Cost Analysis: Per-Object, Tiled & Clustered Culling Measured (Scenes Are Densely Lit, Little to Skip) | Foundation (post-`v1.6.0`) |
 | [026](026-shadow-pass-analysis.md) | Shadow Pass Analysis: Exact Light-Space Caster Culling (Missing-Shadow Fix), Merged Depth-Only Meshes & Per-Cascade Timing | Foundation Fix (post-`v1.6.0`) |

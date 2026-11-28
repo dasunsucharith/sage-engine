@@ -14,6 +14,7 @@ Welcome! **SAGE (Scriptable AI Game Engine)** is designed to be **AI-Native**. W
 ## 2. Core Architectural Rules
 
 * **Entities = handles + components:** refer to entities in hot C++ paths by `EntityHandle` (O(1), stale-safe), and add new optional per-entity data as a `ComponentStore<T>` in `World`, not as new fields on `Entity`. See [`docs/knowledge-base/029-entity-handles-and-components.md`](docs/knowledge-base/029-entity-handles-and-components.md).
+* **Shaders are files:** GLSL lives in `engine/shaders/` and hot-reloads on save; never embed shader source in C++. Compile errors report the file and line. See [`docs/knowledge-base/030-renderer-split-and-shader-hot-reload.md`](docs/knowledge-base/030-renderer-split-and-shader-hot-reload.md).
 * **Keep C++ clean & modular:** Every subsystem lives behind a clear interface under `engine/include/sage/` so backends (e.g., OpenGL → Vulkan/DX12) can evolve without rewriting game code.
 * **Plain-text first in dev:** Scenes (`scenes/*.json`), resource manifests (`manifest.json`), and configs must stay valid, well-formatted JSON so AI agents and humans can diff and edit them cleanly.
 * **Always update docs alongside code:**

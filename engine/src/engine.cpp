@@ -159,6 +159,9 @@ bool Engine::initialize() {
     m_resolvedScenePath = resolveProjectPath(m_config.scenePath);
 
     m_renderer = createOpenGLRenderer();
+    if (m_renderer) {
+        m_renderer->setAssetRoot(m_projectRoot); // Needed by initialize() to find engine/shaders
+    }
     if (!m_renderer || !m_renderer->initialize(m_window.width(), m_window.height())) {
         std::cerr << "[SAGE] Failed to initialize 3D GPU renderer.\n";
         shutdown();

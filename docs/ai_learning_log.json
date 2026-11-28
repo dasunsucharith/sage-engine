@@ -124,6 +124,12 @@
       "version": "1.6.0+",
       "domain": "Entity Handles & Components",
       "lesson": "Refactor core data structures behind a deterministic behaviour log: thanks to the fixed simulation clock, a Lua test that logs every entity value every tick reproduced 112/112 ticks across runs, so the post-refactor build matching 113/113 ticks is strong proof of identical behaviour. Generational handles (slot + generation, slot->dense table, swap-remove updates only the moved entity's slot, destroy/clear bump generations) give O(1) stale-safe references with the name API unchanged. Sparse-set ComponentStore<T> moved rarely-used ragdoll (84 B) and look-at (16 B) state out of Entity (416 -> 336 B). To keep behaviour exact: iterate in the ORIGINAL order when updates have order-dependent side effects (ragdoll ground hits spawn RNG-driven particles), keep components alive whenever the old fields' leftover state mattered (ragdoll), and give new components 'previous' interpolation values that match the old per-entity defaults. Separately: when absolute benchmarks suddenly regress, rebuild main and A/B before blaming the change (here both builds were equally slow, caused by machine state)."
+    },
+    {
+      "id": "L021",
+      "version": "1.6.0+",
+      "domain": "Renderer Split & Shader Hot-Reload",
+      "lesson": "Moving 14 embedded GLSL raw strings into engine/shaders files and splitting gl_renderer.cpp (4,469 -> 2,473 lines; gl_model/gl_animation/gl_shaders/gl_profiler) was done with scripted, asserted text moves, not hand edits: every extracted region was checked to contain only shaders/comments, and type definitions vs function bodies were split automatically into header + .cpp. Hot reload must rebuild ALL programs into temporaries and swap only if every one links, then re-query uniform locations, so a typo never leaves the renderer half-updated or black. Drop the raw-string leading newline so driver error lines (NVIDIA 0(N)) equal file lines (verified: injected typo reported at the exact edited line). The renderer now needs the project root before initialize() to find shaders. Verified identical via screenshot diffs at noise floor, the per-tick behaviour log, and an interleaved A/B (p50 2.11-2.18 vs 2.09-2.14 ms)."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [
