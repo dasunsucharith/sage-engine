@@ -300,6 +300,7 @@ void Engine::render(double elapsedSeconds) {
     stats.savedDrawCalls = m_renderer->lastSavedDrawCalls();
     stats.luaResources = m_lua.activeResourceCount();
     stats.freeFlyMode = m_freeFlyMode;
+    stats.gpuPasses = m_renderer->lastGpuPassTimings();
 
     EditorActions actions;
     actions.onHotReload = [this]() {
@@ -333,6 +334,25 @@ void Engine::render(double elapsedSeconds) {
 }
 
 namespace {
+
+// mean / p50 / p95 / max of a sample set (milliseconds).
+nlohmann::json summarizeSamples(std::vector<float> samples) {
+    nlohmann::json out;
+    if (samples.empty()) {
+        return out;
+    }
+    std::sort(samples.begin(), samples.end());
+    double sum = 0.0;
+    for (float s : samples) sum += s;
+    const auto pct = [&samples](double p) {
+        return samples[static_cast<std::size_t>(std::lround(p / 100.0 * static_cast<double>(samples.size() - 1)))];
+    };
+    out["meanMs"] = sum / static_cast<double>(samples.size());
+    out["p50Ms"] = pct(50.0);
+    out["p95Ms"] = pct(95.0);
+    out["maxMs"] = samples.back();
+    return out;
+}
 
 // Steady-state statistics over frames AFTER the warm-up window. Percentiles matter
 // more than averages for games: p99 captures the hitches players actually feel.
@@ -375,6 +395,27 @@ nlohmann::json computeFrameStats(const std::vector<float>& frameTimesMs, int war
 
 } // namespace
 
+void Engine::recordGpuPassTimings() {
+    if (!m_renderer) return;
+    const std::uint64_t id = m_renderer->gpuTimingFrameId();
+    if (id == m_lastGpuTimingId) return; // No newly completed GPU frame yet
+    m_lastGpuTimingId = id;
+    float total = 0.0f;
+    for (const GpuPassTiming& t : m_renderer->lastGpuPassTimings()) {
+        const std::string name(t.name);
+        auto it = std::find(m_gpuPassNames.begin(), m_gpuPassNames.end(), name);
+        std::size_t idx = static_cast<std::size_t>(it - m_gpuPassNames.begin());
+        if (it == m_gpuPassNames.end()) {
+            m_gpuPassNames.push_back(name);
+            m_gpuPassSamples.emplace_back();
+            idx = m_gpuPassNames.size() - 1;
+        }
+        m_gpuPassSamples[idx].push_back(t.ms);
+        total += t.ms;
+    }
+    m_gpuTotalSamples.push_back(total);
+}
+
 void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     if (m_projectRoot.empty() || totalFrames <= 0) {
         return;
@@ -415,6 +456,22 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
         "avgFrameMs/peakFrameMs include cold-start frames. Compare versions ONLY with steadyState from a "
         "Release --benchmark run (VSync off); smoke-test numbers are dominated by the first-frame hitch.";
     j["steadyState"] = computeFrameStats(m_frameTimesMs, m_config.warmupFrames, m_config.vsync);
+    if (!m_gpuTotalSamples.empty()) {
+        // GPU time per render pass (timer queries). Unlike CPU frame time this shows WHERE
+        // the GPU spends its time, so optimizations can target the expensive pass.
+        nlohmann::json gpuTimes;
+        gpuTimes["note"] = "GPU milliseconds per render pass (GL_TIME_ELAPSED), after warm-up. Excludes the ImGui overlay.";
+        gpuTimes["frames"] = m_gpuTotalSamples.size();
+        gpuTimes["total"] = summarizeSamples(m_gpuTotalSamples);
+        nlohmann::json passes = nlohmann::json::array();
+        for (std::size_t i = 0; i < m_gpuPassNames.size(); ++i) {
+            nlohmann::json p = summarizeSamples(m_gpuPassSamples[i]);
+            p["name"] = m_gpuPassNames[i];
+            passes.push_back(p);
+        }
+        gpuTimes["passes"] = passes;
+        j["steadyState"]["gpu"] = gpuTimes;
+    }
     if (m_config.benchmarkMode && j["steadyState"].value("measuredFrames", 0) > 0) {
         const auto& s = j["steadyState"];
         std::cout << std::fixed << std::setprecision(2)
@@ -423,6 +480,15 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
                   << " ms | p50 " << s["p50FrameMs"].get<double>() << " | p95 " << s["p95FrameMs"].get<double>()
                   << " | p99 " << s["p99FrameMs"].get<double>() << " | max " << s["maxFrameMs"].get<double>()
                   << " ms (" << buildConfigName() << ", VSync " << (m_config.vsync ? "ON" : "OFF") << ")\n";
+    }
+    if (m_config.benchmarkMode && j["steadyState"].contains("gpu")) {
+        const auto& gpuTimes = j["steadyState"]["gpu"];
+        std::cout << std::fixed << std::setprecision(2) << "[SAGE][Benchmark][GPU] total p50 "
+                  << gpuTimes["total"]["p50Ms"].get<double>() << " ms | mean per pass:";
+        for (const auto& p : gpuTimes["passes"]) {
+            std::cout << " " << p["name"].get<std::string>() << " " << p["meanMs"].get<double>();
+        }
+        std::cout << " ms\n";
     }
     j["world"] = {
         {"entities", m_world.entityCount()},
@@ -560,6 +626,7 @@ int Engine::run() {
             accumulator -= m_config.fixedTimeStep;
         }
 
+        // (GPU pass timings are read a few frames late, see recordGpuPassTimings)
         // Shader time = simulation time + the not-yet-simulated remainder, so GPU water waves
         // stay in lock-step with the CPU buoyancy samples while still animating smoothly.
         m_renderTime = m_simTime + accumulator;
@@ -568,6 +635,9 @@ int Engine::run() {
         render(m_renderTime);
 
         ++totalFrames;
+        if (m_config.maxFrames > 0 && totalFrames > m_config.warmupFrames) {
+            recordGpuPassTimings();
+        }
         if (!m_config.screenshotPath.empty() && m_config.maxFrames > 0 && totalFrames == m_config.maxFrames) {
             // Re-render pure 3D world cleanly (no MENU overlay) & read back exact backbuffer PNG!
             renderWorldInterpolated({0.05f, 0.07f, 0.11f, 1.0f}, m_renderTime);

@@ -87,6 +87,12 @@
       "version": "1.6.0+",
       "domain": "Per-Resource Saves",
       "lesson": "With many resources in one Lua state, a single global sage.saveData writing saves/<key>.dat lets mods overwrite each other's saves. Give each resource its own `sage` table (metatable __index -> the shared table) whose save functions are bound to saves/<resource folder>/, so isolation needs no API change. Write to <key>.dat.tmp then rename over the target so a crash never leaves a half-written save. Migrate legacy saves/<key>.dat lazily on first load and rename it to .migrated so no other resource can claim it. Also re-migrate when the legacy file is NEWER than the per-resource copy: a player may still be running an older build that keeps saving to the old path, and preferring the stale migrated copy would silently lose progress. Test saves in an isolated project copy (junction the assets folder) so test runs never touch the user's real saves."
+    },
+    {
+      "id": "L015",
+      "version": "1.6.0+",
+      "domain": "GPU Pass Profiling",
+      "lesson": "Measure where time goes before optimizing. Per-pass GL_TIME_ELAPSED timer queries in a 4-frame ring, read only when GL_QUERY_RESULT_AVAILABLE so the CPU never stalls, showed (Release, RTX 5050 Laptop, 1280x720) GPU total p50 1.1-1.8 ms vs CPU frame p50 2.3-2.7 ms: SAGE is CPU-bound. The GPU idles over a third of each frame waiting on ~1,900 draw calls, Lua and physics. GPU split: opaque 0.56-1.18 ms > shadows 0.30-0.41 > grass/post ~0.1-0.2 > sky/water <0.1. So the next big wins are CPU-side (fewer draw calls via batching/instancing, cheaper per-entity work, multithreaded command building), not shader tweaks. GL_TIME_ELAPSED queries cannot nest: make begin() end the previous pass, and use an RAII frame scope so early returns still close the frame."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [

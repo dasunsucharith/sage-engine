@@ -3,6 +3,10 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include <utility>
+#include <vector>
+
+#include "sage/renderer/renderer.h"
 
 namespace sage {
 
@@ -25,6 +29,7 @@ struct EditorStats {
     std::size_t savedDrawCalls = 0;
     std::size_t luaResources = 0;
     bool freeFlyMode = false;
+    std::vector<GpuPassTiming> gpuPasses; // Latest completed GPU frame, per render pass
 };
 
 struct EditorActions {
@@ -71,6 +76,7 @@ private:
     std::string m_saveStatusMessage;
     float m_fpsHistory[90]{};
     int m_fpsOffset = 0;
+    std::vector<std::pair<std::string, float>> m_gpuPassSmoothed; // Smoothed for readable display
 };
 
 } // namespace sage

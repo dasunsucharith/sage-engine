@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace sage {
 
@@ -14,6 +16,12 @@ struct ClearColor {
     float g = 0.08f;
     float b = 0.12f;
     float a = 1.0f;
+};
+
+// GPU time spent in one render pass (from GPU timer queries, a few frames behind).
+struct GpuPassTiming {
+    const char* name = "";  // Static string, e.g. "shadows", "opaque", "post"
+    float ms = 0.0f;
 };
 
 struct RendererInfo {
@@ -52,6 +60,12 @@ public:
     virtual std::size_t lastInstancedBatchCount() const { return 0; }
     virtual std::size_t lastInstancedPropCount() const { return 0; }
     virtual std::size_t lastSavedDrawCalls() const { return 0; }
+
+    // Per-pass GPU times of the most recently COMPLETED frame (typically 2-3 frames old,
+    // because reading GPU timers immediately would stall the CPU). Empty when unsupported.
+    virtual std::vector<GpuPassTiming> lastGpuPassTimings() const { return {}; }
+    // Increments each time lastGpuPassTimings() holds a newly completed frame.
+    virtual std::uint64_t gpuTimingFrameId() const { return 0; }
 };
 
 // Creates the default OpenGL 3.3 Core 3D renderer backend.

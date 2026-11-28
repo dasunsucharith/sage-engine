@@ -54,6 +54,7 @@ private:
     void updateWindowTitle(double fps);
     bool checkSceneHotReload();
     void writeSessionTelemetry(int totalFrames, double totalSeconds) const;
+    void recordGpuPassTimings();
 
     std::filesystem::path resolveProjectPath(const std::filesystem::path& relativePath) const;
 
@@ -83,6 +84,12 @@ private:
     float m_peakFrameMs = 0.0f;
     double m_frameMsAccum = 0.0;
     std::vector<float> m_frameTimesMs;  // Raw (unclamped) per-frame CPU wall times for percentile telemetry
+    // Per-pass GPU times (ms) collected after warm-up in --benchmark / --smoke-test runs,
+    // in first-seen pass order. Index 0..N-1 matches m_gpuPassNames.
+    std::vector<std::string> m_gpuPassNames;
+    std::vector<std::vector<float>> m_gpuPassSamples;
+    std::vector<float> m_gpuTotalSamples;
+    std::uint64_t m_lastGpuTimingId = 0;
 
     // Simulation clock: advances by exactly fixedTimeStep per fixedTick, so physics,
     // water waves and Lua gameplay all see the same deterministic time (never wall-clock).

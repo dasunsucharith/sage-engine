@@ -3,6 +3,7 @@
 #include "sage/platform/window.h"
 
 #include <iostream>
+#include <type_traits>
 
 namespace sage::gl {
 
@@ -58,6 +59,17 @@ PFNGLBINDRENDERBUFFERPROC bindRenderbuffer = nullptr;
 PFNGLRENDERBUFFERSTORAGEPROC renderbufferStorage = nullptr;
 PFNGLFRAMEBUFFERRENDERBUFFERPROC framebufferRenderbuffer = nullptr;
 PFNGLDELETERENDERBUFFERSPROC deleteRenderbuffers = nullptr;
+
+PFNGLGENQUERIESPROC genQueries = nullptr;
+PFNGLDELETEQUERIESPROC deleteQueries = nullptr;
+PFNGLBEGINQUERYPROC beginQuery = nullptr;
+PFNGLENDQUERYPROC endQuery = nullptr;
+PFNGLGETQUERYOBJECTIVPROC getQueryObjectiv = nullptr;
+PFNGLGETQUERYOBJECTUI64VPROC getQueryObjectui64v = nullptr;
+
+bool hasTimerQueries() {
+    return genQueries && deleteQueries && beginQuery && endQuery && getQueryObjectiv && getQueryObjectui64v;
+}
 
 namespace {
 
@@ -130,6 +142,20 @@ bool loadFunctions() {
     ok &= loadOne(renderbufferStorage, "glRenderbufferStorage");
     ok &= loadOne(framebufferRenderbuffer, "glFramebufferRenderbuffer");
     ok &= loadOne(deleteRenderbuffers, "glDeleteRenderbuffers");
+
+    // Optional (profiling only): a missing timer query never prevents the engine from starting.
+    const auto loadOptional = [](auto& target, const char* symbolName) {
+        target = reinterpret_cast<std::remove_reference_t<decltype(target)>>(Window::getGLProcAddress(symbolName));
+    };
+    loadOptional(genQueries, "glGenQueries");
+    loadOptional(deleteQueries, "glDeleteQueries");
+    loadOptional(beginQuery, "glBeginQuery");
+    loadOptional(endQuery, "glEndQuery");
+    loadOptional(getQueryObjectiv, "glGetQueryObjectiv");
+    loadOptional(getQueryObjectui64v, "glGetQueryObjectui64v");
+    if (!hasTimerQueries()) {
+        std::cout << "[SAGE][OpenGL] GPU timer queries unavailable: per-pass GPU timings disabled.\n";
+    }
 
     return ok;
 }

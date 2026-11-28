@@ -7,6 +7,9 @@
 #include "sage/world/world.h"
 
 #include <SDL3/SDL.h>
+#include <algorithm>
+#include <cstdio>
+#include <iterator>
 #include <string>
 
 #ifdef _MSC_VER
@@ -127,6 +130,28 @@ void EditorUI::render(
                 stats.drawCalls, stats.instancedBatches, stats.instancedProps, stats.savedDrawCalls);
             ImGui::Text("Grass Blades: %zu | Jolt: %zu | Lights: %zu",
                 stats.grassClumps * 2, physics.bodyCount(), world.pointLights().size());
+
+            if (!stats.gpuPasses.empty() && ImGui::CollapsingHeader("GPU Passes (ms)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                // Exponential smoothing so numbers are readable instead of flickering every frame.
+                float total = 0.0f;
+                for (const GpuPassTiming& t : stats.gpuPasses) {
+                    auto it = std::find_if(m_gpuPassSmoothed.begin(), m_gpuPassSmoothed.end(),
+                        [&t](const auto& e) { return e.first == t.name; });
+                    if (it == m_gpuPassSmoothed.end()) {
+                        m_gpuPassSmoothed.emplace_back(t.name, t.ms);
+                        it = std::prev(m_gpuPassSmoothed.end());
+                    } else {
+                        it->second += (t.ms - it->second) * 0.08f;
+                    }
+                    total += it->second;
+                }
+                ImGui::Text("GPU total: %.2f ms (excludes this overlay)", total);
+                for (const auto& [name, ms] : m_gpuPassSmoothed) {
+                    char overlay[48];
+                    std::snprintf(overlay, sizeof(overlay), "%s %.2f", name.c_str(), ms);
+                    ImGui::ProgressBar(total > 0.0f ? ms / total : 0.0f, ImVec2(-1.0f, 0.0f), overlay);
+                }
+            }
 
             ImGui::Separator();
             if (ImGui::Button("Hot-Reload (F5)")) {

@@ -24,6 +24,7 @@
 // OpenGL 3.3 Core types & constants missing from Windows' legacy GL/gl.h (OpenGL 1.1)
 using GLchar = char;
 using GLsizeiptr = std::ptrdiff_t;
+using GLuint64Sage = std::uint64_t; // GLuint64 (not declared by the Windows gl.h)
 
 #ifndef GL_ARRAY_BUFFER
 #define GL_ARRAY_BUFFER 0x8892
@@ -115,10 +116,26 @@ using GLsizeiptr = std::ptrdiff_t;
 #ifndef GL_FRAMEBUFFER_COMPLETE
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #endif
+// GPU timer queries (core since OpenGL 3.3 / ARB_timer_query)
+#ifndef GL_TIME_ELAPSED
+#define GL_TIME_ELAPSED 0x88BF
+#endif
+#ifndef GL_QUERY_RESULT
+#define GL_QUERY_RESULT 0x8866
+#endif
+#ifndef GL_QUERY_RESULT_AVAILABLE
+#define GL_QUERY_RESULT_AVAILABLE 0x8867
+#endif
 
 namespace sage::gl {
 
 using PFNGLCREATESHADERPROC = GLuint(APIENTRYP)(GLenum type);
+using PFNGLGENQUERIESPROC = void(APIENTRYP)(GLsizei n, GLuint* ids);
+using PFNGLDELETEQUERIESPROC = void(APIENTRYP)(GLsizei n, const GLuint* ids);
+using PFNGLBEGINQUERYPROC = void(APIENTRYP)(GLenum target, GLuint id);
+using PFNGLENDQUERYPROC = void(APIENTRYP)(GLenum target);
+using PFNGLGETQUERYOBJECTIVPROC = void(APIENTRYP)(GLuint id, GLenum pname, GLint* params);
+using PFNGLGETQUERYOBJECTUI64VPROC = void(APIENTRYP)(GLuint id, GLenum pname, GLuint64Sage* params);
 using PFNGLSHADERSOURCEPROC = void(APIENTRYP)(GLuint shader, GLsizei count, const GLchar* const* string, const GLint* length);
 using PFNGLCOMPILESHADERPROC = void(APIENTRYP)(GLuint shader);
 using PFNGLGETSHADERIVPROC = void(APIENTRYP)(GLuint shader, GLenum pname, GLint* params);
@@ -223,6 +240,16 @@ extern PFNGLBINDRENDERBUFFERPROC bindRenderbuffer;
 extern PFNGLRENDERBUFFERSTORAGEPROC renderbufferStorage;
 extern PFNGLFRAMEBUFFERRENDERBUFFERPROC framebufferRenderbuffer;
 extern PFNGLDELETERENDERBUFFERSPROC deleteRenderbuffers;
+
+// Optional: GPU timer queries for per-pass profiling. Null if the driver lacks them;
+// call hasTimerQueries() before use.
+extern PFNGLGENQUERIESPROC genQueries;
+extern PFNGLDELETEQUERIESPROC deleteQueries;
+extern PFNGLBEGINQUERYPROC beginQuery;
+extern PFNGLENDQUERYPROC endQuery;
+extern PFNGLGETQUERYOBJECTIVPROC getQueryObjectiv;
+extern PFNGLGETQUERYOBJECTUI64VPROC getQueryObjectui64v;
+bool hasTimerQueries();
 
 // Loads all required OpenGL 3.3 Core functions from the current GL context.
 bool loadFunctions();
