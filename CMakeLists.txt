@@ -159,6 +159,9 @@ find_package(OpenGL REQUIRED)
 # ------------------------------------------------------------------------------
 add_library(sage_core STATIC
     engine/src/engine.cpp
+    engine/src/engine_remote.cpp
+    engine/src/remote/log_buffer.cpp
+    engine/src/remote/remote_server.cpp
     engine/src/audio/audio_engine.cpp
     engine/src/editor/editor_ui.cpp
     engine/src/physics/physics_world.cpp
@@ -211,6 +214,10 @@ target_link_libraries(sage_core
         Jolt
         imgui_static
 )
+
+if(WIN32)
+    target_link_libraries(sage_core PRIVATE ws2_32) # Winsock: localhost remote-control server (--remote)
+endif()
 
 if(MSVC)
     target_compile_options(sage_core PRIVATE /W4 /utf-8 /bigobj)

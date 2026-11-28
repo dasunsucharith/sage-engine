@@ -1203,6 +1203,60 @@ void LuaEngine::renderUI() {
     }
 }
 
+bool LuaEngine::runSnippet(const std::string& code, std::string& output) {
+    output.clear();
+    if (!m_impl->lua) {
+        output = "Lua is not running";
+        return false;
+    }
+    sol::state& lua = *m_impl->lua;
+    sol::environment env(lua, sol::create, lua.globals());
+
+    // Capture print() output instead of writing it to the console only.
+    std::string printed;
+    env.set_function("print", [&printed, &lua](sol::variadic_args args) {
+        sol::protected_function toString = lua["tostring"];
+        bool first = true;
+        for (auto arg : args) {
+            if (!first) printed += "\t";
+            first = false;
+            sol::protected_function_result r = toString(arg);
+            printed += r.valid() ? r.get<std::string>() : std::string("?");
+        }
+        printed += "\n";
+    });
+
+    // REPL-style: try it as an expression first ("return <code>"), then as statements.
+    sol::load_result chunk = lua.load("return " + code, "=remote", sol::load_mode::text);
+    if (!chunk.valid()) {
+        chunk = lua.load(code, "=remote", sol::load_mode::text);
+    }
+    if (!chunk.valid()) {
+        const sol::error err = chunk;
+        output = std::string("compile error: ") + err.what();
+        return false;
+    }
+    sol::protected_function fn = chunk;
+    env.set_on(fn);
+
+    WatchdogScope watchdog(kCallbackBudget);
+    sol::protected_function_result result = fn();
+    if (!result.valid()) {
+        const sol::error err = result;
+        output = printed + "error: " + err.what();
+        return false;
+    }
+    std::string values;
+    sol::protected_function toString = lua["tostring"];
+    for (int i = 0; i < result.return_count(); ++i) {
+        sol::protected_function_result r = toString(result.get<sol::object>(i));
+        if (!values.empty()) values += "\t";
+        values += r.valid() ? r.get<std::string>() : std::string("?");
+    }
+    output = printed + values;
+    return true;
+}
+
 bool LuaEngine::checkHotReload() {
     std::string changedPath;
     if (m_impl->hasWatchedFilesChanged(changedPath)) {

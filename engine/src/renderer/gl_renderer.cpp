@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cmath>
@@ -1368,9 +1369,15 @@ public:
     void endFrame() override {}
 
     bool captureScreenshot(const std::filesystem::path& outputPath) const override {
+        return captureScreenshotScaled(outputPath, 0);
+    }
+
+    // Saves the back buffer. `maxWidth` > 0 box-downscales by an integer factor until the
+    // image fits; a .jpg/.jpeg extension writes a JPEG (quality 85, ~10x smaller), else PNG.
+    bool captureScreenshotScaled(const std::filesystem::path& outputPath, int maxWidth) const override {
         if (!m_initialized || m_viewportWidth <= 0 || m_viewportHeight <= 0) return false;
-        const int w = m_viewportWidth;
-        const int h = m_viewportHeight;
+        int w = m_viewportWidth;
+        int h = m_viewportHeight;
         std::vector<unsigned char> raw(static_cast<std::size_t>(w * h * 3));
         std::vector<unsigned char> flipped(static_cast<std::size_t>(w * h * 3));
         gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1381,11 +1388,38 @@ public:
             std::copy_n(raw.data() + static_cast<std::size_t>(h - 1 - y) * rowBytes, rowBytes,
                         flipped.data() + static_cast<std::size_t>(y) * rowBytes);
         }
+        int factor = 1;
+        while (maxWidth > 0 && w / factor > maxWidth && factor < 16) ++factor;
+        if (factor > 1) {
+            const int sw = w / factor;
+            const int sh = h / factor;
+            std::vector<unsigned char> small(static_cast<std::size_t>(sw * sh * 3));
+            for (int y = 0; y < sh; ++y) {
+                for (int x = 0; x < sw; ++x) {
+                    for (int c = 0; c < 3; ++c) {
+                        int sum = 0;
+                        for (int dy = 0; dy < factor; ++dy) {
+                            for (int dx = 0; dx < factor; ++dx) {
+                                sum += flipped[(static_cast<std::size_t>(y * factor + dy) * w + (x * factor + dx)) * 3 + c];
+                            }
+                        }
+                        small[(static_cast<std::size_t>(y) * sw + x) * 3 + c] = static_cast<unsigned char>(sum / (factor * factor));
+                    }
+                }
+            }
+            flipped.swap(small);
+            w = sw;
+            h = sh;
+        }
         std::error_code ec;
         if (outputPath.has_parent_path()) {
             std::filesystem::create_directories(outputPath.parent_path(), ec);
         }
-        const int ok = stbi_write_png(outputPath.string().c_str(), w, h, 3, flipped.data(), w * 3);
+        std::string ext = outputPath.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        const int ok = (ext == ".jpg" || ext == ".jpeg")
+            ? stbi_write_jpg(outputPath.string().c_str(), w, h, 3, flipped.data(), 85)
+            : stbi_write_png(outputPath.string().c_str(), w, h, 3, flipped.data(), w * 3);
         if (ok) {
             std::cout << "[SAGE][Capture] Saved GPU screenshot -> " << outputPath.string() << " (" << w << "x" << h << ")\n";
         }

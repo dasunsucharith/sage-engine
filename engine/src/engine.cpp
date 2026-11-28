@@ -135,6 +135,9 @@ bool Engine::checkSceneHotReload() {
 }
 
 bool Engine::initialize() {
+    if (m_config.remotePort != 0) {
+        m_logs.attach(); // Capture engine logs (from here on) for the remote get_logs tool
+    }
     std::cout << "========================================\n";
     std::cout << "  SAGE Engine v" << kEngineVersion << " (" << buildConfigName() << " build)\n";
     std::cout << "  App: " << m_config.appName << "\n";
@@ -234,10 +237,14 @@ bool Engine::initialize() {
         // Pre-warm all scene & Lua .glb models, 3D terrain & instanced grass BEFORE Frame 1 (eliminates v1.3 226ms hitch!)
         m_renderer->preloadModels(m_world);
     }
+    if (m_config.remotePort != 0) {
+        m_remote.start(m_config.remotePort); // Logs its own success/failure; the game runs either way
+    }
     return true;
 }
 
 void Engine::shutdown() {
+    m_remote.stop();
     m_lua.shutdown();
     m_window.setRawEventCallback(nullptr);
     m_editor.shutdown();
@@ -280,7 +287,7 @@ void Engine::renderWorldInterpolated(const ClearColor& clearColor, double elapse
     // Free-fly and --cam cameras are already per-frame, so they are never blended.
     if (m_config.renderInterpolation) {
         CpuScope scope(m_cpuProfiler, "interpolation");
-        const bool blendCamera = !m_freeFlyMode && !m_config.overrideCamera;
+        const bool blendCamera = !m_freeFlyMode && !m_config.overrideCamera && !m_remoteCameraOverride;
         m_world.applyRenderInterpolation(m_interpAlpha, blendCamera);
     }
     {
@@ -716,6 +723,7 @@ int Engine::run() {
         render(m_renderTime);
 
         m_cpuProfiler.endFrame();
+        processRemoteCommands(); // Remote/MCP commands run here: between frames, on the main thread
         ++totalFrames;
         if (m_config.maxFrames > 0 && totalFrames > m_config.warmupFrames) {
             recordGpuPassTimings();

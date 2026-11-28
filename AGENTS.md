@@ -40,7 +40,14 @@ Read [`docs/lua_api.md`](docs/lua_api.md) before writing Lua scripts to verify w
 
 ---
 
-## 4. Knowledge Base & AI Self-Learning Protocol
+## 4. Working With the Running Game (MCP)
+
+The `sage` MCP server ([`docs/mcp.md`](docs/mcp.md), registered in [`.mcp.json`](.mcp.json)) gives you live access to a running game. Use it to **see the effect of your changes** instead of guessing:
+* After editing a scene, Lua script or shader, call `reload` (shaders reload on save automatically), then `screenshot` from a relevant viewpoint.
+* After a gameplay change, check `get_logs` with `errors_only` and test it with `run_lua`.
+* Place objects with `spawn` (+ `snap_to_ground`), check them visually, then write the final positions into the scene JSON so they persist.
+
+## 5. Knowledge Base & AI Self-Learning Protocol
 
 Before making big architectural decisions or starting a new engine version:
 1. **Read past engineering memory first:** Check [`docs/ai_learning_log.json`](docs/ai_learning_log.json), [`logs/last_session_telemetry.json`](logs/last_session_telemetry.json) (auto-generated on every engine run), and [`docs/knowledge-base/README.md`](docs/knowledge-base/README.md) so you build on proven patterns, target real measured hardware metrics, and never repeat a past mistake.

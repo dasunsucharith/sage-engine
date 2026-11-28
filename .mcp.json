@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sage": {
+      "command": "python",
+      "args": ["tools/sage_mcp/server.py"],
+      "env": {}
+    }
+  }
+}

@@ -79,6 +79,15 @@ int main(int argc, char* argv[]) {
             } else {
                 std::cerr << "[SAGE] --resolution expects WIDTHxHEIGHT, e.g. 1920x1080 (ignored)\n";
             }
+        } else if (arg == "--remote") {
+            // Localhost remote control for the MCP bridge (tools/sage_mcp). Optional port.
+            int port = 47800;
+            parseOptionalCount(argc, argv, i, port);
+            if (port < 1024 || port > 65535) {
+                std::cerr << "[SAGE] --remote port must be 1024..65535; using 47800\n";
+                port = 47800;
+            }
+            config.remotePort = static_cast<std::uint16_t>(port);
         } else if (arg == "--no-light-tiles") {
             config.lightTileCulling = false;
         } else if (arg == "--no-interp") {

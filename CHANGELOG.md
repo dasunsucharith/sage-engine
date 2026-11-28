@@ -2,6 +2,12 @@
 
 All notable changes to SAGE Engine. Each entry links to the knowledge-base article that explains the change in depth.
 
+## Unreleased
+
+### For game makers & AI assistants
+- **MCP bridge:** AI assistants (Claude Code, Claude Desktop, any MCP client) can work with a *running* game: list and inspect entities, spawn (with `snap_to_ground`), move, hide or destroy them, steer the camera, take screenshots they can see (from any viewpoint, without moving the game camera), read the engine log, check live performance, run sandboxed Lua and hot-reload. Start the game with `--remote` (localhost only), or let the assistant call `launch_game`. A zero-dependency Python MCP server (`tools/sage_mcp/server.py`) is registered in `.mcp.json`. See [`docs/mcp.md`](docs/mcp.md) and [KB 032](docs/knowledge-base/032-mcp-bridge.md).
+- **Screenshots:** can now be saved as downscaled JPEG (`Renderer::captureScreenshotScaled`).
+
 ## v1.7.0 — Foundations: Measurement, Correctness & Hot-Reloadable Everything
 
 v1.7 is a foundation release. It makes the engine measurable, safer, faster where measured, and easier to build games on. There are no changes to existing Lua scripts or scenes.

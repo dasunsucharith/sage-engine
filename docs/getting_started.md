@@ -84,6 +84,7 @@ The same tests run automatically on GitHub for every push and pull request (`.gi
 | `--resource <name>` | `.\build\sage.exe --resource stunt_sandbox` | Loads only this Lua resource (even if its manifest is disabled). |
 | `--no-vsync` | `.\build\sage.exe --no-vsync` | Disables VSync for interactive runs. |
 | `--resolution WxH` | `.\build\sage.exe --benchmark --resolution 1920x1080` | Sets the window size. Benchmark at two resolutions to tell pixel-bound passes (cost scales with pixel count) from geometry-bound ones. |
+| `--remote [port]` | `.\build\sage.exe --survival --remote` | Lets AI assistants control the running game through the MCP bridge (localhost only, default port 47800). See [AI Assistants in a Running Game](mcp.md). |
 | `--no-light-tiles` | `.\build\sage.exe --benchmark --no-light-tiles` | Turns off clustered point-light culling (every pixel loops over every light). The image is identical either way; this is for A/B performance tests. |
 | `--no-interp` | `.\build\sage.exe --no-interp` | Turns render interpolation off, drawing raw 60 Hz tick positions (for A/B comparison on high-refresh displays). |
 | `--screenshot <file.png>` | `.\build\sage.exe --smoke-test --screenshot shot.png` | With `--smoke-test`/`--benchmark`, saves a PNG of the final 3D frame (no UI overlay). |

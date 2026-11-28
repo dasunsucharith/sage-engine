@@ -142,6 +142,12 @@
       "version": "1.7.0",
       "domain": "Benchmark Methodology (run order)",
       "lesson": "Alternating OLD then NEW with NEW always second produced a consistent-looking 0.9 ms 'regression' (3/3 runs) that disappeared under rotated run order: 6 rounds, each build first, middle and last equally often, compared by MEDIAN, gave 2.38 / 2.31 / 2.56 ms with overlapping ranges and identical GPU time. The suspected build's engine code was identical to a build that measured fastest. Laptops heat up within a group of back-to-back runs, so fixed ordering biases whatever runs later. Rotate or randomise order, use medians, look at the less noisy GPU and renderSubmit numbers, and check whether the code under suspicion even changed before calling a regression."
+    },
+    {
+      "id": "L024",
+      "version": "1.7.0+",
+      "domain": "MCP Bridge",
+      "lesson": "Split AI integration into (1) a tiny protocol-agnostic engine port: localhost-only TCP, newline-delimited JSON, non-blocking sockets polled once per frame on the main thread, so there are no threads or locks and commands never race with rendering/physics/Lua, and (2) a separate MCP server. The MCP stdio protocol (JSON-RPC: initialize / tools/list / tools/call, notifications without replies, tool failures as isError results rather than protocol errors) fits in ~350 lines of standard-library Python, so users need no pip install. Verify compliance with the OFFICIAL client SDK in a throwaway venv: it negotiated protocol 2025-06-18 and exercised every tool, including image content. Note that SDK 2.x uses snake_case attributes (server_info, is_error, mime_type). Return screenshots as downscaled JPEG (16-38 KB instead of MB-sized PNGs), and let screenshot take its own camera without touching the game camera, suppressing render interpolation for that one render. Tee std::cout/cerr into a ring buffer (with a lock: other threads log too) so AI agents can read errors. Reuse the Lua sandbox and watchdog for run_lua, so a runaway snippet returns an error after 1 s and the game keeps responding."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [

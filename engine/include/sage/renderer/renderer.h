@@ -49,6 +49,12 @@ public:
     // Tiled point-light culling (on by default). Off = every pixel loops over every light;
     // the image is identical either way, so this exists for A/B performance comparison.
     virtual void setLightTileCulling(bool enabled) { (void)enabled; }
+    // Like captureScreenshot, downscaled to at most maxWidth pixels wide (0 = full size);
+    // a .jpg extension writes JPEG. Used by the remote-control/MCP screenshot tool.
+    virtual bool captureScreenshotScaled(const std::filesystem::path& outputPath, int maxWidth) const {
+        (void)maxWidth;
+        return captureScreenshot(outputPath);
+    }
     virtual bool captureScreenshot(const std::filesystem::path& outputPath) const {
         (void)outputPath;
         return false;

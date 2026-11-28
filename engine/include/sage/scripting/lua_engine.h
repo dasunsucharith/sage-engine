@@ -44,6 +44,12 @@ public:
     void tick(double dt);
     void renderUI();
     bool checkHotReload();
+
+    // Runs a Lua snippet for remote tools (the MCP bridge's run_lua): sandboxed like a
+    // resource, with the normal world/physics/camera/... API, print() captured, and the
+    // usual 1 s watchdog. Expressions return their value ("world.getPosition('hero')").
+    // Returns false (with the error in `output`) if it fails to compile or errors.
+    bool runSnippet(const std::string& code, std::string& output);
     void shutdown();
 
     std::size_t activeResourceCount() const;

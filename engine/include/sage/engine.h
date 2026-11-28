@@ -6,10 +6,13 @@
 #include "sage/platform/input.h"
 #include "sage/platform/window.h"
 #include "sage/profiling/profiler.h"
+#include "sage/remote/log_buffer.h"
+#include "sage/remote/remote_server.h"
 #include "sage/renderer/renderer.h"
 #include "sage/scripting/lua_engine.h"
 #include "sage/world/world.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -26,8 +29,9 @@ struct EngineConfig {
     int maxFrames = 0;                 // 0 = run until window closes (non-zero for --smoke-test / --benchmark)
     int warmupFrames = 0;              // Leading frames excluded from steady-state frame-time stats
     bool benchmarkMode = false;        // true for --benchmark (VSync off, long measured window)
-    bool renderInterpolation = true;
-    bool lightTileCulling = true;      // Tiled point-light culling; --no-light-tiles disables (A/B testing)   // Blend the last two 60 Hz ticks when drawing (smooth on 120/144 Hz); --no-interp disables
+    bool renderInterpolation = true;   // Blend the last two 60 Hz ticks when drawing (smooth on 120/144 Hz); --no-interp disables
+    bool lightTileCulling = true;      // Clustered point-light culling; --no-light-tiles disables (A/B testing)
+    std::uint16_t remotePort = 0;      // 0 = off. --remote [port] enables the localhost remote-control / MCP bridge
     bool silentAudio = false;          // true during --smoke-test
     std::filesystem::path resourcesPath = "resources";
     std::filesystem::path scenePath = "scenes/stunt_city.json";
@@ -57,6 +61,10 @@ private:
     bool checkSceneHotReload();
     void writeSessionTelemetry(int totalFrames, double totalSeconds) const;
     void recordGpuPassTimings();
+
+    // Remote control (MCP bridge), see engine_remote.cpp and docs/mcp.md
+    void processRemoteCommands();
+    std::string handleRemoteRequest(const std::string& line);
 
     std::filesystem::path resolveProjectPath(const std::filesystem::path& relativePath) const;
 
@@ -107,6 +115,11 @@ private:
     double m_simTime = 0.0;
     double m_renderTime = 0.0;         // m_simTime + leftover accumulator (smooth time for shaders)
     float m_interpAlpha = 1.0f;        // accumulator / fixedTimeStep, blend factor for render interpolation
+
+    RemoteServer m_remote;
+    LogBuffer m_logs;
+    bool m_remoteCameraOverride = false; // Remote screenshot is using its own camera: don't blend it
+    std::uint64_t m_remoteShotCounter = 0;
 
     std::string m_scriptTitle;
     double m_startTime = 0.0;
