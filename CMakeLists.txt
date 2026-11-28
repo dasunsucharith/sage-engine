@@ -235,3 +235,38 @@ if(MSVC)
 else()
     target_compile_options(sage PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# ------------------------------------------------------------------------------
+# Automated tests (doctest + CTest). Headless: no window or GPU needed, so they
+# also run on CI servers. Build & run:  cmake --build build --target sage_tests
+#                                        ctest --test-dir build --output-on-failure
+# ------------------------------------------------------------------------------
+option(SAGE_BUILD_TESTS "Build the SAGE automated test suite" ON)
+if(SAGE_BUILD_TESTS)
+    FetchContent_Declare(
+        doctest
+        URL https://github.com/doctest/doctest/archive/refs/tags/v2.4.11.tar.gz
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_GetProperties(doctest)
+    if(NOT doctest_POPULATED)
+        FetchContent_Populate(doctest) # Header-only: no need to run its own CMake
+    endif()
+
+    enable_testing()
+    add_executable(sage_tests
+        tests/test_main.cpp
+        tests/test_world_handles.cpp
+        tests/test_render_interpolation.cpp
+        tests/test_terrain.cpp
+        tests/test_lua_sandbox.cpp
+        tests/test_determinism.cpp
+    )
+    target_include_directories(sage_tests SYSTEM PRIVATE ${doctest_SOURCE_DIR}) # SYSTEM: no warnings from doctest itself
+    target_include_directories(sage_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_link_libraries(sage_tests PRIVATE sage_core)
+    if(MSVC)
+        target_compile_options(sage_tests PRIVATE /W4 /utf-8)
+    endif()
+    add_test(NAME sage_tests COMMAND sage_tests WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()

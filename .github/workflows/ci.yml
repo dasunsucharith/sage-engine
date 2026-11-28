@@ -1,0 +1,36 @@
+# Continuous integration: builds the engine and runs the automated test suite on every
+# push to main and on every pull request. The tests are headless (no window or GPU), so
+# they run on GitHub's standard runners. The game itself is compiled (to catch build
+# breaks) but not run, because these runners have no GPU.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows (MSVC, Release)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          lfs: false # Tests don't need the large model/audio files
+
+      - name: Configure (fetches SDL3, Lua, Jolt, ImGui, ... via FetchContent)
+        # No -G: CMake picks the newest Visual Studio on the runner (multi-config generator).
+        run: cmake -S . -B build -A x64 -DSAGE_BUILD_TESTS=ON
+
+      - name: Build engine and tests
+        run: cmake --build build --config Release --target sage sage_tests --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure

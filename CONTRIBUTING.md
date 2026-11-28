@@ -11,7 +11,8 @@ Thank you for helping build **SAGE** (**S**criptable **A**I **G**ame **E**ngine)
 2. Read [`AGENTS.md`](AGENTS.md) and [`docs/architecture.md`](docs/architecture.md) to match project conventions.
 3. Keep pull requests focused on **one clear feature or fix** (e.g., *"Add SDL3 window creation"* or *"Add `world.spawnModel` Lua binding"*).
 4. If you add a new Lua API or engine subsystem, update [`docs/lua_api.md`](docs/lua_api.md) or [`docs/knowledge-base/`](docs/knowledge-base/).
-5. Open a **Pull Request** explaining what you built and how to test it.
+5. **Run the tests** (`cmake --build build --target sage_tests` then `ctest --test-dir build --output-on-failure`), and add a test in `tests/` for any new engine behaviour. CI runs the same suite on every pull request.
+6. Open a **Pull Request** explaining what you built and how to test it.
 
 ## Coding Style
 

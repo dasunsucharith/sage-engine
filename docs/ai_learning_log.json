@@ -130,6 +130,12 @@
       "version": "1.6.0+",
       "domain": "Renderer Split & Shader Hot-Reload",
       "lesson": "Moving 14 embedded GLSL raw strings into engine/shaders files and splitting gl_renderer.cpp (4,469 -> 2,473 lines; gl_model/gl_animation/gl_shaders/gl_profiler) was done with scripted, asserted text moves, not hand edits: every extracted region was checked to contain only shaders/comments, and type definitions vs function bodies were split automatically into header + .cpp. Hot reload must rebuild ALL programs into temporaries and swap only if every one links, then re-query uniform locations, so a typo never leaves the renderer half-updated or black. Drop the raw-string leading newline so driver error lines (NVIDIA 0(N)) equal file lines (verified: injected typo reported at the exact edited line). The renderer now needs the project root before initialize() to find shaders. Verified identical via screenshot diffs at noise floor, the per-tick behaviour log, and an interleaved A/B (p50 2.11-2.18 vs 2.09-2.14 ms)."
+    },
+    {
+      "id": "L022",
+      "version": "1.6.0+",
+      "domain": "Automated Tests & CI",
+      "lesson": "World, PhysicsWorld (Jolt), LuaEngine, SceneLoader and a silent AudioEngine all run headless, so a doctest suite linking sage_core covers handles, interpolation, terrain, the Lua sandbox/watchdog/saves and full-scenario determinism in ~1.4 s without a GPU, which makes it CI-friendly. Lua tests read results back via sage.saveData files, so no LuaEngine internals need exposing. ALWAYS mutation-check new tests: plant the bug the test should catch and confirm it fails (4/4 caught here). Gotcha: on Windows, git restores files with CRLF, so a naive \n-based search/replace silently applies nothing (and a silently failing rebuild makes everything 'pass'). The mutation script must normalise line endings, assert the bug applied, and the rebuild exit code must be checked. CI: don't hard-code a Visual Studio generator version (runner images change); let CMake pick, and build/test with --config Release / -C Release."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [

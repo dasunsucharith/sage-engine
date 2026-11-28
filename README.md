@@ -1,5 +1,7 @@
 # SAGE Engine
 
+[![CI](https://github.com/dasunsucharith/sage-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/dasunsucharith/sage-engine/actions/workflows/ci.yml)
+
 **SAGE** (**S**criptable **A**I **G**ame **E**ngine) is an open-source **C++20 + Lua** 3D game engine inspired by the open-world engineering of Rockstar's **RAGE** and the developer-friendly Lua resource ecosystem of **FiveM** — built from Day 1 to be **100% AI-Native** and effortless for any developer to build any 3D game.
 
 > **Vision:** Clone the repo, drop in static or animated `.glb` 3D models (from Blender or AI), and build complete 3D games with physics, soft shadows, audio, and custom HUDs purely in hot-reloadable Lua + JSON — or by guiding an AI coding assistant in plain English.

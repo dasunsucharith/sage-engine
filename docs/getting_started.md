@@ -57,6 +57,16 @@ cmake --build build --target sage
 ./build/sage
 ```
 
+### Run the automated tests
+The test suite (`tests/`, built with [doctest](https://github.com/doctest/doctest)) checks entity handles, render interpolation, data-driven terrain, the Lua sandbox, per-resource saves and deterministic simulation. It needs no window or GPU and takes about 2 seconds:
+
+```powershell
+cmake --build build --target sage_tests
+ctest --test-dir build --output-on-failure
+```
+
+The same tests run automatically on GitHub for every push and pull request (`.github/workflows/ci.yml`).
+
 ---
 
 ## 3. Command-Line Options
