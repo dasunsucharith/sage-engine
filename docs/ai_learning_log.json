@@ -81,6 +81,12 @@
       "version": "1.6.0+",
       "domain": "Data-Driven Terrain",
       "lesson": "Game-specific landscapes hard-coded in engine C++ (coordinates of peaks, lakes, ring roads; grass exclusions tied to those roads) force C++ edits for every new game. Move them into a scene JSON spec evaluated by ONE function (baseHeight + heightmap + FBM -> island mask -> ordered peak/basin/flatten/road features) that the GPU mesh, Jolt HeightField, grass scatter and Lua sampleTerrain all share. Gate renderer/physics rebuilds on a revision counter bumped on every scene load, not on a few cached numbers (the old cache missed hot-reloaded terrain edits). Validate every key with file + JSON-path errors, warn on unknown keys (catches typos) and on 0..255 colours, and fall back to flat terrain on errors. Keep legacy presets byte-identical and prove it: same triangle/grass/collider counts and ~0.1% pixel diff (moving objects only) between old and new builds from identical cameras. Gotcha: culling seabed triangles near the water surface (hideBelowHeight) causes a stair-step seam because the water shader shades by depth."
+    },
+    {
+      "id": "L014",
+      "version": "1.6.0+",
+      "domain": "Per-Resource Saves",
+      "lesson": "With many resources in one Lua state, a single global sage.saveData writing saves/<key>.dat lets mods overwrite each other's saves. Give each resource its own `sage` table (metatable __index -> the shared table) whose save functions are bound to saves/<resource folder>/, so isolation needs no API change. Write to <key>.dat.tmp then rename over the target so a crash never leaves a half-written save. Migrate legacy saves/<key>.dat lazily on first load and rename it to .migrated so no other resource can claim it. Also re-migrate when the legacy file is NEWER than the per-resource copy: a player may still be running an older build that keeps saving to the old path, and preferring the stale migrated copy would silently lose progress. Test saves in an isolated project copy (junction the assets folder) so test runs never touch the user's real saves."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [

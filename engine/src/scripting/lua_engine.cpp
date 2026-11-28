@@ -145,35 +145,9 @@ struct LuaEngine::Impl {
                 callbacks.requestQuit();
             }
         });
-        sageTbl.set_function("saveData", [this](const std::string& key, const std::string& data) -> bool {
-            std::string safeKey;
-            for (char c : key) {
-                if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') {
-                    safeKey.push_back(c);
-                }
-            }
-            if (safeKey.empty()) return false;
-            const fs::path saveDir = resourcesRoot.parent_path() / "saves";
-            std::error_code ec;
-            fs::create_directories(saveDir, ec);
-            std::ofstream out(saveDir / (safeKey + ".dat"), std::ios::trunc);
-            if (!out.is_open()) return false;
-            out << data;
-            return true;
-        });
-        sageTbl.set_function("loadData", [this](const std::string& key) -> std::string {
-            std::string safeKey;
-            for (char c : key) {
-                if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') {
-                    safeKey.push_back(c);
-                }
-            }
-            if (safeKey.empty()) return "";
-            const fs::path filePath = resourcesRoot.parent_path() / "saves" / (safeKey + ".dat");
-            std::ifstream in(filePath);
-            if (!in.is_open()) return "";
-            return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        });
+        // NOTE: sage.saveData / loadData / deleteData are NOT global. Each resource gets its
+        // own copies bound to its own save folder (see bindResourceSaves), so two resources
+        // can never read or overwrite each other's saves, even with the same key.
         sageTbl.set_function("fileExists", [this](const std::string& relPath) -> bool {
             // Only project-relative paths: scripts must not probe the rest of the user's disk.
             if (relPath.empty()) return false;
@@ -854,6 +828,146 @@ struct LuaEngine::Impl {
         return false;
     }
 
+    // -----------------------------------------------------------------------
+    // Per-resource save data: saves/<resource folder>/<key>.dat
+    // -----------------------------------------------------------------------
+    static constexpr std::size_t kMaxSaveBytes = 16u * 1024u * 1024u;
+
+    // Keeps [A-Za-z0-9_-]; warns (no silent magic) when characters had to be dropped.
+    static std::string sanitizeSaveKey(const std::string& key, const std::string& resourceName, const char* api) {
+        std::string safe;
+        for (char c : key) {
+            if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') {
+                safe.push_back(c);
+            }
+        }
+        if (safe.empty()) {
+            std::cerr << "[SAGE][Saves] " << resourceName << ": sage." << api << "(\"" << key
+                      << "\") - key must contain letters, digits, '_' or '-'\n";
+        } else if (safe != key) {
+            std::cerr << "[SAGE][Saves] " << resourceName << ": sage." << api << " key \"" << key
+                      << "\" was stored as \"" << safe << "\" (only A-Z a-z 0-9 _ - are allowed)\n";
+        }
+        return safe;
+    }
+
+    fs::path savesRoot() const { return resourcesRoot.parent_path() / "saves"; }
+
+    bool saveResourceData(const std::string& ns, const std::string& resourceName, const std::string& key, const std::string& data) {
+        const std::string safeKey = sanitizeSaveKey(key, resourceName, "saveData");
+        if (safeKey.empty()) return false;
+        if (data.size() > kMaxSaveBytes) {
+            std::cerr << "[SAGE][Saves] " << resourceName << ": sage.saveData(\"" << safeKey << "\") refused: "
+                      << data.size() << " bytes exceeds the 16 MB per-key limit\n";
+            return false;
+        }
+        const fs::path dir = savesRoot() / ns;
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        const fs::path finalPath = dir / (safeKey + ".dat");
+        const fs::path tmpPath = dir / (safeKey + ".dat.tmp");
+        {
+            // Write to a temp file first, then swap it in: a crash or power loss mid-write
+            // leaves the previous save intact instead of a half-written, corrupt one.
+            std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
+            if (!out.is_open()) {
+                std::cerr << "[SAGE][Saves] " << resourceName << ": cannot write " << tmpPath.string() << "\n";
+                return false;
+            }
+            out.write(data.data(), static_cast<std::streamsize>(data.size()));
+            if (!out.good()) {
+                std::cerr << "[SAGE][Saves] " << resourceName << ": write failed for " << tmpPath.string() << "\n";
+                return false;
+            }
+        }
+        fs::rename(tmpPath, finalPath, ec);
+        if (ec) {
+            std::cerr << "[SAGE][Saves] " << resourceName << ": could not replace " << finalPath.string()
+                      << ": " << ec.message() << "\n";
+            fs::remove(tmpPath, ec);
+            return false;
+        }
+        return true;
+    }
+
+    std::string loadResourceData(const std::string& ns, const std::string& resourceName, const std::string& key) {
+        const std::string safeKey = sanitizeSaveKey(key, resourceName, "loadData");
+        if (safeKey.empty()) return "";
+        const fs::path filePath = savesRoot() / ns / (safeKey + ".dat");
+        std::error_code ec;
+        const fs::path legacy = savesRoot() / (safeKey + ".dat");
+        const bool hasNew = fs::exists(filePath, ec);
+        const bool hasLegacy = fs::exists(legacy, ec);
+        // Migrate from the old shared layout (saves/<key>.dat) when there is no per-resource
+        // file yet, OR when the old file is NEWER (an older engine build saved again after a
+        // migration, e.g. while switching builds) so that progress is never silently lost.
+        bool migrate = hasLegacy && !hasNew;
+        if (hasLegacy && hasNew) {
+            std::error_code e1, e2;
+            const auto legacyTime = fs::last_write_time(legacy, e1);
+            const auto newTime = fs::last_write_time(filePath, e2);
+            migrate = !e1 && !e2 && legacyTime > newTime;
+        }
+        if (migrate) {
+            // The old file is then renamed to .migrated (kept as a backup) so no other resource
+            // can claim it later.
+            {
+                std::ifstream legacyIn(legacy, std::ios::binary);
+                const std::string legacyData((std::istreambuf_iterator<char>(legacyIn)), std::istreambuf_iterator<char>());
+                legacyIn.close();
+                if (saveResourceData(ns, resourceName, safeKey, legacyData)) {
+                    fs::path backup = legacy;
+                    backup += ".migrated";
+                    fs::rename(legacy, backup, ec);
+                    std::cout << "[SAGE][Saves] Migrated " << legacy.string() << " -> " << filePath.string()
+                              << " (old file kept as " << backup.filename().string() << ")\n";
+                    return legacyData;
+                }
+            }
+            if (!hasNew) return "";
+            // Migration failed but a per-resource save exists: fall back to it.
+        } else if (!hasNew) {
+            return "";
+        }
+        std::ifstream in(filePath, std::ios::binary);
+        if (!in.is_open()) return "";
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    }
+
+    bool deleteResourceData(const std::string& ns, const std::string& resourceName, const std::string& key) {
+        const std::string safeKey = sanitizeSaveKey(key, resourceName, "deleteData");
+        if (safeKey.empty()) return false;
+        std::error_code ec;
+        return fs::remove(savesRoot() / ns / (safeKey + ".dat"), ec);
+    }
+
+    // Gives a resource its own `sage` table: save functions bound to its save folder, and
+    // everything else (sage.log, sage.getTime, ...) inherited from the shared table.
+    void bindResourceSaves(LoadedResource& res, const fs::path& resourceDir) {
+        std::string ns;
+        for (char c : resourceDir.filename().string()) {
+            ns.push_back((std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') ? c : '_');
+        }
+        if (ns.empty()) ns = "_unnamed";
+
+        sol::table resSage = lua->create_table();
+        sol::table meta = lua->create_table();
+        meta["__index"] = (*lua)["sage"];
+        resSage[sol::metatable_key] = meta;
+
+        const std::string resName = res.name;
+        resSage.set_function("saveData", [this, ns, resName](const std::string& key, const std::string& data) -> bool {
+            return saveResourceData(ns, resName, key, data);
+        });
+        resSage.set_function("loadData", [this, ns, resName](const std::string& key) -> std::string {
+            return loadResourceData(ns, resName, key);
+        });
+        resSage.set_function("deleteData", [this, ns, resName](const std::string& key) -> bool {
+            return deleteResourceData(ns, resName, key);
+        });
+        res.env["sage"] = resSage;
+    }
+
     void callShutdownHooks() {
         for (auto& res : resources) {
             if (res.active && res.onShutdown.valid()) {
@@ -903,6 +1017,7 @@ struct LuaEngine::Impl {
         res.author = manifest.value("author", "Unknown");
         res.rootDir = resourceDir;
         res.env = sol::environment(*lua, sol::create, lua->globals());
+        bindResourceSaves(res, resourceDir);
 
         if (!manifest.contains("scripts") || !manifest["scripts"].is_array()) {
             std::cerr << "[SAGE][Lua] Manifest " << manifestPath.string()

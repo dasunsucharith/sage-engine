@@ -28,6 +28,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [020](020-honest-benchmarks-simulation-clock-and-lua-sandbox.md) | Steady-State `--benchmark` Percentiles, Deterministic Simulation Clock, Lua Sandbox Hardening & Runaway-Script Watchdog | Foundation Fix (post-`v1.6.0`) |
 | [021](021-render-interpolation.md) | Render Interpolation: Smooth 120/144 Hz+ Motion from a Fixed 60 Hz Simulation, Teleports & Camera Cuts | Foundation Fix (post-`v1.6.0`) |
 | [022](022-data-driven-terrain.md) | Data-Driven Terrain: Procedural & Heightmap Landscapes, Features, Layers, Grass & Collision from Scene JSON | Foundation Fix (post-`v1.6.0`) |
+| [023](023-per-resource-saves.md) | Per-Resource Save Folders, Crash-Safe Writes & Automatic Save Migration | Foundation Fix (post-`v1.6.0`) |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:

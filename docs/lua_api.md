@@ -49,8 +49,9 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 | `sage.getRealTime()` | Returns wall-clock seconds since engine startup. Use it only for UI effects or profiling, never for gameplay (it is not deterministic). |
 | `sage.setTitle(title)` | Sets custom HUD text in the OS window title bar (FPS is appended automatically). |
 | `sage.quit()` | Requests a clean engine shutdown (ideal for Quit buttons in Lua Main/Pause Menus). |
-| `sage.saveData(key, content)` | Persists a string/JSON save file safely under `saves/<key>.dat` (ideal for high scores, unlocks & game saves). |
-| `sage.loadData(key)` | Reads previously saved string data from `saves/<key>.dat` (returns `""` if not found). |
+| `sage.saveData(key, content)` | Saves a string (e.g. JSON) to `saves/<resource folder>/<key>.dat`. **Each resource has its own save folder**, so two mods using the same key never overwrite each other. Writes are crash-safe (temp file, then swap). Keys may use `A-Z a-z 0-9 _ -` (other characters are dropped with a warning); max 16 MB per key. Returns `true` on success. |
+| `sage.loadData(key)` | Reads this resource's saved string (returns `""` if not found). Saves from older SAGE versions (`saves/<key>.dat`) are migrated automatically the first time they're loaded, and the old file is kept as `<key>.dat.migrated`. |
+| `sage.deleteData(key)` | Deletes this resource's save for `key` (e.g. "New Game" / reset progress). Returns `true` if a file was removed. |
 | `sage.fileExists(path)` | Returns `true` if a file exists relative to the SAGE project root (great for auto-detecting drop-in Meshy/Blender `.glb` upgrades!). Absolute paths and `..` segments are rejected and return `false`. |
 
 ### Script Sandbox Rules
