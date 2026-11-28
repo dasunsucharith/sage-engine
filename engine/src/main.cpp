@@ -64,6 +64,8 @@ int main(int argc, char* argv[]) {
             config.silentAudio = true;
         } else if (arg == "--no-vsync") {
             config.vsync = false;
+        } else if (arg == "--no-interp") {
+            config.renderInterpolation = false;
         } else if (arg == "--screenshot" && i + 1 < argc) {
             config.screenshotPath = argv[++i];
         } else if (arg == "--cam" && i + 6 < argc) {

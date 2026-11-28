@@ -243,6 +243,9 @@ struct LuaEngine::Impl {
         worldTbl.set_function("setPosition", [this](const std::string& id, float x, float y, float z) -> bool {
             return world ? world->setPosition(id, x, y, z) : false;
         });
+        worldTbl.set_function("teleport", [this](const std::string& id, float x, float y, float z) -> bool {
+            return world ? world->teleport(id, x, y, z) : false;
+        });
         worldTbl.set_function("getPosition", [this](const std::string& id) -> std::tuple<float, float, float> {
             if (!world) {
                 return {0.0f, 0.0f, 0.0f};
@@ -515,6 +518,11 @@ struct LuaEngine::Impl {
         cameraTbl.set_function("setFov", [this](float fovDegrees) {
             if (world) {
                 world->camera().fovDegrees = std::clamp(fovDegrees, 25.0f, 110.0f);
+            }
+        });
+        cameraTbl.set_function("cut", [this]() {
+            if (world) {
+                world->snapCamera();
             }
         });
 

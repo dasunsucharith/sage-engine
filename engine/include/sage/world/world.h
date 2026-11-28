@@ -79,6 +79,24 @@ struct Entity {
     Vec3 ragdollVel{0.0f, 0.0f, 0.0f};
     Vec3 ragdollAngVel{0.0f, 0.0f, 0.0f};
     Vec3 ragdollAngle{0.0f, 0.0f, 0.0f};
+
+    // Render interpolation: state captured at the START of the latest fixed tick.
+    // The renderer draws a blend between this and the current (end-of-tick) state so
+    // motion is smooth on 120/144 Hz displays while gameplay stays at a fixed 60 Hz.
+    struct TickSnapshot {
+        Vec3 position{};
+        Vec3 rotation{};
+        Quat rotationQuat{};
+        Vec3 scale{1.0f, 1.0f, 1.0f};
+        bool useQuaternion = false;
+        float animTime = 0.0f;
+        float prevAnimTime = 0.0f;
+        float blendElapsed = 0.0f;
+        float ragdollBlend = 0.0f;
+        Vec3 ragdollAngle{};
+    };
+    TickSnapshot interpPrev{};
+    bool interpValid = false; // false = just spawned/teleported -> render current state as-is
 };
 
 // Real-time dynamic point light (headlights, street lamps, neon arches, lighthouse beam!)
@@ -88,6 +106,9 @@ struct PointLight {
     Color3 color{1.0f, 0.9f, 0.7f};
     float radius = 18.0f;
     float intensity = 2.0f;
+
+    Vec3 interpPrevPosition{};  // Position at the start of the latest fixed tick
+    bool interpValid = false;
 };
 
 // Lightweight 3D HDR particle (water splash spray, tire drift smoke, nitro sparks, debris!)
@@ -178,6 +199,9 @@ public:
         Vec3 scale = {1.0f, 1.0f, 1.0f});
 
     bool setPosition(const std::string& id, float x, float y, float z);
+    // Moves an entity WITHOUT render interpolation (respawns, checkpoints, cut-scenes),
+    // so it appears at the new spot instantly instead of sliding there over one tick.
+    bool teleport(const std::string& id, float x, float y, float z);
     bool setRotation(const std::string& id, float pitch, float yaw, float roll);
     bool setRotationQuat(const std::string& id, float x, float y, float z, float w);
     bool setScale(const std::string& id, float x, float y, float z);
@@ -231,6 +255,17 @@ public:
 
     void setTimeOfDay(float hours);
 
+    // --- Render interpolation (fixed 60 Hz simulation -> smooth any-Hz rendering) ---
+    // Call at the start of every fixed tick: remembers the pre-tick state.
+    void captureTickSnapshot();
+    // Temporarily replaces transforms/camera/lights with prev + (current - prev) * alpha
+    // (alpha in [0,1] = accumulator / fixedTimeStep). MUST be paired with
+    // restoreFromRenderInterpolation() before anything else reads or edits the world.
+    void applyRenderInterpolation(float alpha, bool includeCamera);
+    void restoreFromRenderInterpolation();
+    // Skips camera interpolation for the current tick (camera cuts).
+    void snapCamera() { m_cameraInterpValid = false; }
+
     std::vector<Entity>& entitiesMutable() { return m_entities; }
     const std::vector<Entity>& entities() const { return m_entities; }
     std::size_t entityCount() const { return m_entities.size(); }
@@ -251,6 +286,15 @@ private:
     CameraState m_camera{};
     SkySettings m_sky{};
     TerrainSettings m_terrain{};
+
+    // Render interpolation bookkeeping
+    CameraState m_cameraPrev{};
+    bool m_cameraInterpValid = false;
+    bool m_interpApplied = false;
+    std::vector<Entity::TickSnapshot> m_interpBackup;      // Real end-of-tick entity state while blended
+    std::vector<Vec3> m_lightBackup;
+    CameraState m_cameraBackup{};
+    bool m_cameraBackedUp = false;
 };
 
 } // namespace sage

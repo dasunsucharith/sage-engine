@@ -69,6 +69,12 @@
       "version": "1.6.0+",
       "domain": "Benchmark Methodology, Simulation Clock & Lua Sandbox",
       "lesson": "A 12-frame --smoke-test average is NOT a performance number: one 200-250 ms cold-start frame dominates it, and the old telemetry clamped frame times to the 250 ms simulation cap, so every hitch read as exactly 250 ms. On the same Release build and RTX 5050 Laptop GPU, the 12-frame average read 20-26 ms but steady state was p50 2.3-2.4 ms (Stunt City) and 1.9-2.6 ms (Echo Island) via --benchmark (120 warm-up + 600 measured frames, VSync off). Earlier logged 'speedups' were within that cold-start noise, so re-baseline from --benchmark p50/p95/p99, run twice, and treat differences inside the run-to-run spread (about 10-25% here) as noise. Separately, physics/water/sage.getTime() used wall-clock time, so catch-up fixed ticks in one frame all saw the same time (getTime-driven objects stalled, buoyancy drifted from the rendered waves). Advance a simulation clock by exactly dt per fixedTick and render shaders at simTime + accumulator. Finally, Lua base-lib dofile/loadfile and binary load() escape the sandbox, and an infinite loop froze the engine. Remove them and arm a LUA_MASKCOUNT watchdog hook per host->Lua call so runaway scripts error out and pause only their own resource."
+    },
+    {
+      "id": "L012",
+      "version": "1.6.0+",
+      "domain": "Render Interpolation",
+      "lesson": "With a fixed 60 Hz simulation and VSync off, SAGE drew ~7 frames per tick (419 UI frames over 62 ticks), so un-interpolated motion repeated each snapshot and then jumped (judder at any refresh rate above 60 Hz). Capture a per-entity/light/camera snapshot at the start of each fixedTick, draw prev + (cur - prev) * (accumulator / dt), and restore the true state before the editor and Lua UI run. Blend Euler yaw along the shortest arc, quaternions via shortest-hemisphere nlerp, and animation clocks forward-only. Snap on spawn, on world.teleport()/camera.cut(), and on any move over 25 m per tick. Leave unchanged values bit-identical so static-prop caches are unaffected. Measured cost: none (p50 2.35-2.39 ms on vs 2.36-2.40 ms off, Release, RTX 5050 Laptop)."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [

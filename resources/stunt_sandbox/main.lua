@@ -303,7 +303,8 @@ local function respawnCarAtBiome(idx)
     car.lastDryX, car.lastDryZ, car.lastDryYaw = sp.x, sp.z, sp.yaw
     car.boostEnergy = 100.0
     cam.orbitYaw, cam.orbitPitch = 0.0, 0.0
-    world.setPosition("player_car", car.x, car.y, car.z)
+    world.teleport("player_car", car.x, car.y, car.z) -- respawn: no render blending
+    camera.cut()
     world.setRotation("player_car", 0.0, car.yaw, 0.0)
 end
 
@@ -923,7 +924,7 @@ function onTick(dt)
             player.yaw = car.yaw
             player.grounded = true
             world.setVisible("player_char", true)
-            world.setPosition("player_char", player.x, player.y, player.z)
+            world.teleport("player_char", player.x, player.y, player.z) -- appear beside the vehicle, no slide
             world.setRotation("player_char", 0.0, player.yaw, 0.0)
             world.playAnimation("player_char", "Idle", true, 1.0)
             player.currentAnim = "Idle"
@@ -941,7 +942,7 @@ function onTick(dt)
             player.vx, player.vy, player.vz = 0.0, 0.0, 0.0
             player.yaw = boat.yaw
             world.setVisible("player_char", true)
-            world.setPosition("player_char", player.x, player.y, player.z)
+            world.teleport("player_char", player.x, player.y, player.z) -- appear beside the vehicle, no slide
             world.setAnimationSpeed("player_boat", 0.35)
             audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
             audio.playChime()

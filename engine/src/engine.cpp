@@ -248,6 +248,8 @@ void Engine::shutdown() {
 }
 
 void Engine::fixedTick(double dt) {
+    // Remember the pre-tick state so render() can blend smoothly toward the post-tick state.
+    m_world.captureTickSnapshot();
     if (!m_freeFlyMode) {
         m_lua.tick(dt);
     }
@@ -258,15 +260,27 @@ void Engine::fixedTick(double dt) {
     m_simTime += dt;
 }
 
+void Engine::renderWorldInterpolated(const ClearColor& clearColor, double elapsedSeconds) {
+    // Blend transforms between the last two fixed ticks for the GPU only, then restore
+    // the real simulation state BEFORE the editor/Lua UI can read or edit it.
+    // Free-fly and --cam cameras are already per-frame, so they are never blended.
+    if (m_config.renderInterpolation) {
+        const bool blendCamera = !m_freeFlyMode && !m_config.overrideCamera;
+        m_world.applyRenderInterpolation(m_interpAlpha, blendCamera);
+    }
+    m_renderer->beginFrame(clearColor);
+    m_renderer->renderWorld(m_world, static_cast<float>(elapsedSeconds));
+    m_renderer->endFrame();
+    m_world.restoreFromRenderInterpolation();
+}
+
 void Engine::render(double elapsedSeconds) {
     if (m_config.overrideCamera) {
         m_world.camera().position = m_config.overrideCamPos;
         m_world.camera().target = m_config.overrideCamTarget;
     }
     const ClearColor clearColor{0.05f, 0.07f, 0.11f, 1.0f};
-    m_renderer->beginFrame(clearColor);
-    m_renderer->renderWorld(m_world, static_cast<float>(elapsedSeconds));
-    m_renderer->endFrame();
+    renderWorldInterpolated(clearColor, elapsedSeconds);
 
     if (!m_config.screenshotPath.empty() && m_config.maxFrames > 0) {
         // Captured on the final frame right before ImGui overlay so 3D world is 100% unobstructed!
@@ -549,14 +563,14 @@ int Engine::run() {
         // Shader time = simulation time + the not-yet-simulated remainder, so GPU water waves
         // stay in lock-step with the CPU buoyancy samples while still animating smoothly.
         m_renderTime = m_simTime + accumulator;
+        // How far we are between the last tick and the next one (0..1) for render interpolation.
+        m_interpAlpha = static_cast<float>(accumulator / m_config.fixedTimeStep);
         render(m_renderTime);
 
         ++totalFrames;
         if (!m_config.screenshotPath.empty() && m_config.maxFrames > 0 && totalFrames == m_config.maxFrames) {
             // Re-render pure 3D world cleanly (no MENU overlay) & read back exact backbuffer PNG!
-            m_renderer->beginFrame({0.05f, 0.07f, 0.11f, 1.0f});
-            m_renderer->renderWorld(m_world, static_cast<float>(m_renderTime));
-            m_renderer->endFrame();
+            renderWorldInterpolated({0.05f, 0.07f, 0.11f, 1.0f}, m_renderTime);
             m_renderer->captureScreenshot(m_config.screenshotPath);
         }
         ++fpsFrames;

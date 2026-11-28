@@ -25,6 +25,7 @@ struct EngineConfig {
     int maxFrames = 0;                 // 0 = run until window closes (non-zero for --smoke-test / --benchmark)
     int warmupFrames = 0;              // Leading frames excluded from steady-state frame-time stats
     bool benchmarkMode = false;        // true for --benchmark (VSync off, long measured window)
+    bool renderInterpolation = true;   // Blend the last two 60 Hz ticks when drawing (smooth on 120/144 Hz); --no-interp disables
     bool silentAudio = false;          // true during --smoke-test
     std::filesystem::path resourcesPath = "resources";
     std::filesystem::path scenePath = "scenes/stunt_city.json";
@@ -49,6 +50,7 @@ private:
     void updateFreeFlyCamera(float dt);
     void syncFreeFlyFromWorldCamera();
     void render(double elapsedSeconds);
+    void renderWorldInterpolated(const ClearColor& clearColor, double elapsedSeconds);
     void updateWindowTitle(double fps);
     bool checkSceneHotReload();
     void writeSessionTelemetry(int totalFrames, double totalSeconds) const;
@@ -86,6 +88,7 @@ private:
     // water waves and Lua gameplay all see the same deterministic time (never wall-clock).
     double m_simTime = 0.0;
     double m_renderTime = 0.0;         // m_simTime + leftover accumulator (smooth time for shaders)
+    float m_interpAlpha = 1.0f;        // accumulator / fixedTimeStep, blend factor for render interpolation
 
     std::string m_scriptTitle;
     double m_startTime = 0.0;

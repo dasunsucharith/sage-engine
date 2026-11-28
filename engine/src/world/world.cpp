@@ -229,6 +229,7 @@ std::string World::spawnEntity(
         existing->color = color;
         existing->emissive = false;
         existing->visible = true;
+        existing->interpValid = false; // Respawn = teleport, never slide from the old spot
         existing->waterSeabedY = position.y - 0.85f;
         return existing->id;
     }
@@ -262,6 +263,7 @@ std::string World::spawnModel(
         existing->color = {1.0f, 1.0f, 1.0f};
         existing->emissive = false;
         existing->visible = true;
+        existing->interpValid = false; // Respawn = teleport, never slide from the old spot
         return existing->id;
     }
 
@@ -281,6 +283,15 @@ std::string World::spawnModel(
 bool World::setPosition(const std::string& id, float x, float y, float z) {
     if (Entity* e = findEntity(id)) {
         e->position = {x, y, z};
+        return true;
+    }
+    return false;
+}
+
+bool World::teleport(const std::string& id, float x, float y, float z) {
+    if (Entity* e = findEntity(id)) {
+        e->position = {x, y, z};
+        e->interpValid = false;
         return true;
     }
     return false;
@@ -749,6 +760,9 @@ void World::clear() {
     m_lightIndexById.clear();
     m_particles.clear();
     m_camera = {};
+    m_cameraInterpValid = false;
+    m_interpApplied = false;
+    m_cameraBackedUp = false;
     m_sky = {};
     setTimeOfDay(17.5f);
 }
@@ -797,6 +811,205 @@ void World::setTimeOfDay(float hours) {
         m_sky.ambientIntensity = 0.36f + 0.14f * dayFactor;
         m_sky.groundAmbientColor = lerpColor({0.18f, 0.15f, 0.16f}, {0.22f, 0.24f, 0.26f}, dayFactor);
     }
+}
+
+// =============================================================================
+// Render interpolation
+// =============================================================================
+// Gameplay & physics run at a fixed 60 Hz. Without interpolation a 144 Hz display
+// shows each simulated position for 2-3 frames and then jumps ("judder"). Instead we
+// render one tick in the past, blended by alpha = accumulator / dt between the state
+// before and after the latest tick. Cost: <= 1 tick (16.7 ms) of visual latency.
+namespace {
+
+// Anything that moved further than this in ONE 60 Hz tick (= 1,500 m/s) was
+// teleported by a script, so it is drawn at its new spot instead of sliding there.
+constexpr float kTeleportDistance = 25.0f;
+
+float lerpf(float a, float b, float t) {
+    return a + (b - a) * t;
+}
+
+Vec3 lerpVec3(const Vec3& a, const Vec3& b, float t) {
+    return {lerpf(a.x, b.x, t), lerpf(a.y, b.y, t), lerpf(a.z, b.z, t)};
+}
+
+bool sameVec3(const Vec3& a, const Vec3& b) {
+    return a.x == b.x && a.y == b.y && a.z == b.z;
+}
+
+float distSq(const Vec3& a, const Vec3& b) {
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+// Euler angles in DEGREES: blend along the shortest arc so 359 -> 1 doesn't spin backwards.
+float lerpAngleDeg(float a, float b, float t) {
+    if (a == b) {
+        return b;
+    }
+    const float delta = std::fmod(b - a + 540.0f, 360.0f) - 180.0f;
+    return a + delta * t;
+}
+
+Vec3 lerpEulerDeg(const Vec3& a, const Vec3& b, float t) {
+    return {lerpAngleDeg(a.x, b.x, t), lerpAngleDeg(a.y, b.y, t), lerpAngleDeg(a.z, b.z, t)};
+}
+
+// Normalized lerp along the shortest hemisphere (plenty accurate for one tick of rotation).
+Quat nlerpQuat(const Quat& a, const Quat& b, float t) {
+    if (a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w) {
+        return b;
+    }
+    const float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    const float sign = dot < 0.0f ? -1.0f : 1.0f;
+    Quat q{
+        lerpf(a.x, b.x * sign, t),
+        lerpf(a.y, b.y * sign, t),
+        lerpf(a.z, b.z * sign, t),
+        lerpf(a.w, b.w * sign, t),
+    };
+    const float len = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (len < 1e-6f) {
+        return b;
+    }
+    q.x /= len;
+    q.y /= len;
+    q.z /= len;
+    q.w /= len;
+    return q;
+}
+
+// Monotonic clocks (animation time) only blend forward; a reset/restart snaps.
+float lerpForward(float prev, float cur, float t) {
+    return cur >= prev ? lerpf(prev, cur, t) : cur;
+}
+
+Entity::TickSnapshot captureEntity(const Entity& e) {
+    Entity::TickSnapshot s;
+    s.position = e.position;
+    s.rotation = e.rotation;
+    s.rotationQuat = e.rotationQuat;
+    s.scale = e.scale;
+    s.useQuaternion = e.useQuaternion;
+    s.animTime = e.animTime;
+    s.prevAnimTime = e.prevAnimTime;
+    s.blendElapsed = e.blendElapsed;
+    s.ragdollBlend = e.ragdollBlend;
+    s.ragdollAngle = e.ragdollAngle;
+    return s;
+}
+
+void restoreEntity(Entity& e, const Entity::TickSnapshot& s) {
+    e.position = s.position;
+    e.rotation = s.rotation;
+    e.rotationQuat = s.rotationQuat;
+    e.scale = s.scale;
+    e.animTime = s.animTime;
+    e.prevAnimTime = s.prevAnimTime;
+    e.blendElapsed = s.blendElapsed;
+    e.ragdollBlend = s.ragdollBlend;
+    e.ragdollAngle = s.ragdollAngle;
+}
+
+} // namespace
+
+void World::captureTickSnapshot() {
+    for (Entity& e : m_entities) {
+        e.interpPrev = captureEntity(e);
+        e.interpValid = true;
+    }
+    for (PointLight& pl : m_pointLights) {
+        pl.interpPrevPosition = pl.position;
+        pl.interpValid = true;
+    }
+    m_cameraPrev = m_camera;
+    m_cameraInterpValid = true;
+}
+
+void World::applyRenderInterpolation(float alpha, bool includeCamera) {
+    if (m_interpApplied) {
+        return; // Never blend twice without restoring (would compound).
+    }
+    const float t = std::clamp(alpha, 0.0f, 1.0f);
+    constexpr float kTeleportSq = kTeleportDistance * kTeleportDistance;
+
+    m_interpBackup.resize(m_entities.size());
+    for (std::size_t i = 0; i < m_entities.size(); ++i) {
+        Entity& e = m_entities[i];
+        m_interpBackup[i] = captureEntity(e);
+        if (!e.interpValid) {
+            continue;
+        }
+        const Entity::TickSnapshot& p = e.interpPrev;
+        if (distSq(p.position, e.position) > kTeleportSq) {
+            continue; // Scripted teleport: show the new spot immediately.
+        }
+        if (!sameVec3(p.position, e.position)) {
+            e.position = lerpVec3(p.position, e.position, t);
+        }
+        if (p.useQuaternion == e.useQuaternion) {
+            if (e.useQuaternion) {
+                e.rotationQuat = nlerpQuat(p.rotationQuat, e.rotationQuat, t);
+            } else if (!sameVec3(p.rotation, e.rotation)) {
+                e.rotation = lerpEulerDeg(p.rotation, e.rotation, t);
+            }
+        }
+        if (!sameVec3(p.scale, e.scale)) {
+            e.scale = lerpVec3(p.scale, e.scale, t);
+        }
+        e.animTime = lerpForward(p.animTime, e.animTime, t);
+        e.prevAnimTime = lerpForward(p.prevAnimTime, e.prevAnimTime, t);
+        e.blendElapsed = lerpForward(p.blendElapsed, e.blendElapsed, t);
+        if (p.ragdollBlend != e.ragdollBlend) {
+            e.ragdollBlend = lerpf(p.ragdollBlend, e.ragdollBlend, t);
+        }
+        if (!sameVec3(p.ragdollAngle, e.ragdollAngle)) {
+            e.ragdollAngle = lerpVec3(p.ragdollAngle, e.ragdollAngle, t);
+        }
+    }
+
+    m_lightBackup.resize(m_pointLights.size());
+    for (std::size_t i = 0; i < m_pointLights.size(); ++i) {
+        PointLight& pl = m_pointLights[i];
+        m_lightBackup[i] = pl.position;
+        if (pl.interpValid && !sameVec3(pl.interpPrevPosition, pl.position) &&
+            distSq(pl.interpPrevPosition, pl.position) <= kTeleportSq) {
+            pl.position = lerpVec3(pl.interpPrevPosition, pl.position, t);
+        }
+    }
+
+    m_cameraBackedUp = false;
+    if (includeCamera && m_cameraInterpValid &&
+        distSq(m_cameraPrev.position, m_camera.position) <= kTeleportSq) {
+        m_cameraBackup = m_camera;
+        m_cameraBackedUp = true;
+        m_camera.position = lerpVec3(m_cameraPrev.position, m_camera.position, t);
+        m_camera.target = lerpVec3(m_cameraPrev.target, m_camera.target, t);
+        m_camera.fovDegrees = lerpf(m_cameraPrev.fovDegrees, m_camera.fovDegrees, t);
+    }
+    m_interpApplied = true;
+}
+
+void World::restoreFromRenderInterpolation() {
+    if (!m_interpApplied) {
+        return;
+    }
+    const std::size_t n = std::min(m_entities.size(), m_interpBackup.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        restoreEntity(m_entities[i], m_interpBackup[i]);
+    }
+    const std::size_t nl = std::min(m_pointLights.size(), m_lightBackup.size());
+    for (std::size_t i = 0; i < nl; ++i) {
+        m_pointLights[i].position = m_lightBackup[i];
+    }
+    if (m_cameraBackedUp) {
+        m_camera = m_cameraBackup;
+        m_cameraBackedUp = false;
+    }
+    m_interpApplied = false;
 }
 
 } // namespace sage

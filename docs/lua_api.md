@@ -80,7 +80,8 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.spawnSphere(id, x, y, z)` | Spawns a 3D UV-sphere entity and returns `id`. |
 | `world.spawnTriangle(id, x, y, z)` | Spawns a 3D extruded pointer chevron (points along `+Z` at `yaw = 0`). |
 | `world.spawnRing(id, x, y, z)` | Spawns a glowing 3D pulsing checkpoint beacon ring. |
-| `world.setPosition(id, x, y, z)` | Moves an entity in 3D space. |
+| `world.setPosition(id, x, y, z)` | Moves an entity in 3D space. Moves made inside `onTick` are drawn smoothly: the renderer blends between the last two 60 Hz ticks. |
+| `world.teleport(id, x, y, z)` | Moves an entity **instantly**, with no render blending. Use it for respawns, checkpoints and level transitions so the entity doesn't visibly slide to the new spot. Jumps over 25 m in a single tick are treated as teleports automatically. |
 | `world.getPosition(id)` | Returns `x, y, z` for an entity. |
 | `world.setRotation(id, pitch, yaw, roll)` | Sets Euler rotation in degrees (`yaw` around `+Y`, `pitch` around `+X`, `roll` around `+Z`). |
 | `world.setScale(id, sx, sy, sz)` | Sets 3D entity scale in meters. |
@@ -122,6 +123,7 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `camera.setPosition(x, y, z)` | Sets the 3D camera world position. |
 | `camera.setTarget(x, y, z)` | Sets the 3D point the camera looks at (2-arg `setTarget(x, z)` also supported). |
 | `camera.setFov(fovDegrees)` | Sets vertical perspective Field of View (`25.0`–`110.0` degrees). |
+| `camera.cut()` | Marks a hard camera cut for this tick, so the camera jumps instead of blending from its previous position (cut-scenes, switching 1st/3rd person). |
 
 ### `physics` *(Jolt Physics 5.7)*
 | Function | Description |

@@ -45,7 +45,7 @@ per frame:  accumulator += frameDelta (clamped)
 * `stb` is pinned to an exact commit for reproducible builds.
 
 ## Still To Do (next steps)
-* **Render interpolation:** keep the previous transform per entity and blend by `accumulator / dt`, so 120/144 Hz displays don't judder.
+* ~~**Render interpolation**~~: done, see [021](021-render-interpolation.md).
 * **GPU timer queries** (`GL_TIME_ELAPSED`) per pass: shadows, opaque, water, post.
 * **Data-driven terrain/foliage/biomes:** world-specific shapes still live in `world.cpp` and `gl_renderer.cpp`.
 * **Per-resource save namespaces**, and an inter-resource event bus.
