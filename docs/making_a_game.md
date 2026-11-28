@@ -130,7 +130,25 @@ Place static geometry, lighting, sky time-of-day, and `.glb` props in JSON so hu
 }
 ```
 
-Supported entity `"type"` values: `"model"`, `"primitive_box"`, `"primitive_plane"`, `"primitive_sphere"`, `"primitive_triangle"`, `"primitive_ring"`.
+Supported entity `"type"` values: `"model"`, `"water"`, `"primitive_box"`, `"primitive_plane"`, `"primitive_sphere"`, `"primitive_triangle"`, `"primitive_ring"`.
+
+### Add a landscape (no C++)
+Add a `"terrain"` block to shape hills, an island coastline, mountains, lakes, plateaus for towns, road beds, colours, snow and grass, either procedurally or from a heightmap PNG:
+
+```json
+"terrain": {
+  "type": "procedural",
+  "halfSize": 300,
+  "noise": { "amplitude": 12, "frequency": 0.01, "warp": 40 },
+  "island": { "radius": 210, "falloff": 60, "coastNoise": 30 },
+  "features": [
+    { "type": "peak", "center": [0, 80], "radius": 120, "height": 40 },
+    { "type": "flatten", "center": [60, -40], "innerRadius": 20, "radius": 45, "height": 6 }
+  ]
+}
+```
+
+Models with `position.y = 0` are placed on the ground automatically. See [**Data-Driven Terrain**](terrain.md) for every option, and `scenes/terrain_demo.json` / `scenes/heightmap_demo.json` for complete examples.
 
 ---
 

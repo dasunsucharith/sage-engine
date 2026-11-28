@@ -1,0 +1,49 @@
+{
+  "name": "River Canyon: Heightmap Terrain Demo",
+  "version": 2,
+  "terrain": {
+    "type": "heightmap",
+    "halfSize": 256.0,
+    "maxHeight": 70.0,
+    "gridResolution": 220,
+    "heightmap": {
+      "path": "assets/terrain/demo_canyon.png",
+      "minHeight": -8.0,
+      "maxHeight": 70.0
+    },
+    "noise": {
+      "amplitude": 2.0,
+      "frequency": 0.05,
+      "octaves": 3
+    },
+    "features": [
+      { "type": "flatten", "name": "Ranger camp", "center": [-40.0, -150.0], "innerRadius": 14.0, "radius": 30.0, "height": 6.0 }
+    ],
+    "layers": [
+      { "name": "riverbank", "color": [0.30, 0.25, 0.17], "roughness": 0.75 },
+      { "name": "grass", "color": [0.10, 0.19, 0.07], "startHeight": 1.5, "blend": 2.5, "roughness": 0.88 },
+      { "name": "scrub", "color": [0.20, 0.17, 0.10], "startHeight": 22.0, "blend": 8.0, "roughness": 0.92 }
+    ],
+    "cliff": { "color": [0.26, 0.20, 0.15], "slopeStart": 0.18, "slopeEnd": 0.40 },
+    "snow": { "startHeight": 52.0, "endHeight": 60.0 },
+    "grass": { "count": 30000, "minHeight": 1.5, "maxHeight": 24.0, "minNormalY": 0.80 },
+    "collisionMinHeight": -6.0
+  },
+  "sky": {
+    "timeOfDay": 16.5,
+    "ambientIntensity": 0.42,
+    "fogStart": 200.0,
+    "fogEnd": 650.0
+  },
+  "camera": {
+    "position": [0.0, 90.0, -280.0],
+    "target": [0.0, 10.0, 0.0],
+    "fov": 60.0
+  },
+  "entities": [
+    { "id": "river", "type": "water", "position": [0.0, 0.0, 0.0], "scale": [600.0, 1.0, 600.0], "color": [0.06, 0.20, 0.24] },
+    { "id": "ranger_cabin", "type": "model", "model": "assets/models/alpine_cabin.glb", "position": [-40.0, 0.0, -150.0], "rotation": [0.0, 20.0, 0.0], "scale": [1.0, 1.0, 1.0] },
+    { "id": "camp_pine_1", "type": "model", "model": "assets/models/pine_tree.glb", "position": [-58.0, 0.0, -140.0], "scale": [1.2, 1.2, 1.2] },
+    { "id": "camp_pine_2", "type": "model", "model": "assets/models/pine_tree.glb", "position": [-25.0, 0.0, -168.0], "scale": [1.0, 1.0, 1.0] }
+  ]
+}

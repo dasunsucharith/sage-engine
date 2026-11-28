@@ -22,6 +22,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -264,6 +265,14 @@ uniform float uPulse;
 uniform float uTime;
 uniform int uIsGround;
 uniform int uTerrainMode;
+// Data-driven terrain (uTerrainMode == 2): up to 6 height layers packed as 2 x vec4 each:
+//   uTLayers[2i]   = (linear color.rgb, roughness)
+//   uTLayers[2i+1] = (startHeight, blend, 0, 0)
+uniform vec4 uTLayers[12];
+uniform int uTLayerCount;
+uniform vec4 uTCliffColor;   // rgb
+uniform vec4 uTSlopeSnow;    // (cliffSlopeStart, cliffSlopeEnd, snowStartHeight, snowEndHeight)
+uniform vec4 uTSnowColor;    // rgb, a = enabled (1/0)
 uniform float uWetness;
 uniform int uCloudShadowsEnabled;
 
@@ -487,7 +496,39 @@ void main() {
         float bumpAmp = mix(0.42, 1.05, smoothstep(0.08, 0.36, slope));
         N = normalize(Ngeom + vec3((b0 - bx) * bumpAmp, 0.0, (b0 - bz) * bumpAmp));
 
-        if (uTerrainMode == 1) {
+        if (uTerrainMode == 2) {
+            // DATA-DRIVEN TERRAIN: colors, heights & slopes all come from the scene JSON "terrain" block.
+            float hN = vWorldPos.y + detail * 2.4;
+            vec3 col = uTLayers[0].rgb;
+            float lr = uTLayers[0].a;
+            for (int i = 1; i < 6; ++i) {
+                if (i >= uTLayerCount) break;
+                vec4 cr = uTLayers[i * 2];
+                vec4 hb = uTLayers[i * 2 + 1];
+                float t = smoothstep(hb.x - hb.y * 0.5, hb.x + hb.y * 0.5, hN);
+                col = mix(col, cr.rgb, t);
+                lr = mix(lr, cr.a, t);
+            }
+            col *= (1.0 + detail * 0.42);
+            float cliffT = smoothstep(uTSlopeSnow.x, uTSlopeSnow.y, slope);
+            float rockCrag = terrainFbm(vec2(vWorldPos.x * 0.07 + vWorldPos.y * 0.11, vWorldPos.z * 0.07 - vWorldPos.y * 0.08));
+            vec3 cliffCol = uTCliffColor.rgb * (0.70 + 0.60 * rockCrag) * (1.0 + detail * 0.30);
+            col = mix(col, cliffCol, cliffT);
+            lr = mix(lr, 0.90, cliffT);
+            float snowMask = 0.0;
+            if (uTSnowColor.a > 0.5) {
+                snowMask = smoothstep(uTSlopeSnow.z, uTSlopeSnow.w, vWorldPos.y + detail * 4.5) * smoothstep(0.38, 0.70, Ngeom.y);
+                col = mix(col, uTSnowColor.rgb * (0.95 + 0.07 * nMicro), snowMask);
+                lr = mix(lr, 0.62, snowMask);
+            }
+            albedo = col;
+            rough = clamp(lr + detail * 0.12, 0.20, 0.98);
+            metal = 0.02;
+            if (uWetness > 0.01) {
+                albedo *= (1.0 - 0.30 * uWetness);
+                rough = mix(rough, 0.18, uWetness * 0.60);
+            }
+        } else if (uTerrainMode == 1) {
             // ORGANIC PHOTOREALISTIC WILDERNESS ISLAND (Rich earthy woodland tones + fractured granite!)
             float hN = vWorldPos.y + detail * 2.4;
             vec3 wetSand    = vec3(0.22, 0.18, 0.12) * (1.0 + detail * 0.32);
@@ -2001,6 +2042,11 @@ public:
         m_uTime = gl::getUniformLocation(m_litProgram, "uTime");
         m_uIsGround = gl::getUniformLocation(m_litProgram, "uIsGround");
         m_uTerrainMode = gl::getUniformLocation(m_litProgram, "uTerrainMode");
+        m_uTLayers = gl::getUniformLocation(m_litProgram, "uTLayers");
+        m_uTLayerCount = gl::getUniformLocation(m_litProgram, "uTLayerCount");
+        m_uTCliffColor = gl::getUniformLocation(m_litProgram, "uTCliffColor");
+        m_uTSlopeSnow = gl::getUniformLocation(m_litProgram, "uTSlopeSnow");
+        m_uTSnowColor = gl::getUniformLocation(m_litProgram, "uTSnowColor");
         m_uWetness = gl::getUniformLocation(m_litProgram, "uWetness");
         m_uCloudShadowsEnabled = gl::getUniformLocation(m_litProgram, "uCloudShadowsEnabled");
         m_uShadowsEnabled = gl::getUniformLocation(m_litProgram, "uShadowsEnabled");
@@ -2613,6 +2659,9 @@ public:
         gl::uniform1f(m_uFogEnd, sky.fogEnd);
         gl::uniform1f(m_uTime, timeSeconds);
         gl::uniform1i(m_uTerrainMode, world.terrain().mode);
+        if (world.terrain().mode == TerrainSettings::kModeDataDriven) {
+            uploadTerrainMaterial(world.terrain().spec);
+        }
         gl::uniform1f(m_uWetness, std::clamp(sky.wetness, 0.0f, 1.0f));
         gl::uniform1i(m_uCloudShadowsEnabled, sky.cloudShadowsEnabled ? 1 : 0);
         gl::uniform1i(m_uAlbedoTex, 0);
@@ -3088,10 +3137,79 @@ private:
         m_grassBuilt = false;
     }
 
+    // Data-driven grass: scatter over the terrain using only the scene's "grass" rules
+    // (height band, max slope, avoid flatten/road features). No map-specific coordinates.
+    template <typename Rand, typename Inst>
+    static void scatterDataDrivenGrass(const World& world, Rand& rand01, std::vector<Inst>& out) {
+        const TerrainSettings& cfg = world.terrain();
+        const TerrainSpec& spec = cfg.spec;
+        if (!spec.grassEnabled || spec.grassCount <= 0) {
+            return;
+        }
+        const float extent = cfg.halfSize * spec.grassArea;
+        const std::size_t target = static_cast<std::size_t>(spec.grassCount);
+        const int candidates = spec.grassCount * 5;
+
+        const auto insideFeature = [&spec](float x, float z) {
+            for (const TerrainFeature& f : spec.features) {
+                if (f.type == TerrainFeature::Type::Flatten) {
+                    if (std::hypot(x - f.x, z - f.z) < f.radius) return true;
+                } else if (f.type == TerrainFeature::Type::Road) {
+                    // Point-to-polyline distance (cheap enough at grass-build time).
+                    for (std::size_t i = 0; i + 5 < f.points.size(); i += 3) { // x, z, height triplets
+                        const float ax = f.points[i], az = f.points[i + 1];
+                        const float abx = f.points[i + 3] - ax, abz = f.points[i + 4] - az;
+                        const float lenSq = abx * abx + abz * abz;
+                        const float t = lenSq > 1e-6f ? std::clamp(((x - ax) * abx + (z - az) * abz) / lenSq, 0.0f, 1.0f) : 0.0f;
+                        if (std::hypot(x - (ax + abx * t), z - (az + abz * t)) < f.width * 0.5f + f.blend * 0.5f) return true;
+                    }
+                }
+            }
+            return false;
+        };
+
+        for (int i = 0; i < candidates && out.size() < target; ++i) {
+            const float x = -extent + rand01() * 2.0f * extent;
+            const float z = -extent + rand01() * 2.0f * extent;
+            const TerrainSample ts = world.sampleTerrain(x, z);
+            if (ts.height < spec.grassMinHeight || ts.height > spec.grassMaxHeight) continue;
+            if (ts.normal.y < spec.grassMinNormalY) continue;
+            if (spec.grassAvoidFeatures && insideFeature(x, z)) continue;
+            const float h = 0.30f + rand01() * 0.34f;
+            const float yaw = rand01() * 2.0f * kPi;
+            const float colShift = rand01();
+            const float phase = rand01() * 6.2831f;
+            const float flower = (rand01() > 0.93f) ? 1.0f : 0.0f;
+            out.push_back({x, ts.height - 0.02f, z, h, yaw, colShift, phase, flower});
+        }
+    }
+
+    // Uploads the scene's terrain layers/cliff/snow to the lit shader (cheap: 15 vec4s per frame).
+    void uploadTerrainMaterial(const TerrainSpec& spec) {
+        std::array<float, 12 * 4> packed{};
+        const int count = static_cast<int>(std::min<std::size_t>(spec.layers.size(), 6));
+        for (int i = 0; i < count; ++i) {
+            const TerrainLayer& l = spec.layers[static_cast<std::size_t>(i)];
+            float* a = &packed[static_cast<std::size_t>(i * 8)];
+            a[0] = l.color.r; a[1] = l.color.g; a[2] = l.color.b; a[3] = l.roughness;
+            a[4] = l.startHeight; a[5] = l.blend; a[6] = 0.0f; a[7] = 0.0f;
+        }
+        gl::uniform4fv(m_uTLayers, 12, packed.data());
+        gl::uniform1i(m_uTLayerCount, count);
+        const float cliff[4] = {spec.cliffColor.r, spec.cliffColor.g, spec.cliffColor.b, 1.0f};
+        gl::uniform4fv(m_uTCliffColor, 1, cliff);
+        const float slopeSnow[4] = {spec.cliffSlopeStart, spec.cliffSlopeEnd, spec.snowStartHeight, spec.snowEndHeight};
+        gl::uniform4fv(m_uTSlopeSnow, 1, slopeSnow);
+        const float snow[4] = {spec.snowColor.r, spec.snowColor.g, spec.snowColor.b, spec.snowEnabled ? 1.0f : 0.0f};
+        gl::uniform4fv(m_uTSnowColor, 1, snow);
+    }
+
     void ensureGrassField(const World& world) {
-        if (m_grassBuilt && m_grassModeCached == world.terrain().mode) return;
+        if (m_grassBuilt && m_grassModeCached == world.terrain().mode &&
+            m_grassRevisionCached == world.terrain().revision) return;
         destroyGrassBuffers();
         m_grassModeCached = world.terrain().mode;
+        m_grassRevisionCached = world.terrain().revision;
 
         // Lush 4-blade curved slender meadow grass tuft (8 triangles = 24 vertices per instance!)
         constexpr float kW = 0.044f;
@@ -3136,8 +3254,11 @@ private:
         };
 
         // Scatter lush shadowed meadow grass tufts across natural biomes!
-        const bool islandMode = (world.terrain().mode == 1);
-        const int kCandidates = islandMode ? 135000 : 85000;
+        if (world.terrain().mode == TerrainSettings::kModeDataDriven) {
+            scatterDataDrivenGrass(world, rand01, instances);
+        }
+        const bool islandMode = (world.terrain().mode == TerrainSettings::kModeEchoIslandPreset);
+        const int kCandidates = (world.terrain().mode == TerrainSettings::kModeDataDriven) ? 0 : (islandMode ? 135000 : 85000);
         for (int i = 0; i < kCandidates; ++i) {
             float x = 0.0f;
             float z = 0.0f;
@@ -3214,6 +3335,7 @@ private:
     void ensureTerrainMesh(const World& world) {
         const TerrainSettings& cfg = world.terrain();
         if (m_terrainMeshBuilt &&
+            m_terrainRevisionCached == cfg.revision &&
             m_terrainModeCached == cfg.mode &&
             std::abs(m_terrainHalfSizeCached - cfg.halfSize) < 0.01f &&
             std::abs(m_terrainMaxHeightCached - cfg.maxHeight) < 0.01f &&
@@ -3226,7 +3348,10 @@ private:
         const int stride = divs + 1;
         const float half = cfg.halfSize;
         const float step = (half * 2.0f) / static_cast<float>(divs);
-        const bool islandMode = (cfg.mode == 1);
+        const bool islandMode = (cfg.mode == TerrainSettings::kModeEchoIslandPreset);
+        const bool dataDriven = (cfg.mode == TerrainSettings::kModeDataDriven);
+        const bool cityPreset = !islandMode && !dataDriven;
+        const float hideBelow = cfg.spec.hideBelowHeight;
 
         std::vector<Vertex3D> verts;
         std::vector<float> rawH(static_cast<std::size_t>(stride * stride), 0.0f);
@@ -3241,7 +3366,7 @@ private:
                 const TerrainSample s = world.sampleTerrain(x, z);
                 rawH[static_cast<std::size_t>(iz * stride + ix)] = s.height;
                 float y = s.height;
-                if (!islandMode) {
+                if (cityPreset) {
                     // Sink flat zones 0.22m below city roads so zero Z-fighting ever occurs with flat ground/roads!
                     const float riseT = std::clamp(s.height / 0.45f, 0.0f, 1.0f);
                     const float smoothRise = riseT * riseT * (3.0f - 2.0f * riseT);
@@ -3259,7 +3384,10 @@ private:
                 const std::size_t i1 = i0 + 1;
                 const std::size_t i2 = static_cast<std::size_t>((iz + 1) * stride + ix);
                 const std::size_t i3 = i2 + 1;
-                if (!islandMode && rawH[i0] < 0.02f && rawH[i1] < 0.02f && rawH[i2] < 0.02f && rawH[i3] < 0.02f) {
+                if (dataDriven && rawH[i0] < hideBelow && rawH[i1] < hideBelow && rawH[i2] < hideBelow && rawH[i3] < hideBelow) {
+                    continue;
+                }
+                if (cityPreset && rawH[i0] < 0.02f && rawH[i1] < 0.02f && rawH[i2] < 0.02f && rawH[i3] < 0.02f) {
                     continue;
                 }
                 if (islandMode && rawH[i0] < -5.8f && rawH[i1] < -5.8f && rawH[i2] < -5.8f && rawH[i3] < -5.8f) {
@@ -3277,11 +3405,12 @@ private:
         }
         m_terrainMeshBuilt = true;
         m_terrainModeCached = cfg.mode;
+        m_terrainRevisionCached = cfg.revision;
         m_terrainHalfSizeCached = cfg.halfSize;
         m_terrainMaxHeightCached = cfg.maxHeight;
         m_terrainGridCached = cfg.gridResolution;
         std::cout << "[SAGE][Terrain] Built GPU 3D heightmap mesh (" << (idx.size() / 3)
-                  << " triangles, mode=" << (islandMode ? "island" : "city")
+                  << " triangles, mode=" << (dataDriven ? "data-driven" : (islandMode ? "island" : "city"))
                   << ", +/-" << half << "m, maxH=" << cfg.maxHeight << "m)\n";
     }
 
@@ -3812,6 +3941,7 @@ private:
     GLint m_uModel = -1, m_uViewProj = -1, m_uHasSkin = -1, m_uUseInstancing = -1, m_uBoneMatrices = -1, m_uBaseColor = -1, m_uEmissive = -1;
     GLint m_uMetallic = -1, m_uRoughness = -1, m_uHasTexture = -1, m_uAlbedoTex = -1;
     GLint m_uHasNormalTex = -1, m_uNormalTex = -1, m_uHasMetRoughTex = -1, m_uMetRoughTex = -1;
+    GLint m_uTLayers = -1, m_uTLayerCount = -1, m_uTCliffColor = -1, m_uTSlopeSnow = -1, m_uTSnowColor = -1;
     GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1, m_uTerrainMode = -1, m_uWetness = -1, m_uCloudShadowsEnabled = -1;
     GLint m_uShadowsEnabled = -1, m_uLightViewProj = -1, m_uLightViewProjMid = -1, m_uLightViewProjFar = -1;
     GLint m_uShadowMap = -1, m_uShadowMapMid = -1, m_uShadowMapFar = -1, m_uShadowTexelSize = -1;
@@ -3867,6 +3997,8 @@ private:
     GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh, m_terrainMesh;
     bool m_terrainMeshBuilt = false;
     int m_terrainModeCached = -1;
+    std::uint32_t m_terrainRevisionCached = 0;
+    std::uint32_t m_grassRevisionCached = 0;
     float m_terrainHalfSizeCached = 0.0f;
     float m_terrainMaxHeightCached = 0.0f;
     int m_terrainGridCached = 0;

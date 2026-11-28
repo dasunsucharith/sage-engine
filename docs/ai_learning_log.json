@@ -75,6 +75,12 @@
       "version": "1.6.0+",
       "domain": "Render Interpolation",
       "lesson": "With a fixed 60 Hz simulation and VSync off, SAGE drew ~7 frames per tick (419 UI frames over 62 ticks), so un-interpolated motion repeated each snapshot and then jumped (judder at any refresh rate above 60 Hz). Capture a per-entity/light/camera snapshot at the start of each fixedTick, draw prev + (cur - prev) * (accumulator / dt), and restore the true state before the editor and Lua UI run. Blend Euler yaw along the shortest arc, quaternions via shortest-hemisphere nlerp, and animation clocks forward-only. Snap on spawn, on world.teleport()/camera.cut(), and on any move over 25 m per tick. Leave unchanged values bit-identical so static-prop caches are unaffected. Measured cost: none (p50 2.35-2.39 ms on vs 2.36-2.40 ms off, Release, RTX 5050 Laptop)."
+    },
+    {
+      "id": "L013",
+      "version": "1.6.0+",
+      "domain": "Data-Driven Terrain",
+      "lesson": "Game-specific landscapes hard-coded in engine C++ (coordinates of peaks, lakes, ring roads; grass exclusions tied to those roads) force C++ edits for every new game. Move them into a scene JSON spec evaluated by ONE function (baseHeight + heightmap + FBM -> island mask -> ordered peak/basin/flatten/road features) that the GPU mesh, Jolt HeightField, grass scatter and Lua sampleTerrain all share. Gate renderer/physics rebuilds on a revision counter bumped on every scene load, not on a few cached numbers (the old cache missed hot-reloaded terrain edits). Validate every key with file + JSON-path errors, warn on unknown keys (catches typos) and on 0..255 colours, and fall back to flat terrain on errors. Keep legacy presets byte-identical and prove it: same triangle/grass/collider counts and ~0.1% pixel diff (moving objects only) between old and new builds from identical cameras. Gotcha: culling seabed triangles near the water surface (hideBelowHeight) causes a stair-step seam because the water shader shades by depth."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [

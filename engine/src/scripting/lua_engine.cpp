@@ -307,11 +307,24 @@ struct LuaEngine::Impl {
         worldTbl.set_function("setTerrainEnabled", [this](bool enabled) {
             if (world) {
                 world->terrain().enabled = enabled;
+                ++world->terrain().revision;
             }
         });
         worldTbl.set_function("setTerrainMode", [this](const std::string& modeName) {
             if (world) {
-                world->terrain().mode = (modeName == "island" || modeName == "wilderness") ? 1 : 0;
+                // Switches between the built-in legacy presets. Data-driven terrain comes from the
+                // scene JSON "terrain" block; "data" keeps it (no-op) if the scene defined one.
+                if (modeName == "island" || modeName == "wilderness" || modeName == "echo_island") {
+                    world->terrain().mode = TerrainSettings::kModeEchoIslandPreset;
+                } else if (modeName == "data") {
+                    if (world->terrain().mode != TerrainSettings::kModeDataDriven) {
+                        std::cerr << "[SAGE][Lua] world.setTerrainMode(\"data\"): this scene has no data-driven terrain block\n";
+                    }
+                    return;
+                } else {
+                    world->terrain().mode = TerrainSettings::kModeStuntCityPreset;
+                }
+                ++world->terrain().revision;
             }
         });
         worldTbl.set_function("setSSR", [this](bool enabled, sol::optional<float> intensity) {

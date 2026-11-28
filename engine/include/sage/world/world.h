@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -132,19 +133,128 @@ struct WaterSampleResult {
     float shoreDist = 0.0f;  // Horizontal distance inside the water boundary (meters)
 };
 
-// Synchronized CPU/GPU 3D Heightmap Terrain configuration & query result (v1.3.0 / v1.5+ organic island mode)
+// ---------------------------------------------------------------------------
+// Data-driven terrain (scene JSON "terrain": { "type": "procedural" | "heightmap" })
+// ---------------------------------------------------------------------------
+// Everything a game needs to shape its own landscape WITHOUT touching C++:
+// final height = baseHeight + heightmap + noise -> island mask -> features (in order).
+// See docs/terrain.md for the JSON format.
+
+// A sculpting operation applied on top of the base height, in the order listed.
+struct TerrainFeature {
+    enum class Type {
+        Peak,     // Adds a smooth mountain/hill: +height at the centre, fading to 0 at radius
+        Basin,    // Carves a lake bed / crater: flattens toward the centre, then lowers by depth
+        Flatten,  // Levels a round plateau/plaza to an exact height (building sites, towns)
+        Road      // Levels a strip along a polyline to an exact height (road beds, runways)
+    };
+    Type type = Type::Peak;
+    float x = 0.0f;
+    float z = 0.0f;
+    float radius = 50.0f;        // Outer edge of the influence (Peak/Basin/Flatten)
+    float innerRadius = 0.0f;    // Fully-affected core radius (Basin/Flatten); Peak uses 0
+    float height = 10.0f;        // Peak: added height. Flatten/Road: target height (meters)
+    float depth = 3.0f;          // Basin: how far below the flattened floor to carve
+    float strength = 0.85f;      // Basin: how strongly the floor is flattened (0..1)
+    float sharpness = 2.0f;      // Peak: exponent on the falloff (1 = cone-like, 2+ = rounder)
+    float width = 12.0f;         // Road: fully-flat strip width
+    float blend = 10.0f;         // Road: extra distance over which it blends back into the terrain
+    // Road: polyline stored as x, z, height triplets. A point given as [x, z] in JSON
+    // uses the feature's "height"; [x, z, h] lets the road climb (interpolated per segment).
+    std::vector<float> points;
+};
+
+// Height-banded surface material (lowest band first). Colors are linear RGB 0..1,
+// the same convention as entity "color" values in scene JSON.
+struct TerrainLayer {
+    std::string name;            // e.g. "sand", "grass" (reported by world.sampleTerrain as biome index)
+    Color3 color{0.3f, 0.3f, 0.3f};
+    float startHeight = 0.0f;    // Height (m) where this layer takes over from the one below
+    float blend = 2.0f;          // Transition width (m)
+    float roughness = 0.85f;
+};
+
+struct TerrainSpec {
+    // --- Base shape ---
+    float baseHeight = 0.0f;
+
+    // Optional grayscale heightmap (8- or 16-bit PNG) stretched over [-halfSize, +halfSize].
+    std::string heightmapPath;
+    std::vector<float> heightmap;   // Normalized 0..1 samples, row-major (row 0 = most negative Z)
+    int heightmapWidth = 0;
+    int heightmapHeight = 0;
+    float heightmapMin = 0.0f;      // Height (m) of pure black
+    float heightmapMax = 40.0f;     // Height (m) of pure white
+
+    // Fractal (FBM) noise for natural hills.
+    float noiseAmplitude = 0.0f;    // Meters added at noise == 1
+    float noiseFrequency = 0.01f;   // Features per meter (0.01 = ~100 m hills)
+    int noiseOctaves = 4;
+    float noiseRidged = 0.0f;       // 0 = rolling hills, 1 = sharp ridges
+    float noiseWarp = 0.0f;         // Domain-warp distance (m) for organic, non-grid shapes
+    float noiseSeed = 0.0f;         // Shifts the noise pattern
+
+    // Optional island mask: land inside radius, sloping down to seabedHeight outside.
+    bool island = false;
+    float islandCenterX = 0.0f;
+    float islandCenterZ = 0.0f;
+    float islandRadius = 200.0f;
+    float islandFalloff = 80.0f;    // Width of the beach/shelf transition
+    float islandCoastNoise = 0.0f;  // Meters of coastline wobble (bays & peninsulas)
+    float seabedHeight = -6.0f;
+
+    std::vector<TerrainFeature> features;
+
+    // --- Look ---
+    std::vector<TerrainLayer> layers; // Max 6 used by the renderer
+    Color3 cliffColor{0.22f, 0.21f, 0.20f};
+    float cliffSlopeStart = 0.14f;    // 0 = flat, 1 = vertical
+    float cliffSlopeEnd = 0.34f;
+    bool snowEnabled = false;
+    Color3 snowColor{0.84f, 0.88f, 0.94f};
+    float snowStartHeight = 30.0f;
+    float snowEndHeight = 38.0f;
+
+    // --- Grass ---
+    bool grassEnabled = true;
+    int grassCount = 30000;           // Target tufts (max 60,000)
+    float grassArea = 1.0f;           // Fraction of halfSize to scatter over
+    float grassMinHeight = 0.5f;
+    float grassMaxHeight = 30.0f;
+    float grassMinNormalY = 0.74f;    // 1 = only flat ground
+    bool grassAvoidFeatures = true;   // Skip Flatten/Road areas
+
+    // --- Collision & mesh ---
+    float collisionMinHeight = -1.0e9f; // Below this, no Jolt collision (lets props sink into carved lakes)
+    float hideBelowHeight = -1.0e9f;    // Skip mesh triangles entirely below this (deep seabed under water)
+};
+
+// Synchronized CPU/GPU 3D Heightmap Terrain configuration & query result.
+// mode 0 / 1 are the built-in legacy presets used by the shipped showcase games;
+// mode 2 is fully described by TerrainSpec (any new game should use this).
 struct TerrainSettings {
+    static constexpr int kModeStuntCityPreset = 0;
+    static constexpr int kModeEchoIslandPreset = 1;
+    static constexpr int kModeDataDriven = 2;
+
     bool enabled = true;
-    int mode = 0; // 0 = StuntCity (4-biome road-flattened), 1 = WildernessIsland (organic domain-warped island!)
+    int mode = kModeStuntCityPreset;
     float halfSize = 440.0f;
     float maxHeight = 46.0f;
     int gridResolution = 160;
+    TerrainSpec spec;
+    // Bumped whenever any terrain setting changes, so the renderer & physics know
+    // to rebuild the mesh, grass and collider (also after scene hot-reload).
+    std::uint32_t revision = 1;
+    std::string sourceJson; // Original scene "terrain" block, written back by scene export
 };
 
 struct TerrainSample {
     float height = 0.0f;
     Vec3 normal{0.0f, 1.0f, 0.0f};
-    int biomeId = 0; // 0=Downtown, 1=Alpine Highlands, 2=Palm Coast, 3=Red Rock Desert
+    // Data-driven terrain: index of the dominant height layer (0 = lowest).
+    // Legacy presets: 0=Downtown, 1=Alpine Highlands, 2=Palm Coast, 3=Red Rock Desert quadrants.
+    int biomeId = 0;
 };
 
 struct SkySettings {

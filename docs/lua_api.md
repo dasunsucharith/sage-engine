@@ -103,9 +103,9 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.evalSpline(pointsTable, t [, closed])` | Evaluates a smooth C1 3D Catmull-Rom spline (`pointsTable` = list of `{x, y, z}` waypoints, `t` in `0..1`, `closed` default `true`) and returns `x, y, z, tanX, tanY, tanZ, yawDeg`. |
 | `world.setGodRays(enabled [, intensity])` | Toggles Screen-Space Volumetric Sun Shafts (Crepuscular God-Rays) and optionally sets intensity (`0.0`–`1.5`, default `0.42`). |
 | `world.setCloudShadows(enabled)` | Toggles drifting FBM cloud shadows cast across terrain, mountains, roads, and city blocks (`true` by default). |
-| `world.setTerrainEnabled(enabled)` | Enables or disables the synchronized 160×160 3D multi-biome heightmap terrain (`true` by default). |
-| `world.setTerrainMode(mode)` | Switches 3D terrain generator between `"city"` (4-biome road-flattened) and `"island"` (organic domain-warped wilderness island with coves, inland lake, cliffs & snow summit). |
-| `world.sampleTerrain(x, z)` | Samples the synchronized 3D heightmap terrain at `(x, z)` and returns `height, normalX, normalY, normalZ, biomeId` (exact match to GPU mesh & Jolt HeightField). |
+| `world.setTerrainEnabled(enabled)` | Enables or disables the 3D heightmap terrain (`true` by default). The terrain itself is defined in the scene JSON `"terrain"` block; see [`terrain.md`](terrain.md). |
+| `world.setTerrainMode(mode)` | Switches to a built-in **legacy preset**: `"city"` (Stunt City) or `"island"` (Echo Island). `"data"` keeps the scene's data-driven terrain. New games should define terrain in the scene JSON instead ([`terrain.md`](terrain.md)). |
+| `world.sampleTerrain(x, z)` | Samples the terrain at `(x, z)` and returns `height, normalX, normalY, normalZ, biomeId` (exact match to the GPU mesh & Jolt HeightField). For data-driven terrain `biomeId` is the index of the highest `layers` entry reached (0 = lowest); for the legacy presets it's the map quadrant. |
 | `world.setWeather(rainIntensity [, wetness])` | Controls real-time 3D falling rain (`0.0`–`1.0`) and reflective wet-puddle road/terrain shading (`0.0`–`1.0`). |
 | `world.setPointLight(id, x, y, z, r, g, b [, radius, intensity])` | Creates or updates a real-time dynamic point light (up to 16 active) that illuminates 3D meshes, roads, and reflects off animated ocean waves. |
 | `world.removePointLight(id)` | Removes a dynamic point light by `id`. |

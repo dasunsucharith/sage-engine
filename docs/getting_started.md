@@ -68,6 +68,7 @@ cmake --build build --target sage
 | `--smoke-test` | `.\build\sage.exe --smoke-test` | Initializes GPU, Jolt Physics, Dear ImGui, JSON scene, `.glb` models, and Lua scripts, renders 12 real frames, prints diagnostics, and exits `0` (ideal for CI and AI agents!). This is a **boot check, not a performance measurement**: 12 frames are dominated by the cold-start hitch. |
 | `--benchmark [frames]` | `.\build\sage.exe --benchmark 600` | Steady-state performance run: turns VSync off, mutes audio, skips 120 warm-up frames, then measures `frames` frames (default 600). Prints mean/p50/p95/p99/max frame time and writes them to `steadyState` in `logs/last_session_telemetry.json`. Always benchmark a **Release** build (`-DCMAKE_BUILD_TYPE=Release`) when comparing versions. |
 | `--survival` | `.\build\sage.exe --survival` | Loads `scenes/survival_island.json` with only the `survival_game` resource. |
+| *(terrain demo)* | `.\build\sage.exe --scene scenes/terrain_demo.json --resource terrain_demo` | Orbiting preview of the data-driven terrain demo (also try `scenes/heightmap_demo.json`). |
 | `--resource <name>` | `.\build\sage.exe --resource stunt_sandbox` | Loads only this Lua resource (even if its manifest is disabled). |
 | `--no-vsync` | `.\build\sage.exe --no-vsync` | Disables VSync for interactive runs. |
 | `--no-interp` | `.\build\sage.exe --no-interp` | Turns render interpolation off, drawing raw 60 Hz tick positions (for A/B comparison on high-refresh displays). |

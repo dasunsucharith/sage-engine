@@ -1,0 +1,10 @@
+{
+  "name": "terrain_demo",
+  "version": "1.0.0",
+  "author": "SAGE Engine",
+  "enabled": false,
+  "description": "Slow orbiting camera for previewing data-driven terrain scenes. Run: sage.exe --scene scenes/terrain_demo.json --resource terrain_demo",
+  "scripts": [
+    "main.lua"
+  ]
+}

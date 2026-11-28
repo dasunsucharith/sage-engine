@@ -7,7 +7,7 @@ Welcome! **SAGE (Scriptable AI Game Engine)** is designed to be **AI-Native**. W
 ## 1. Two Modes of Working in This Repo
 
 1. **Engine Development (`engine/`):** Writing clean, beginner-readable, well-commented **C++20** systems (platform, renderer, ECS, physics, audio, Lua bindings).
-2. **Game Development (`scenes/`, `resources/`, `assets/`):** Creating games **without touching C++** — by editing plain-text JSON scenes, adding `.glb`/`.gltf` 3D models to `assets/models/`, and writing FiveM-style **Lua** scripts inside `resources/<resource_name>/`.
+2. **Game Development (`scenes/`, `resources/`, `assets/`):** Creating games **without touching C++** — by editing plain-text JSON scenes, adding `.glb`/`.gltf` 3D models to `assets/models/`, and writing FiveM-style **Lua** scripts inside `resources/<resource_name>/`. Landscapes (hills, islands, mountains, lakes, roads, colours, grass) belong in the scene's `"terrain"` block; see [`docs/terrain.md`](docs/terrain.md). Never hard-code map-specific coordinates in engine C++.
 
 ---
 

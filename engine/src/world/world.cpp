@@ -71,6 +71,148 @@ float fbmTerrain(float x, float z) {
     return sum;
 }
 
+// ---------------------------------------------------------------------------
+// Data-driven terrain (mode 2): every number comes from the scene JSON.
+// ---------------------------------------------------------------------------
+float fbmOctaves(float x, float z, int octaves) {
+    float sum = 0.0f;
+    float amp = 0.5f;
+    float freq = 1.0f;
+    float norm = 0.0f;
+    const int n = std::clamp(octaves, 1, 8);
+    for (int i = 0; i < n; ++i) {
+        sum += amp * valueNoise2D(x * freq, z * freq);
+        norm += amp;
+        freq *= 2.03f;
+        amp *= 0.5f;
+    }
+    return sum / std::max(norm, 1e-5f); // 0..1
+}
+
+// Bilinear heightmap lookup over the terrain square; returns 0..1.
+float sampleHeightmap01(const TerrainSpec& spec, float halfSize, float x, float z) {
+    if (spec.heightmap.empty() || spec.heightmapWidth < 2 || spec.heightmapHeight < 2) {
+        return 0.0f;
+    }
+    const float u = std::clamp((x + halfSize) / (2.0f * halfSize), 0.0f, 1.0f) * static_cast<float>(spec.heightmapWidth - 1);
+    const float v = std::clamp((z + halfSize) / (2.0f * halfSize), 0.0f, 1.0f) * static_cast<float>(spec.heightmapHeight - 1);
+    const int x0 = static_cast<int>(u);
+    const int z0 = static_cast<int>(v);
+    const int x1 = std::min(x0 + 1, spec.heightmapWidth - 1);
+    const int z1 = std::min(z0 + 1, spec.heightmapHeight - 1);
+    const float fx = u - static_cast<float>(x0);
+    const float fz = v - static_cast<float>(z0);
+    const auto at = [&spec](int ix, int iz) {
+        return spec.heightmap[static_cast<std::size_t>(iz) * static_cast<std::size_t>(spec.heightmapWidth) + static_cast<std::size_t>(ix)];
+    };
+    const float a = at(x0, z0) + (at(x1, z0) - at(x0, z0)) * fx;
+    const float b = at(x0, z1) + (at(x1, z1) - at(x0, z1)) * fx;
+    return a + (b - a) * fz;
+}
+
+// Shortest distance from (x, z) to a road polyline stored as x, z, height triplets.
+// Also returns the road height at the closest point (interpolated along that segment).
+float distanceToPolyline(const std::vector<float>& pts, float x, float z, float& outHeight) {
+    outHeight = 0.0f;
+    if (pts.size() < 3) {
+        return 1.0e9f;
+    }
+    if (pts.size() < 6) {
+        outHeight = pts[2];
+        return std::hypot(x - pts[0], z - pts[1]);
+    }
+    float best = 1.0e9f;
+    for (std::size_t i = 0; i + 5 < pts.size(); i += 3) {
+        const float ax = pts[i], az = pts[i + 1], ah = pts[i + 2];
+        const float bx = pts[i + 3], bz = pts[i + 4], bh = pts[i + 5];
+        const float abx = bx - ax, abz = bz - az;
+        const float lenSq = abx * abx + abz * abz;
+        const float t = lenSq > 1e-6f ? std::clamp(((x - ax) * abx + (z - az) * abz) / lenSq, 0.0f, 1.0f) : 0.0f;
+        const float d = std::hypot(x - (ax + abx * t), z - (az + abz * t));
+        if (d < best) {
+            best = d;
+            outHeight = ah + (bh - ah) * t;
+        }
+    }
+    return best;
+}
+
+float evaluateDataDrivenHeight(float x, float z, const TerrainSettings& cfg) {
+    const TerrainSpec& spec = cfg.spec;
+    float h = spec.baseHeight;
+
+    if (!spec.heightmap.empty()) {
+        h += spec.heightmapMin + sampleHeightmap01(spec, cfg.halfSize, x, z) * (spec.heightmapMax - spec.heightmapMin);
+    }
+
+    if (spec.noiseAmplitude != 0.0f) {
+        float nx = x * spec.noiseFrequency + spec.noiseSeed * 17.31f;
+        float nz = z * spec.noiseFrequency - spec.noiseSeed * 9.73f;
+        if (spec.noiseWarp > 0.0f) {
+            // Domain warping bends the noise grid so hills never look tiled or axis-aligned.
+            const float wf = spec.noiseFrequency * 0.5f;
+            nx += (fbmOctaves(x * wf + 1.7f, z * wf - 2.9f, 3) - 0.5f) * spec.noiseWarp * spec.noiseFrequency;
+            nz += (fbmOctaves(x * wf - 3.8f, z * wf + 2.1f, 3) - 0.5f) * spec.noiseWarp * spec.noiseFrequency;
+        }
+        float n = fbmOctaves(nx, nz, spec.noiseOctaves);
+        if (spec.noiseRidged > 0.0f) {
+            const float ridge = 1.0f - std::abs(n * 2.0f - 1.0f);
+            n = n + (ridge * ridge - n) * std::clamp(spec.noiseRidged, 0.0f, 1.0f);
+        }
+        h += n * spec.noiseAmplitude;
+    }
+
+    if (spec.island) {
+        const float dx = x - spec.islandCenterX;
+        const float dz = z - spec.islandCenterZ;
+        float coast = spec.islandRadius;
+        if (spec.islandCoastNoise > 0.0f) {
+            // Sample noise along the coastline direction (bays & peninsulas), smooth around the circle.
+            const float ang = std::atan2(dz, dx);
+            coast += (fbmOctaves(std::cos(ang) * 2.2f + 5.0f, std::sin(ang) * 2.2f + 5.0f, 3) - 0.5f) * 2.0f * spec.islandCoastNoise;
+        }
+        const float r = std::sqrt(dx * dx + dz * dz);
+        const float land = 1.0f - smoothstepf(coast - spec.islandFalloff, coast + spec.islandFalloff * 0.5f, r);
+        h = h * land + spec.seabedHeight * (1.0f - land);
+    }
+
+    for (const TerrainFeature& f : spec.features) {
+        switch (f.type) {
+        case TerrainFeature::Type::Peak: {
+            const float d = std::hypot(x - f.x, z - f.z);
+            if (d >= f.radius) break;
+            const float m = 1.0f - smoothstepf(0.0f, f.radius, d);
+            h += std::pow(m, std::max(f.sharpness, 0.1f)) * f.height;
+            break;
+        }
+        case TerrainFeature::Type::Basin: {
+            const float d = std::hypot(x - f.x, z - f.z);
+            if (d >= f.radius) break;
+            const float m = 1.0f - smoothstepf(f.innerRadius, f.radius, d);
+            h = h * (1.0f - m * std::clamp(f.strength, 0.0f, 1.0f)) - m * f.depth;
+            break;
+        }
+        case TerrainFeature::Type::Flatten: {
+            const float d = std::hypot(x - f.x, z - f.z);
+            if (d >= f.radius) break;
+            const float m = 1.0f - smoothstepf(f.innerRadius, f.radius, d);
+            h += (f.height - h) * m;
+            break;
+        }
+        case TerrainFeature::Type::Road: {
+            const float half = f.width * 0.5f;
+            float roadH = 0.0f;
+            const float d = distanceToPolyline(f.points, x, z, roadH);
+            if (d >= half + f.blend) break;
+            const float m = 1.0f - smoothstepf(half, half + std::max(f.blend, 0.01f), d);
+            h += (roadH - h) * m;
+            break;
+        }
+        }
+    }
+    return h;
+}
+
 // Deterministic 3D open-world heightmap:
 //   mode == 0 (StuntCity): flat highways/ring roads/plaza + rolling hills + surrounding snow mountains
 //   mode == 1 (WildernessIsland): true organic domain-warped coastal island rising out of the ocean
@@ -80,6 +222,11 @@ float evaluateTerrainHeightRaw(float x, float z, const TerrainSettings& cfg) {
         return 0.0f;
     }
 
+    if (cfg.mode == TerrainSettings::kModeDataDriven) {
+        return evaluateDataDrivenHeight(x, z, cfg);
+    }
+
+    // ----- Legacy built-in presets (the shipped showcase maps). New games should use mode 2. -----
     if (cfg.mode == 1) {
         // Domain-warp coordinates with multi-octave FBM so coastlines & ridges are 100% organic (zero blocks!)
         const float warpX = (fbmTerrain(x * 0.0046f + 1.7f, z * 0.0046f - 2.9f) - 0.5f) * 84.0f;
@@ -649,7 +796,8 @@ void World::spawnParticles(
 
 WaterSampleResult World::sampleWater(float x, float z, float timeSeconds) const {
     WaterSampleResult best{};
-    const bool islandMode = (m_terrain.enabled && m_terrain.mode == 1);
+    // Natural terrains (island preset & data-driven) use the real terrain surface as the water bed.
+    const bool islandMode = (m_terrain.enabled && m_terrain.mode != TerrainSettings::kModeStuntCityPreset);
     const float islandTerrainY = islandMode ? evaluateTerrainHeightRaw(x, z, m_terrain) : 0.0f;
 
     for (const Entity& e : m_entities) {
@@ -700,16 +848,28 @@ WaterSampleResult World::sampleWater(float x, float z, float timeSeconds) const 
 
 TerrainSample World::sampleTerrain(float x, float z) const {
     TerrainSample s{};
-    if (x < 0.0f && z >= 0.0f) s.biomeId = 0;       // Downtown Metro
-    else if (x >= 0.0f && z >= 0.0f) s.biomeId = 1; // Alpine Highlands
-    else if (x >= 0.0f && z < 0.0f) s.biomeId = 2;  // Palm Coast Marina
-    else s.biomeId = 3;                             // Red Rock Desert
+    const bool dataDriven = (m_terrain.mode == TerrainSettings::kModeDataDriven);
+    if (!dataDriven) {
+        if (x < 0.0f && z >= 0.0f) s.biomeId = 0;       // Downtown Metro
+        else if (x >= 0.0f && z >= 0.0f) s.biomeId = 1; // Alpine Highlands
+        else if (x >= 0.0f && z < 0.0f) s.biomeId = 2;  // Palm Coast Marina
+        else s.biomeId = 3;                             // Red Rock Desert
+    }
 
     if (!m_terrain.enabled) {
         return s;
     }
 
     s.height = evaluateTerrainHeightRaw(x, z, m_terrain);
+    if (dataDriven) {
+        // Biome = the highest layer this height has reached (matches the shader's banding).
+        const auto& layers = m_terrain.spec.layers;
+        for (std::size_t i = 1; i < layers.size(); ++i) {
+            if (s.height >= layers[i].startHeight) {
+                s.biomeId = static_cast<int>(i);
+            }
+        }
+    }
     constexpr float kEps = 1.25f;
     const float hL = evaluateTerrainHeightRaw(x - kEps, z, m_terrain);
     const float hR = evaluateTerrainHeightRaw(x + kEps, z, m_terrain);

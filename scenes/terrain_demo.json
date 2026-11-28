@@ -1,0 +1,73 @@
+{
+  "name": "Highland Cove: Data-Driven Terrain Demo",
+  "version": 2,
+  "terrain": {
+    "type": "procedural",
+    "halfSize": 320.0,
+    "maxHeight": 60.0,
+    "gridResolution": 220,
+    "baseHeight": 1.0,
+    "noise": {
+      "amplitude": 14.0,
+      "frequency": 0.008,
+      "octaves": 5,
+      "ridged": 0.35,
+      "warp": 60.0,
+      "seed": 3.0
+    },
+    "island": {
+      "center": [0.0, 0.0],
+      "radius": 225.0,
+      "falloff": 70.0,
+      "coastNoise": 34.0,
+      "seabedHeight": -6.5
+    },
+    "features": [
+      { "type": "peak", "name": "Mount Cairn", "center": [-40.0, 95.0], "radius": 150.0, "height": 46.0, "sharpness": 2.2 },
+      { "type": "peak", "name": "East Ridge", "center": [150.0, 95.0], "radius": 70.0, "height": 16.0 },
+      { "type": "basin", "name": "Mirror Lake", "center": [-70.0, -55.0], "innerRadius": 20.0, "radius": 58.0, "depth": 4.0, "strength": 0.9 },
+      { "type": "flatten", "name": "Village plateau", "center": [60.0, 60.0], "innerRadius": 24.0, "radius": 62.0, "height": 9.0 },
+      {
+        "type": "road",
+        "name": "Cove road",
+        "width": 8.0,
+        "blend": 10.0,
+        "points": [[178.0, -112.0, 1.4], [130.0, -60.0, 3.5], [92.0, 8.0, 7.0], [60.0, 60.0, 9.0]]
+      }
+    ],
+    "layers": [
+      { "name": "sand", "color": [0.50, 0.42, 0.27], "roughness": 0.80 },
+      { "name": "meadow", "color": [0.09, 0.20, 0.06], "startHeight": 2.4, "blend": 2.0, "roughness": 0.88 },
+      { "name": "forest", "color": [0.06, 0.14, 0.05], "startHeight": 10.0, "blend": 5.0, "roughness": 0.90 },
+      { "name": "highland", "color": [0.15, 0.14, 0.10], "startHeight": 24.0, "blend": 7.0, "roughness": 0.92 }
+    ],
+    "cliff": { "color": [0.21, 0.20, 0.19], "slopeStart": 0.15, "slopeEnd": 0.34 },
+    "snow": { "startHeight": 40.0, "endHeight": 48.0 },
+    "grass": { "count": 40000, "area": 0.8, "minHeight": 2.0, "maxHeight": 26.0, "minNormalY": 0.78 },
+    "collisionMinHeight": -4.5
+  },
+  "sky": {
+    "timeOfDay": 9.5,
+    "ambientIntensity": 0.44,
+    "fogStart": 220.0,
+    "fogEnd": 720.0
+  },
+  "camera": {
+    "position": [250.0, 75.0, -250.0],
+    "target": [0.0, 12.0, 0.0],
+    "fov": 60.0
+  },
+  "entities": [
+    { "id": "ocean", "type": "water", "position": [0.0, 0.0, 0.0], "scale": [960.0, 1.0, 960.0], "color": [0.05, 0.22, 0.30] },
+    { "id": "cabin_1", "type": "model", "model": "assets/models/alpine_cabin.glb", "position": [52.0, 0.0, 66.0], "rotation": [0.0, 30.0, 0.0], "scale": [1.0, 1.0, 1.0] },
+    { "id": "cabin_2", "type": "model", "model": "assets/models/alpine_cabin.glb", "position": [70.0, 0.0, 50.0], "rotation": [0.0, -60.0, 0.0], "scale": [1.0, 1.0, 1.0] },
+    { "id": "lamp_1", "type": "model", "model": "assets/models/street_lamp.glb", "position": [62.0, 0.0, 58.0], "scale": [1.0, 1.0, 1.0] },
+    { "id": "lighthouse", "type": "model", "model": "assets/models/lighthouse.glb", "position": [186.0, 0.0, -124.0], "scale": [1.0, 1.0, 1.0] },
+    { "id": "pine_1", "type": "model", "model": "assets/models/pine_tree.glb", "position": [20.0, 0.0, 40.0], "scale": [1.2, 1.2, 1.2] },
+    { "id": "pine_2", "type": "model", "model": "assets/models/pine_tree.glb", "position": [-10.0, 0.0, 20.0], "scale": [1.0, 1.0, 1.0] },
+    { "id": "pine_3", "type": "model", "model": "assets/models/pine_tree.glb", "position": [35.0, 0.0, 100.0], "scale": [1.3, 1.3, 1.3] },
+    { "id": "pine_4", "type": "model", "model": "assets/models/pine_tree.glb", "position": [-30.0, 0.0, -10.0], "scale": [1.1, 1.1, 1.1] },
+    { "id": "pine_5", "type": "model", "model": "assets/models/pine_tree.glb", "position": [95.0, 0.0, 95.0], "scale": [1.0, 1.0, 1.0] },
+    { "id": "pine_6", "type": "model", "model": "assets/models/pine_tree.glb", "position": [-100.0, 0.0, -20.0], "scale": [1.2, 1.2, 1.2] }
+  ]
+}

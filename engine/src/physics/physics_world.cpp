@@ -467,14 +467,20 @@ bool PhysicsWorld::buildTerrainCollider(const World& world) {
     const float halfSize = world.terrain().halfSize;
     const float cellSize = (halfSize * 2.0f) / static_cast<float>(kSampleCount - 1);
 
-    const bool islandMode = (world.terrain().mode == 1);
+    const bool islandMode = (world.terrain().mode == TerrainSettings::kModeEchoIslandPreset);
+    const bool dataDriven = (world.terrain().mode == TerrainSettings::kModeDataDriven);
     std::vector<float> samples(static_cast<std::size_t>(kSampleCount * kSampleCount), 0.0f);
     for (int iz = 0; iz < kSampleCount; ++iz) {
         const float z = -halfSize + static_cast<float>(iz) * cellSize;
         for (int ix = 0; ix < kSampleCount; ++ix) {
             const float x = -halfSize + static_cast<float>(ix) * cellSize;
             const float h = world.sampleTerrain(x, z).height;
-            if (islandMode) {
+            if (dataDriven) {
+                // Data-driven: solid everywhere except below collisionMinHeight (carved lakes stay open
+                // so props sink to the bed and float via buoyancy instead of resting on an invisible floor).
+                samples[static_cast<std::size_t>(iz * kSampleCount + ix)] =
+                    (h >= world.terrain().spec.collisionMinHeight) ? h : JPH::HeightFieldShapeConstants::cNoCollisionValue;
+            } else if (islandMode) {
                 // Organic island: full solid terrain collision across all dry beaches, valleys & peaks!
                 samples[static_cast<std::size_t>(iz * kSampleCount + ix)] =
                     (h > -4.8f) ? h : JPH::HeightFieldShapeConstants::cNoCollisionValue;
