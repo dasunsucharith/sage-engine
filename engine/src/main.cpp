@@ -64,6 +64,21 @@ int main(int argc, char* argv[]) {
             config.silentAudio = true;
         } else if (arg == "--no-vsync") {
             config.vsync = false;
+        } else if (arg == "--resolution" && i + 1 < argc) {
+            // e.g. --resolution 1920x1080 (window size; useful to test pixel-bound vs geometry-bound)
+            const std::string_view res(argv[++i]);
+            const auto x = res.find('x');
+            int w = 0, h = 0;
+            if (x != std::string_view::npos) {
+                std::from_chars(res.data(), res.data() + x, w);
+                std::from_chars(res.data() + x + 1, res.data() + res.size(), h);
+            }
+            if (w >= 320 && h >= 200 && w <= 7680 && h <= 4320) {
+                config.windowWidth = w;
+                config.windowHeight = h;
+            } else {
+                std::cerr << "[SAGE] --resolution expects WIDTHxHEIGHT, e.g. 1920x1080 (ignored)\n";
+            }
         } else if (arg == "--no-interp") {
             config.renderInterpolation = false;
         } else if (arg == "--screenshot" && i + 1 < argc) {

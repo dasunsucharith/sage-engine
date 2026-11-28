@@ -2908,20 +2908,33 @@ public:
 
         m_waterEntitiesScratch.clear();
 
-        // Draw Synchronized 160x160 3D Multi-Biome Heightmap Terrain Mesh (Hills, Mesas & Snow-Capped Mountains!)
-        if (world.terrain().enabled && m_terrainMesh.indexCount > 0) {
-            const glm::mat4 idMat(1.0f);
-            gl::uniform1i(m_uHasSkin, 0);
-            gl::uniform1i(m_uUseInstancing, 0);
-            gl::uniform1i(m_uIsGround, 2);
-            gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(idMat));
-            drawSubMesh(m_terrainMesh, glm::vec3(1.0f), glm::vec3(0.0f), 0.02f, 0.88f, 0.0f);
-            ++m_lastDrawCalls;
-        }
-
+        m_gpuProfiler.begin("opaqueEntities");
         m_lastCulledCount = 0;
         m_instBatchesScratch.clear();
+
+        // Draw order for early-Z: solid entities FRONT-TO-BACK so near objects hide far ones
+        // before the far ones are shaded; then ground planes & water in their ORIGINAL order
+        // (layered roads stay exactly as authored); terrain comes last of all (see below).
+        m_opaqueOrderScratch.clear();
+        m_opaqueGroundScratch.clear();
         for (const Entity& e : world.entities()) {
+            if (e.shape == EntityShape::Plane || e.shape == EntityShape::Water) {
+                m_opaqueGroundScratch.push_back(&e);
+            } else {
+                const float dx = e.position.x - camPos.x;
+                const float dy = e.position.y - camPos.y;
+                const float dz = e.position.z - camPos.z;
+                m_opaqueOrderScratch.push_back({dx * dx + dy * dy + dz * dz, &e});
+            }
+        }
+        std::stable_sort(m_opaqueOrderScratch.begin(), m_opaqueOrderScratch.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+        m_opaqueDrawList.clear();
+        for (const auto& item : m_opaqueOrderScratch) m_opaqueDrawList.push_back(item.second);
+        m_opaqueDrawList.insert(m_opaqueDrawList.end(), m_opaqueGroundScratch.begin(), m_opaqueGroundScratch.end());
+
+        for (const Entity* entityPtr : m_opaqueDrawList) {
+            const Entity& e = *entityPtr;
             if (!e.visible) continue;
             if (e.shape == EntityShape::Water) {
                 m_waterEntitiesScratch.push_back(&e);
@@ -3000,6 +3013,7 @@ public:
             ++m_lastDrawCalls;
         }
 
+        m_gpuProfiler.begin("opaqueInstanced");
         // Flush Automatic GPU-Instanced Static Prop Batches (Trees, Lamps, Towers, Rocks, Crates in 1 draw call per submesh!)
         if (!m_instBatchesScratch.empty()) {
             gl::uniform1i(m_uHasSkin, 0);
@@ -3035,6 +3049,22 @@ public:
                 }
             }
             gl::uniform1i(m_uUseInstancing, 0);
+        }
+
+        m_gpuProfiler.begin("opaqueTerrain");
+        // Terrain is drawn LAST among opaque geometry on purpose. Its shader is the most
+        // expensive (layered procedural noise + bump detail) and it covers most of the screen,
+        // so drawing it after buildings, roads and props lets the depth test reject hidden
+        // terrain pixels BEFORE they are shaded (early-Z). Opaque + depth-tested = same image.
+        if (world.terrain().enabled && m_terrainMesh.indexCount > 0) {
+            const glm::mat4 idMat(1.0f);
+            gl::uniform1i(m_uHasSkin, 0);
+            gl::uniform1i(m_uUseInstancing, 0);
+            gl::uniform1i(m_uIsGround, 2);
+            gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(idMat));
+            drawSubMesh(m_terrainMesh, glm::vec3(1.0f), glm::vec3(0.0f), 0.02f, 0.88f, 0.0f);
+            ++m_lastDrawCalls;
+            gl::uniform1i(m_uIsGround, 0);
         }
 
         m_gpuProfiler.begin("grass");
@@ -4247,6 +4277,9 @@ private:
     GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh, m_terrainMesh;
     bool m_terrainMeshBuilt = false;
     GpuPassProfiler m_gpuProfiler;
+    std::vector<std::pair<float, const Entity*>> m_opaqueOrderScratch; // Reused every frame (no allocations)
+    std::vector<const Entity*> m_opaqueGroundScratch;
+    std::vector<const Entity*> m_opaqueDrawList;
     int m_terrainModeCached = -1;
     std::uint32_t m_terrainRevisionCached = 0;
     std::uint32_t m_grassRevisionCached = 0;

@@ -71,6 +71,7 @@ cmake --build build --target sage
 | *(terrain demo)* | `.\build\sage.exe --scene scenes/terrain_demo.json --resource terrain_demo` | Orbiting preview of the data-driven terrain demo (also try `scenes/heightmap_demo.json`). |
 | `--resource <name>` | `.\build\sage.exe --resource stunt_sandbox` | Loads only this Lua resource (even if its manifest is disabled). |
 | `--no-vsync` | `.\build\sage.exe --no-vsync` | Disables VSync for interactive runs. |
+| `--resolution WxH` | `.\build\sage.exe --benchmark --resolution 1920x1080` | Sets the window size. Benchmark at two resolutions to tell pixel-bound passes (cost scales with pixel count) from geometry-bound ones. |
 | `--no-interp` | `.\build\sage.exe --no-interp` | Turns render interpolation off, drawing raw 60 Hz tick positions (for A/B comparison on high-refresh displays). |
 | `--screenshot <file.png>` | `.\build\sage.exe --smoke-test --screenshot shot.png` | With `--smoke-test`/`--benchmark`, saves a PNG of the final 3D frame (no UI overlay). |
 | `--cam px py pz tx ty tz` | `.\build\sage.exe --smoke-test --cam 0 40 -80 0 0 0` | Overrides the camera position and look-at target (useful for repeatable screenshots). |
