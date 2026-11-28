@@ -165,6 +165,7 @@ bool Engine::initialize() {
         return false;
     }
     m_renderer->setAssetRoot(m_projectRoot);
+    m_renderer->setLightTileCulling(m_config.lightTileCulling);
 
     const RendererInfo gpu = m_renderer->info();
     std::cout << "[SAGE][GPU] Backend : " << gpu.backendName << "\n";

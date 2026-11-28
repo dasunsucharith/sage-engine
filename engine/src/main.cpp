@@ -79,6 +79,8 @@ int main(int argc, char* argv[]) {
             } else {
                 std::cerr << "[SAGE] --resolution expects WIDTHxHEIGHT, e.g. 1920x1080 (ignored)\n";
             }
+        } else if (arg == "--no-light-tiles") {
+            config.lightTileCulling = false;
         } else if (arg == "--no-interp") {
             config.renderInterpolation = false;
         } else if (arg == "--screenshot" && i + 1 < argc) {

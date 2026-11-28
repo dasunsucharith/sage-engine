@@ -46,6 +46,9 @@ public:
     virtual void beginFrame(const ClearColor& clearColor) = 0;
     virtual void renderWorld(const World& world, float timeSeconds) = 0;
     virtual void endFrame() = 0;
+    // Tiled point-light culling (on by default). Off = every pixel loops over every light;
+    // the image is identical either way, so this exists for A/B performance comparison.
+    virtual void setLightTileCulling(bool enabled) { (void)enabled; }
     virtual bool captureScreenshot(const std::filesystem::path& outputPath) const {
         (void)outputPath;
         return false;

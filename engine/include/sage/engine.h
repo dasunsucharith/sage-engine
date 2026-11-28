@@ -26,7 +26,8 @@ struct EngineConfig {
     int maxFrames = 0;                 // 0 = run until window closes (non-zero for --smoke-test / --benchmark)
     int warmupFrames = 0;              // Leading frames excluded from steady-state frame-time stats
     bool benchmarkMode = false;        // true for --benchmark (VSync off, long measured window)
-    bool renderInterpolation = true;   // Blend the last two 60 Hz ticks when drawing (smooth on 120/144 Hz); --no-interp disables
+    bool renderInterpolation = true;
+    bool lightTileCulling = true;      // Tiled point-light culling; --no-light-tiles disables (A/B testing)   // Blend the last two 60 Hz ticks when drawing (smooth on 120/144 Hz); --no-interp disables
     bool silentAudio = false;          // true during --smoke-test
     std::filesystem::path resourcesPath = "resources";
     std::filesystem::path scenePath = "scenes/stunt_city.json";

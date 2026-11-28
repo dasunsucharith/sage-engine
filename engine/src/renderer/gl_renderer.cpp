@@ -301,6 +301,17 @@ uniform float uFogEnd;
 uniform int uPointLightCount;
 uniform vec4 uPointLightPosRadius[MAX_POINT_LIGHTS];
 uniform vec4 uPointLightColorInt[MAX_POINT_LIGHTS];
+// Clustered light culling: the screen is split into tiles AND depth slices; each cluster
+// stores a 16-bit mask of the lights that can reach it (stored exactly in a float).
+// The mask texture stacks the depth slices vertically: row = tileY + slice * tilesY.
+uniform sampler2D uLightTileMask;
+uniform int uLightTilesEnabled;
+uniform int uLightTileSize;
+uniform int uLightTilesY;
+uniform int uLightSlices;
+uniform vec3 uCameraForward;
+uniform float uClusterNear;
+uniform float uClusterLogScale;   // slices / log(far / near)
 
 out vec4 FragColor;
 
@@ -638,8 +649,18 @@ void main() {
     vec3 color = hemiAmbient + directSun + iblSpec + rimGlow + emissiveTerm;
 
     // Real-time Dynamic Point Lights evaluated with true GGX PBR!
+    // Tiled culling: this pixel's tile lists which lights can possibly reach it, so lights
+    // that are far away on screen are skipped without any per-light work.
+    uint tileLights = 0xFFFFu;
+    if (uLightTilesEnabled == 1) {
+        float viewZ = max(dot(vWorldPos - uCameraPos, uCameraForward), uClusterNear);
+        int slice = clamp(int(floor(log(viewZ / uClusterNear) * uClusterLogScale)), 0, uLightSlices - 1);
+        ivec2 tile = ivec2(gl_FragCoord.xy) / uLightTileSize;
+        tileLights = uint(texelFetch(uLightTileMask, ivec2(tile.x, tile.y + slice * uLightTilesY), 0).r + 0.5);
+    }
     for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
-        if (i >= uPointLightCount) break;
+        if (i >= uPointLightCount || tileLights == 0u) break;
+        if ((tileLights & (1u << uint(i))) == 0u) continue;
         vec3 lp = uPointLightPosRadius[i].xyz;
         float lr = max(uPointLightPosRadius[i].w, 0.5);
         vec3 lc = uPointLightColorInt[i].rgb * uPointLightColorInt[i].w;
@@ -2215,6 +2236,14 @@ public:
         m_uFogStart = gl::getUniformLocation(m_litProgram, "uFogStart");
         m_uFogEnd = gl::getUniformLocation(m_litProgram, "uFogEnd");
         m_uPointLightCount = gl::getUniformLocation(m_litProgram, "uPointLightCount");
+        m_uLightTileMask = gl::getUniformLocation(m_litProgram, "uLightTileMask");
+        m_uLightTilesEnabled = gl::getUniformLocation(m_litProgram, "uLightTilesEnabled");
+        m_uLightTileSize = gl::getUniformLocation(m_litProgram, "uLightTileSize");
+        m_uLightTilesY = gl::getUniformLocation(m_litProgram, "uLightTilesY");
+        m_uLightSlices = gl::getUniformLocation(m_litProgram, "uLightSlices");
+        m_uCameraForward = gl::getUniformLocation(m_litProgram, "uCameraForward");
+        m_uClusterNear = gl::getUniformLocation(m_litProgram, "uClusterNear");
+        m_uClusterLogScale = gl::getUniformLocation(m_litProgram, "uClusterLogScale");
         m_uPointLightPosRadius = gl::getUniformLocation(m_litProgram, "uPointLightPosRadius");
         m_uPointLightColorInt = gl::getUniformLocation(m_litProgram, "uPointLightColorInt");
 
@@ -2373,6 +2402,7 @@ public:
 
     void shutdown() override {
         m_gpuProfiler.shutdown();
+        if (m_lightTileTex) { glDeleteTextures(1, &m_lightTileTex); m_lightTileTex = 0; }
         for (auto& [path, model] : m_modelCache) model.destroy();
         m_modelCache.clear();
         m_failedModels.clear();
@@ -2905,6 +2935,24 @@ public:
             gl::uniform4fv(m_uPointLightPosRadius, lightCount, &lightPosRad[0].x);
             gl::uniform4fv(m_uPointLightColorInt, lightCount, &lightColInt[0].x);
         }
+        const bool useLightTiles = m_lightTileCulling && lightCount > 0;
+        if (useLightTiles) {
+            const float clusterNear = std::max(cam.nearPlane, 0.05f);
+            const float clusterFar = std::max(cam.farPlane, clusterNear * 2.0f);
+            buildLightTiles(viewProj, view, clusterNear, clusterFar, lightPosRad, lightCount);
+            gl::activeTexture(GL_TEXTURE0 + kLightTileTextureUnit);
+            glBindTexture(GL_TEXTURE_2D, m_lightTileTex);
+            gl::activeTexture(GL_TEXTURE0);
+            const glm::vec3 camForward = glm::normalize(camTarget - camPos);
+            gl::uniform1i(m_uLightTileMask, kLightTileTextureUnit);
+            gl::uniform1i(m_uLightTileSize, kLightTileSize);
+            gl::uniform1i(m_uLightTilesY, m_lightTilesY);
+            gl::uniform1i(m_uLightSlices, kLightSlices);
+            gl::uniform3f(m_uCameraForward, camForward.x, camForward.y, camForward.z);
+            gl::uniform1f(m_uClusterNear, clusterNear);
+            gl::uniform1f(m_uClusterLogScale, static_cast<float>(kLightSlices) / std::log(clusterFar / clusterNear));
+        }
+        gl::uniform1i(m_uLightTilesEnabled, useLightTiles ? 1 : 0);
 
         m_waterEntitiesScratch.clear();
 
@@ -4150,6 +4198,103 @@ private:
         return &it->second;
     }
 
+    void setLightTileCulling(bool enabled) override { m_lightTileCulling = enabled; }
+
+    // -----------------------------------------------------------------------
+    // Clustered light culling (exact)
+    // -----------------------------------------------------------------------
+    // The view is split into kLightTileSize-pixel screen tiles x kLightSlices depth slices
+    // (exponentially spaced between the near and far planes). Each light's bit is set in
+    // every cluster its sphere can touch:
+    //  * screen extent: the 8 corners of the box around the sphere are projected and the
+    //    rectangle is expanded by a pixel. Any point inside the sphere projects inside it;
+    //    if a corner is behind the camera the light covers every tile instead.
+    //  * depth extent: the sphere spans view depth [z - r, z + r]; one extra slice is added
+    //    on each side so CPU/GPU floating-point differences can never drop a light.
+    // The shader's falloff is exactly zero outside the sphere, so skipping a light in a
+    // cluster it can't reach never changes a pixel.
+    void buildLightTiles(const glm::mat4& viewProj, const glm::mat4& view, float nearZ, float farZ,
+                         const glm::vec4* posRad, int count) {
+        const int tilesX = (m_viewportWidth + kLightTileSize - 1) / kLightTileSize;
+        const int tilesY = (m_viewportHeight + kLightTileSize - 1) / kLightTileSize;
+        // Only ever touch our own texture unit, so other passes' bindings (shadow maps!) stay intact.
+        gl::activeTexture(GL_TEXTURE0 + kLightTileTextureUnit);
+        if (!m_lightTileTex || tilesX != m_lightTilesX || tilesY != m_lightTilesY) {
+            if (!m_lightTileTex) glGenTextures(1, &m_lightTileTex);
+            glBindTexture(GL_TEXTURE_2D, m_lightTileTex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, tilesX, tilesY * kLightSlices, 0, GL_RED, GL_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            m_lightTilesX = tilesX;
+            m_lightTilesY = tilesY;
+        }
+        const std::size_t sliceCells = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
+        m_lightClusterMasks.assign(sliceCells * kLightSlices, 0u);
+        const float logScale = static_cast<float>(kLightSlices) / std::log(farZ / nearZ);
+        const auto sliceOf = [&](float z) {
+            return static_cast<int>(std::floor(std::log(std::max(z, nearZ) / nearZ) * logScale));
+        };
+
+        for (int li = 0; li < count && li < 16; ++li) {
+            const glm::vec3 c(posRad[li]);
+            const float r = std::max(posRad[li].w, 0.5f); // Same minimum radius as the shader
+
+            // Depth extent in view space (view looks down -Z).
+            const float viewZ = -(view * glm::vec4(c, 1.0f)).z;
+            if (viewZ + r < nearZ * 0.5f || viewZ - r > farZ) {
+                continue; // Entirely in front of the near plane or beyond the far plane
+            }
+            const int s0 = std::clamp(sliceOf(viewZ - r) - 1, 0, kLightSlices - 1);
+            const int s1 = std::clamp(sliceOf(viewZ + r) + 1, 0, kLightSlices - 1);
+
+            // Screen extent.
+            int x0 = 0, y0 = 0, x1 = tilesX - 1, y1 = tilesY - 1;
+            bool everywhere = false;
+            float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+            for (int k = 0; k < 8; ++k) {
+                const glm::vec3 corner = c + glm::vec3((k & 1) ? r : -r, (k & 2) ? r : -r, (k & 4) ? r : -r);
+                const glm::vec4 clip = viewProj * glm::vec4(corner, 1.0f);
+                if (clip.w <= 1e-4f) {
+                    everywhere = true; // Box crosses the camera plane: be conservative
+                    break;
+                }
+                const float sx = (clip.x / clip.w * 0.5f + 0.5f) * static_cast<float>(m_viewportWidth);
+                const float sy = (clip.y / clip.w * 0.5f + 0.5f) * static_cast<float>(m_viewportHeight);
+                minX = std::min(minX, sx); maxX = std::max(maxX, sx);
+                minY = std::min(minY, sy); maxY = std::max(maxY, sy);
+            }
+            if (!everywhere) {
+                if (maxX < -1.0f || maxY < -1.0f ||
+                    minX > static_cast<float>(m_viewportWidth) + 1.0f || minY > static_cast<float>(m_viewportHeight) + 1.0f) {
+                    continue; // Entirely off screen: affects no visible pixel
+                }
+                x0 = std::clamp(static_cast<int>(std::floor((minX - 1.0f) / kLightTileSize)), 0, tilesX - 1);
+                x1 = std::clamp(static_cast<int>(std::floor((maxX + 1.0f) / kLightTileSize)), 0, tilesX - 1);
+                y0 = std::clamp(static_cast<int>(std::floor((minY - 1.0f) / kLightTileSize)), 0, tilesY - 1);
+                y1 = std::clamp(static_cast<int>(std::floor((maxY + 1.0f) / kLightTileSize)), 0, tilesY - 1);
+            }
+
+            const std::uint32_t bit = 1u << li;
+            for (int sl = s0; sl <= s1; ++sl) {
+                std::uint32_t* sliceBase = &m_lightClusterMasks[static_cast<std::size_t>(sl) * sliceCells];
+                for (int ty = y0; ty <= y1; ++ty) {
+                    std::uint32_t* row = sliceBase + static_cast<std::size_t>(ty) * static_cast<std::size_t>(tilesX);
+                    for (int tx = x0; tx <= x1; ++tx) row[tx] |= bit;
+                }
+            }
+        }
+
+        m_lightTileData.resize(m_lightClusterMasks.size());
+        for (std::size_t i = 0; i < m_lightClusterMasks.size(); ++i) {
+            m_lightTileData[i] = static_cast<float>(m_lightClusterMasks[i]); // <= 0xFFFF: exact in a float
+        }
+        glBindTexture(GL_TEXTURE_2D, m_lightTileTex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tilesX, tilesY * kLightSlices, GL_RED, GL_FLOAT, m_lightTileData.data());
+        gl::activeTexture(GL_TEXTURE0);
+    }
+
     // Calls fn for the mesh(es) to draw into a shadow map: the merged whole-model mesh when
     // available, otherwise each sub-mesh.
     template <typename Fn>
@@ -4229,6 +4374,17 @@ private:
     GLint m_uSkyZenith = -1, m_uSkyHorizon = -1, m_uGroundAmbient = -1, m_uAmbientIntensity = -1;
     GLint m_uFogStart = -1, m_uFogEnd = -1;
     GLint m_uPointLightCount = -1, m_uPointLightPosRadius = -1, m_uPointLightColorInt = -1;
+    GLint m_uLightTileMask = -1, m_uLightTilesEnabled = -1, m_uLightTileSize = -1;
+    GLint m_uLightTilesY = -1, m_uLightSlices = -1, m_uCameraForward = -1, m_uClusterNear = -1, m_uClusterLogScale = -1;
+    // Clustered light culling state
+    static constexpr int kLightTileSize = 32;
+    static constexpr int kLightSlices = 16;
+    static constexpr int kLightTileTextureUnit = 8;
+    bool m_lightTileCulling = true;
+    GLuint m_lightTileTex = 0;
+    int m_lightTilesX = 0, m_lightTilesY = 0;
+    std::vector<float> m_lightTileData;
+    std::vector<std::uint32_t> m_lightClusterMasks;
 
     GLuint m_grassProgram = 0;
     GLint m_grassViewProj = -1, m_grassCamPos = -1, m_grassInteractPos = -1, m_grassTime = -1;
