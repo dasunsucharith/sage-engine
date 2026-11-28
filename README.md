@@ -27,6 +27,7 @@
 All dependencies (**SDL3**, **Lua 5.4**, **sol2**, **nlohmann/json**, **GLM**, **cgltf**, **stb_image**, **Jolt Physics 5.7**, **Dear ImGui 1.92**, **miniaudio 0.11**) are fetched and built automatically via CMake `FetchContent`:
 
 ```powershell
+git lfs install   # once per machine: models, audio & textures are stored with Git LFS
 git clone https://github.com/dasunsucharith/sage-engine.git
 cd sage-engine
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

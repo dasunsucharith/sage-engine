@@ -27,6 +27,7 @@ winget install --id Microsoft.VisualStudio.BuildTools --exact --override "--pass
 
 ### Windows (Developer Command Prompt for VS or PowerShell)
 ```powershell
+git lfs install   # once per machine: models, audio & textures are stored with Git LFS
 git clone https://github.com/dasunsucharith/sage-engine.git
 cd sage-engine
 
@@ -50,6 +51,7 @@ cmake --build build --target sage
 
 ### Linux / macOS
 ```bash
+git lfs install   # once per machine: models, audio & textures are stored with Git LFS
 git clone https://github.com/dasunsucharith/sage-engine.git
 cd sage-engine
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
