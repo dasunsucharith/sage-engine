@@ -133,6 +133,10 @@ bool g_joltGlobalsInitialized = false;
 struct BodyEntry {
     JPH::BodyID bodyId;
     bool isDynamic = false;
+    // Cached handle of the World entity this body drives. Resolved from the entity name
+    // once (and again only if the entity was destroyed/respawned), so the per-tick
+    // position write-back is an O(1) array lookup instead of a string hash per body.
+    EntityHandle entity;
 };
 
 struct StaticObstacle2D {
@@ -971,19 +975,22 @@ void PhysicsWorld::step(float dt, World& world, float elapsedSeconds) {
     constexpr int kCollisionSteps = 1;
     m_impl->physicsSystem->Update(dt, kCollisionSteps, m_impl->tempAllocator.get(), m_impl->jobSystem.get());
 
-    for (const auto& [entityId, entry] : m_impl->bodiesByEntity) {
+    for (auto& [entityId, entry] : m_impl->bodiesByEntity) {
         if (!entry.isDynamic) {
             continue;
+        }
+        if (!world.isValid(entry.entity)) {
+            entry.entity = world.handleOf(entityId); // Null if the entity doesn't exist (write is skipped)
         }
         JPH::RVec3 pos;
         JPH::Quat rot;
         bi.GetPositionAndRotation(entry.bodyId, pos, rot);
         world.setPosition(
-            entityId,
+            entry.entity,
             static_cast<float>(pos.GetX()),
             static_cast<float>(pos.GetY()),
             static_cast<float>(pos.GetZ()));
-        world.setRotationQuat(entityId, rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW());
+        world.setRotationQuat(entry.entity, rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW());
     }
 }
 

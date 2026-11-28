@@ -1,5 +1,7 @@
 #pragma once
 
+#include "sage/world/component_store.h"
+
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -36,9 +38,56 @@ enum class EntityShape {
     Model
 };
 
+// ---------------------------------------------------------------------------
+// Entity handles
+// ---------------------------------------------------------------------------
+// A small, copyable ticket for an entity: `slot` is a stable index that never moves while
+// the entity lives, and `generation` increases every time a slot is reused. Looking an
+// entity up by handle is O(1), and a handle to a destroyed entity is detected as stale
+// (World::get returns nullptr) instead of silently pointing at whatever reused the slot.
+// String names (Entity::id) remain the public, human-friendly way to refer to entities.
+struct EntityHandle {
+    static constexpr std::uint32_t kInvalidSlot = 0xFFFFFFFFu;
+    std::uint32_t slot = kInvalidSlot;
+    std::uint32_t generation = 0;
+
+    bool isNull() const { return slot == kInvalidSlot; }
+    bool operator==(const EntityHandle& o) const { return slot == o.slot && generation == o.generation; }
+    bool operator!=(const EntityHandle& o) const { return !(*this == o); }
+};
+
+// ---------------------------------------------------------------------------
+// Components: optional data that only some entities have (see ComponentStore)
+// ---------------------------------------------------------------------------
+// Procedural head/upper-body look-at IK. Present only while look-at is enabled.
+struct LookAtComponent {
+    Vec3 target{0.0f, 0.0f, 0.0f};
+    float weight = 0.0f;
+};
+
+// Whole-body tumble ragdoll with get-up blending. Added by World::triggerRagdoll and kept
+// afterwards (its recovered state is the starting point of the next ragdoll).
+struct RagdollComponent {
+    bool active = false;
+    float blend = 0.0f;
+    float timer = 0.0f;
+    float elapsed = 0.0f;
+    Vec3 vel{0.0f, 0.0f, 0.0f};
+    Vec3 angVel{0.0f, 0.0f, 0.0f};
+    Vec3 angle{0.0f, 0.0f, 0.0f};
+
+    // Render interpolation (values at the start of the latest fixed tick / real values while blended)
+    float prevBlend = 0.0f;
+    Vec3 prevAngle{0.0f, 0.0f, 0.0f};
+    float backupBlend = 0.0f;
+    Vec3 backupAngle{0.0f, 0.0f, 0.0f};
+};
+
 // Scene entity rendered in 3D perspective (primitive, animated water, or .glb/.gltf model).
+// Data every entity needs lives here; optional features live in components.
 struct Entity {
     std::string id;
+    EntityHandle handle; // Assigned by World; stable for the entity's lifetime
     EntityShape shape = EntityShape::Box;
     std::string modelPath;
     Vec3 position{0.0f, 0.0f, 0.0f};
@@ -67,19 +116,7 @@ struct Entity {
     float blendDuration = 0.0f;
     float blendElapsed = 0.0f;
 
-    // Real-time Procedural Head/Upper-Body Look-At IK (v1.5.0)
-    bool lookAtEnabled = false;
-    Vec3 lookAtTarget{0.0f, 0.0f, 0.0f};
-    float lookAtWeight = 0.0f;
-
-    // Euphoria-Style Active-Physics Ragdoll & Hit-Reaction Blending (v1.5.0)
-    bool ragdollActive = false;
-    float ragdollBlend = 0.0f;
-    float ragdollTimer = 0.0f;
-    float ragdollElapsed = 0.0f;
-    Vec3 ragdollVel{0.0f, 0.0f, 0.0f};
-    Vec3 ragdollAngVel{0.0f, 0.0f, 0.0f};
-    Vec3 ragdollAngle{0.0f, 0.0f, 0.0f};
+    // Look-at IK and ragdoll state are components: see LookAtComponent / RagdollComponent.
 
     // Render interpolation: state captured at the START of the latest fixed tick.
     // The renderer draws a blend between this and the current (end-of-tick) state so
@@ -93,8 +130,6 @@ struct Entity {
         float animTime = 0.0f;
         float prevAnimTime = 0.0f;
         float blendElapsed = 0.0f;
-        float ragdollBlend = 0.0f;
-        Vec3 ragdollAngle{};
     };
     TickSnapshot interpPrev{};
     bool interpValid = false; // false = just spawned/teleported -> render current state as-is
@@ -308,6 +343,18 @@ public:
         Vec3 position = {},
         Vec3 scale = {1.0f, 1.0f, 1.0f});
 
+    // --- Handles (O(1), stale-safe). Names stay the public API; handles are for hot paths. ---
+    EntityHandle handleOf(const std::string& id) const;     // Null handle if no such entity
+    Entity* get(EntityHandle h);                             // nullptr if stale or null
+    const Entity* get(EntityHandle h) const;
+    bool isValid(EntityHandle h) const { return get(h) != nullptr; }
+    bool setPosition(EntityHandle h, float x, float y, float z);
+    bool setRotationQuat(EntityHandle h, float x, float y, float z, float w);
+
+    // --- Components (nullptr when the entity doesn't have one) ---
+    const LookAtComponent* lookAt(EntityHandle h) const;
+    const RagdollComponent* ragdoll(EntityHandle h) const;
+
     bool setPosition(const std::string& id, float x, float y, float z);
     // Moves an entity WITHOUT render interpolation (respawns, checkpoints, cut-scenes),
     // so it appears at the new spot instantly instead of sliding there over one tick.
@@ -387,8 +434,15 @@ public:
     const SkySettings& sky() const { return m_sky; }
 
 private:
-    std::vector<Entity> m_entities;
-    std::unordered_map<std::string, std::size_t> m_indexById;
+    EntityHandle allocateSlot(std::size_t denseIndex);
+
+    std::vector<Entity> m_entities;                            // Dense, iteration order
+    std::unordered_map<std::string, std::uint32_t> m_slotById; // name -> stable slot
+    std::vector<std::uint32_t> m_slotToDense;                  // slot -> index in m_entities
+    std::vector<std::uint32_t> m_slotGeneration;               // slot -> current generation
+    std::vector<std::uint32_t> m_freeSlots;
+    ComponentStore<LookAtComponent> m_lookAts;
+    ComponentStore<RagdollComponent> m_ragdolls;
     std::vector<PointLight> m_pointLights;
     std::unordered_map<std::string, std::size_t> m_lightIndexById;
     std::vector<Particle3D> m_particles;

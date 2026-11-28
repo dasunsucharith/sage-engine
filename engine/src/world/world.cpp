@@ -344,19 +344,78 @@ float evaluateTerrainHeightRaw(float x, float z, const TerrainSettings& cfg) {
 } // namespace
 
 Entity* World::findEntity(const std::string& id) {
-    const auto it = m_indexById.find(id);
-    if (it == m_indexById.end()) {
+    const auto it = m_slotById.find(id);
+    if (it == m_slotById.end()) {
         return nullptr;
     }
-    return &m_entities[it->second];
+    return &m_entities[m_slotToDense[it->second]];
 }
 
 const Entity* World::findEntity(const std::string& id) const {
-    const auto it = m_indexById.find(id);
-    if (it == m_indexById.end()) {
+    const auto it = m_slotById.find(id);
+    if (it == m_slotById.end()) {
         return nullptr;
     }
-    return &m_entities[it->second];
+    return &m_entities[m_slotToDense[it->second]];
+}
+
+EntityHandle World::allocateSlot(std::size_t denseIndex) {
+    std::uint32_t slot = 0;
+    if (!m_freeSlots.empty()) {
+        slot = m_freeSlots.back();
+        m_freeSlots.pop_back();
+    } else {
+        slot = static_cast<std::uint32_t>(m_slotToDense.size());
+        m_slotToDense.push_back(0);
+        m_slotGeneration.push_back(0);
+    }
+    m_slotToDense[slot] = static_cast<std::uint32_t>(denseIndex);
+    return {slot, m_slotGeneration[slot]};
+}
+
+EntityHandle World::handleOf(const std::string& id) const {
+    const Entity* e = findEntity(id);
+    return e ? e->handle : EntityHandle{};
+}
+
+Entity* World::get(EntityHandle h) {
+    if (h.slot >= m_slotGeneration.size() || m_slotGeneration[h.slot] != h.generation) {
+        return nullptr;
+    }
+    const std::uint32_t idx = m_slotToDense[h.slot];
+    if (idx >= m_entities.size() || m_entities[idx].handle != h) {
+        return nullptr; // Free slot
+    }
+    return &m_entities[idx];
+}
+
+const Entity* World::get(EntityHandle h) const {
+    return const_cast<World*>(this)->get(h);
+}
+
+bool World::setPosition(EntityHandle h, float x, float y, float z) {
+    if (Entity* e = get(h)) {
+        e->position = {x, y, z};
+        return true;
+    }
+    return false;
+}
+
+bool World::setRotationQuat(EntityHandle h, float x, float y, float z, float w) {
+    if (Entity* e = get(h)) {
+        e->rotationQuat = {x, y, z, w};
+        e->useQuaternion = true;
+        return true;
+    }
+    return false;
+}
+
+const LookAtComponent* World::lookAt(EntityHandle h) const {
+    return get(h) ? m_lookAts.get(h.slot) : nullptr;
+}
+
+const RagdollComponent* World::ragdoll(EntityHandle h) const {
+    return get(h) ? m_ragdolls.get(h.slot) : nullptr;
 }
 
 std::string World::spawnEntity(
@@ -389,7 +448,8 @@ std::string World::spawnEntity(
     entity.color = color;
     entity.waterSeabedY = position.y - 0.85f;
 
-    m_indexById[id] = m_entities.size();
+    entity.handle = allocateSlot(m_entities.size());
+    m_slotById[id] = entity.handle.slot;
     m_entities.push_back(std::move(entity));
     return id;
 }
@@ -422,7 +482,8 @@ std::string World::spawnModel(
     entity.scale = scale;
     entity.color = {1.0f, 1.0f, 1.0f};
 
-    m_indexById[id] = m_entities.size();
+    entity.handle = allocateSlot(m_entities.size());
+    m_slotById[id] = entity.handle.slot;
     m_entities.push_back(std::move(entity));
     return id;
 }
@@ -546,9 +607,9 @@ bool World::setAnimationSpeed(const std::string& id, float speed) {
 
 bool World::setLookAt(const std::string& id, Vec3 target, float weight) {
     if (Entity* e = findEntity(id)) {
-        e->lookAtEnabled = true;
-        e->lookAtTarget = target;
-        e->lookAtWeight = std::clamp(weight, 0.0f, 1.0f);
+        LookAtComponent& look = m_lookAts.getOrAdd(e->handle.slot);
+        look.target = target;
+        look.weight = std::clamp(weight, 0.0f, 1.0f);
         return true;
     }
     return false;
@@ -556,8 +617,7 @@ bool World::setLookAt(const std::string& id, Vec3 target, float weight) {
 
 bool World::clearLookAt(const std::string& id) {
     if (Entity* e = findEntity(id)) {
-        e->lookAtEnabled = false;
-        e->lookAtWeight = 0.0f;
+        m_lookAts.remove(e->handle.slot);
         return true;
     }
     return false;
@@ -565,15 +625,16 @@ bool World::clearLookAt(const std::string& id) {
 
 bool World::triggerRagdoll(const std::string& id, Vec3 impulse, float duration) {
     if (Entity* e = findEntity(id)) {
-        e->ragdollActive = true;
-        e->ragdollTimer = std::max(e->ragdollTimer, std::clamp(duration, 0.6f, 8.0f));
-        if (e->ragdollBlend < 0.05f) {
-            e->ragdollElapsed = 0.0f;
-            e->ragdollAngle = {0.0f, 0.0f, 0.0f};
+        RagdollComponent& r = m_ragdolls.getOrAdd(e->handle.slot);
+        r.active = true;
+        r.timer = std::max(r.timer, std::clamp(duration, 0.6f, 8.0f));
+        if (r.blend < 0.05f) {
+            r.elapsed = 0.0f;
+            r.angle = {0.0f, 0.0f, 0.0f};
         }
-        e->ragdollVel.x = std::clamp(e->ragdollVel.x + impulse.x, -38.0f, 38.0f);
-        e->ragdollVel.y = std::clamp(std::max(e->ragdollVel.y, 0.0f) + std::max(impulse.y, 4.5f), 2.5f, 24.0f);
-        e->ragdollVel.z = std::clamp(e->ragdollVel.z + impulse.z, -38.0f, 38.0f);
+        r.vel.x = std::clamp(r.vel.x + impulse.x, -38.0f, 38.0f);
+        r.vel.y = std::clamp(std::max(r.vel.y, 0.0f) + std::max(impulse.y, 4.5f), 2.5f, 24.0f);
+        r.vel.z = std::clamp(r.vel.z + impulse.z, -38.0f, 38.0f);
 
         // Derive realistic tumble angular velocity from horizontal impact vector!
         const float yawRad = e->rotation.y * (kPi / 180.0f);
@@ -583,9 +644,9 @@ bool World::triggerRagdoll(const std::string& id, Vec3 impulse, float duration) 
         const float rightZ = -std::sin(yawRad);
         const float hitFwd = impulse.x * fwdX + impulse.z * fwdZ;
         const float hitSide = impulse.x * rightX + impulse.z * rightZ;
-        e->ragdollAngVel.x = std::clamp(hitFwd * 0.45f + 2.8f, -11.0f, 11.0f);
-        e->ragdollAngVel.z = std::clamp(-hitSide * 0.45f, -10.0f, 10.0f);
-        e->ragdollAngVel.y = std::clamp((hitSide - hitFwd) * 0.18f, -6.0f, 6.0f);
+        r.angVel.x = std::clamp(hitFwd * 0.45f + 2.8f, -11.0f, 11.0f);
+        r.angVel.z = std::clamp(-hitSide * 0.45f, -10.0f, 10.0f);
+        r.angVel.y = std::clamp((hitSide - hitFwd) * 0.18f, -6.0f, 6.0f);
         return true;
     }
     return false;
@@ -593,22 +654,27 @@ bool World::triggerRagdoll(const std::string& id, Vec3 impulse, float duration) 
 
 bool World::isRagdollActive(const std::string& id) const {
     if (const Entity* e = findEntity(id)) {
-        return e->ragdollActive || e->ragdollBlend > 0.02f;
+        if (const RagdollComponent* r = m_ragdolls.get(e->handle.slot)) {
+            return r->active || r->blend > 0.02f;
+        }
     }
     return false;
 }
 
 float World::getRagdollBlend(const std::string& id) const {
     if (const Entity* e = findEntity(id)) {
-        return e->ragdollBlend;
+        if (const RagdollComponent* r = m_ragdolls.get(e->handle.slot)) {
+            return r->blend;
+        }
     }
     return 0.0f;
 }
 
 std::size_t World::activeRagdollCount() const {
     std::size_t count = 0;
-    for (const Entity& e : m_entities) {
-        if (e.ragdollActive || e.ragdollBlend > 0.02f) {
+    for (std::size_t i = 0; i < m_ragdolls.size(); ++i) {
+        const RagdollComponent& r = m_ragdolls.at(i);
+        if (r.active || r.blend > 0.02f) {
             ++count;
         }
     }
@@ -631,70 +697,74 @@ void World::updateAnimations(float dt) {
         }
 
         // Euphoria-Style Active-Physics Ragdoll Simulation & Smooth Get-Up Recovery (v1.5.0)
-        if (e.ragdollActive || e.ragdollBlend > 0.001f) {
-            e.ragdollElapsed += dt;
-            if (e.ragdollActive) {
-                e.ragdollBlend = std::min(1.0f, e.ragdollBlend + dt * 9.5f);
-                e.ragdollTimer -= dt;
+        // Processed in entity order (not component order) so ground-impact particles are
+        // spawned in exactly the same sequence as before components were introduced.
+        RagdollComponent* rp = m_ragdolls.get(e.handle.slot);
+        if (rp && (rp->active || rp->blend > 0.001f)) {
+            RagdollComponent& r = *rp;
+            r.elapsed += dt;
+            if (r.active) {
+                r.blend = std::min(1.0f, r.blend + dt * 9.5f);
+                r.timer -= dt;
 
                 // Ballistic gravity + aerodynamic drag
-                e.ragdollVel.y -= 24.0f * dt;
+                r.vel.y -= 24.0f * dt;
                 const float airDrag = std::exp(-0.45f * dt);
-                e.ragdollVel.x *= airDrag;
-                e.ragdollVel.z *= airDrag;
+                r.vel.x *= airDrag;
+                r.vel.z *= airDrag;
 
-                e.position.x = std::clamp(e.position.x + e.ragdollVel.x * dt, -270.0f, 270.0f);
-                e.position.y += e.ragdollVel.y * dt;
-                e.position.z = std::clamp(e.position.z + e.ragdollVel.z * dt, -270.0f, 270.0f);
+                e.position.x = std::clamp(e.position.x + r.vel.x * dt, -270.0f, 270.0f);
+                e.position.y += r.vel.y * dt;
+                e.position.z = std::clamp(e.position.z + r.vel.z * dt, -270.0f, 270.0f);
 
-                e.ragdollAngle.x += e.ragdollAngVel.x * dt;
-                e.ragdollAngle.y += e.ragdollAngVel.y * dt;
-                e.ragdollAngle.z += e.ragdollAngVel.z * dt;
+                r.angle.x += r.angVel.x * dt;
+                r.angle.y += r.angVel.y * dt;
+                r.angle.z += r.angVel.z * dt;
 
                 const TerrainSample ts = sampleTerrain(e.position.x, e.position.z);
                 const float floorY = ts.height;
                 if (e.position.y <= floorY) {
                     e.position.y = floorY;
-                    if (e.ragdollVel.y < -3.2f) {
-                        const float impactSpd = -e.ragdollVel.y;
-                        e.ragdollVel.y = impactSpd * 0.32f;
-                        e.ragdollVel.x *= 0.62f;
-                        e.ragdollVel.z *= 0.62f;
-                        e.ragdollAngVel.x *= 0.68f;
-                        e.ragdollAngVel.z *= 0.68f;
+                    if (r.vel.y < -3.2f) {
+                        const float impactSpd = -r.vel.y;
+                        r.vel.y = impactSpd * 0.32f;
+                        r.vel.x *= 0.62f;
+                        r.vel.z *= 0.62f;
+                        r.angVel.x *= 0.68f;
+                        r.angVel.z *= 0.68f;
                         spawnParticles(
                             {e.position.x, floorY + 0.15f, e.position.z},
-                            {e.ragdollVel.x * 0.25f, 1.8f, e.ragdollVel.z * 0.25f},
+                            {r.vel.x * 0.25f, 1.8f, r.vel.z * 0.25f},
                             {0.78f, 0.72f, 0.64f}, 5, 0.16f, 0.42f, false, 8.0f);
                     } else {
-                        e.ragdollVel.y = 0.0f;
+                        r.vel.y = 0.0f;
                         const float slideDrag = std::exp(-5.8f * dt);
-                        e.ragdollVel.x *= slideDrag;
-                        e.ragdollVel.z *= slideDrag;
+                        r.vel.x *= slideDrag;
+                        r.vel.z *= slideDrag;
                         const float angDrag = std::exp(-5.0f * dt);
-                        e.ragdollAngVel.x *= angDrag;
-                        e.ragdollAngVel.y *= angDrag;
-                        e.ragdollAngVel.z *= angDrag;
+                        r.angVel.x *= angDrag;
+                        r.angVel.y *= angDrag;
+                        r.angVel.z *= angDrag;
                         // Settle torso flat on back or front (~90 deg pitch) while grounded
-                        const float targetPitch = (e.ragdollAngle.x >= 0.0f) ? 1.48f : -1.48f;
-                        e.ragdollAngle.x += (targetPitch - e.ragdollAngle.x) * std::min(1.0f, 5.5f * dt);
-                        e.ragdollAngle.z *= std::exp(-4.0f * dt);
+                        const float targetPitch = (r.angle.x >= 0.0f) ? 1.48f : -1.48f;
+                        r.angle.x += (targetPitch - r.angle.x) * std::min(1.0f, 5.5f * dt);
+                        r.angle.z *= std::exp(-4.0f * dt);
                     }
                 }
 
-                const float horizSpdSq = e.ragdollVel.x * e.ragdollVel.x + e.ragdollVel.z * e.ragdollVel.z;
-                if (e.ragdollTimer <= 0.0f && e.position.y <= floorY + 0.08f && horizSpdSq < 1.2f) {
-                    e.ragdollActive = false;
+                const float horizSpdSq = r.vel.x * r.vel.x + r.vel.z * r.vel.z;
+                if (r.timer <= 0.0f && e.position.y <= floorY + 0.08f && horizSpdSq < 1.2f) {
+                    r.active = false;
                 }
             } else {
                 // Smooth Euphoria get-up recovery blend (1.0 -> 0.0 over ~0.65s)
-                e.ragdollBlend = std::max(0.0f, e.ragdollBlend - dt * 1.55f);
+                r.blend = std::max(0.0f, r.blend - dt * 1.55f);
                 const float settle = std::exp(-6.0f * dt);
-                e.ragdollAngle.x *= settle;
-                e.ragdollAngle.y *= settle;
-                e.ragdollAngle.z *= settle;
-                e.ragdollVel = {0.0f, 0.0f, 0.0f};
-                e.ragdollAngVel = {0.0f, 0.0f, 0.0f};
+                r.angle.x *= settle;
+                r.angle.y *= settle;
+                r.angle.z *= settle;
+                r.vel = {0.0f, 0.0f, 0.0f};
+                r.angVel = {0.0f, 0.0f, 0.0f};
             }
         }
     }
@@ -884,7 +954,7 @@ TerrainSample World::sampleTerrain(float x, float z) const {
 }
 
 bool World::hasEntity(const std::string& id) const {
-    return m_indexById.contains(id);
+    return m_slotById.contains(id);
 }
 
 Vec3 World::getPosition(const std::string& id) const {
@@ -895,27 +965,42 @@ Vec3 World::getPosition(const std::string& id) const {
 }
 
 bool World::destroy(const std::string& id) {
-    const auto it = m_indexById.find(id);
-    if (it == m_indexById.end()) {
+    const auto it = m_slotById.find(id);
+    if (it == m_slotById.end()) {
         return false;
     }
 
-    const std::size_t idx = it->second;
+    const std::uint32_t slot = it->second;
+    const std::size_t idx = m_slotToDense[slot];
     const std::size_t lastIdx = m_entities.size() - 1;
 
+    // Keep the entity array packed: move the last entity into the freed position. Its slot
+    // (and therefore every handle to it) stays the same; only its dense index changes.
     if (idx != lastIdx) {
         m_entities[idx] = std::move(m_entities[lastIdx]);
-        m_indexById[m_entities[idx].id] = idx;
+        m_slotToDense[m_entities[idx].handle.slot] = static_cast<std::uint32_t>(idx);
     }
-
     m_entities.pop_back();
-    m_indexById.erase(it);
+    m_slotById.erase(it);
+
+    // Drop the entity's components and retire the slot: bumping the generation makes every
+    // outstanding handle to the destroyed entity stale.
+    m_lookAts.remove(slot);
+    m_ragdolls.remove(slot);
+    ++m_slotGeneration[slot];
+    m_freeSlots.push_back(slot);
     return true;
 }
 
 void World::clear() {
+    for (const Entity& e : m_entities) {
+        ++m_slotGeneration[e.handle.slot]; // Invalidate all outstanding handles
+        m_freeSlots.push_back(e.handle.slot);
+    }
     m_entities.clear();
-    m_indexById.clear();
+    m_slotById.clear();
+    m_lookAts.clear();
+    m_ragdolls.clear();
     m_pointLights.clear();
     m_lightIndexById.clear();
     m_particles.clear();
@@ -1057,8 +1142,6 @@ Entity::TickSnapshot captureEntity(const Entity& e) {
     s.animTime = e.animTime;
     s.prevAnimTime = e.prevAnimTime;
     s.blendElapsed = e.blendElapsed;
-    s.ragdollBlend = e.ragdollBlend;
-    s.ragdollAngle = e.ragdollAngle;
     return s;
 }
 
@@ -1070,8 +1153,6 @@ void restoreEntity(Entity& e, const Entity::TickSnapshot& s) {
     e.animTime = s.animTime;
     e.prevAnimTime = s.prevAnimTime;
     e.blendElapsed = s.blendElapsed;
-    e.ragdollBlend = s.ragdollBlend;
-    e.ragdollAngle = s.ragdollAngle;
 }
 
 } // namespace
@@ -1080,6 +1161,11 @@ void World::captureTickSnapshot() {
     for (Entity& e : m_entities) {
         e.interpPrev = captureEntity(e);
         e.interpValid = true;
+    }
+    for (std::size_t i = 0; i < m_ragdolls.size(); ++i) {
+        RagdollComponent& r = m_ragdolls.at(i);
+        r.prevBlend = r.blend;
+        r.prevAngle = r.angle;
     }
     for (PointLight& pl : m_pointLights) {
         pl.interpPrevPosition = pl.position;
@@ -1096,6 +1182,11 @@ void World::applyRenderInterpolation(float alpha, bool includeCamera) {
     const float t = std::clamp(alpha, 0.0f, 1.0f);
     constexpr float kTeleportSq = kTeleportDistance * kTeleportDistance;
 
+    for (std::size_t i = 0; i < m_ragdolls.size(); ++i) {
+        RagdollComponent& r = m_ragdolls.at(i);
+        r.backupBlend = r.blend;
+        r.backupAngle = r.angle;
+    }
     m_interpBackup.resize(m_entities.size());
     for (std::size_t i = 0; i < m_entities.size(); ++i) {
         Entity& e = m_entities[i];
@@ -1123,11 +1214,13 @@ void World::applyRenderInterpolation(float alpha, bool includeCamera) {
         e.animTime = lerpForward(p.animTime, e.animTime, t);
         e.prevAnimTime = lerpForward(p.prevAnimTime, e.prevAnimTime, t);
         e.blendElapsed = lerpForward(p.blendElapsed, e.blendElapsed, t);
-        if (p.ragdollBlend != e.ragdollBlend) {
-            e.ragdollBlend = lerpf(p.ragdollBlend, e.ragdollBlend, t);
-        }
-        if (!sameVec3(p.ragdollAngle, e.ragdollAngle)) {
-            e.ragdollAngle = lerpVec3(p.ragdollAngle, e.ragdollAngle, t);
+        if (RagdollComponent* r = m_ragdolls.get(e.handle.slot)) {
+            if (r->prevBlend != r->blend) {
+                r->blend = lerpf(r->prevBlend, r->blend, t);
+            }
+            if (!sameVec3(r->prevAngle, r->angle)) {
+                r->angle = lerpVec3(r->prevAngle, r->angle, t);
+            }
         }
     }
 
@@ -1160,6 +1253,11 @@ void World::restoreFromRenderInterpolation() {
     const std::size_t n = std::min(m_entities.size(), m_interpBackup.size());
     for (std::size_t i = 0; i < n; ++i) {
         restoreEntity(m_entities[i], m_interpBackup[i]);
+    }
+    for (std::size_t i = 0; i < m_ragdolls.size(); ++i) {
+        RagdollComponent& r = m_ragdolls.at(i);
+        r.blend = r.backupBlend;
+        r.angle = r.backupAngle;
     }
     const std::size_t nl = std::min(m_pointLights.size(), m_lightBackup.size());
     for (std::size_t i = 0; i < nl; ++i) {

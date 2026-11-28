@@ -1809,7 +1809,10 @@ void sampleModelClips(
     }
 }
 
-void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, AnimEvalScratch& sc, std::vector<glm::mat4>& outWorld) {
+// `look` / `rag` are the entity's optional components (nullptr when it has none).
+void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, const LookAtComponent* look,
+                               const RagdollComponent* rag, AnimEvalScratch& sc, std::vector<glm::mat4>& outWorld) {
+    const float ragdollBlend = rag ? rag->blend : 0.0f;
     const std::size_t n = model.nodes.size();
     outWorld.resize(n);
     if (n == 0) return;
@@ -1833,11 +1836,11 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, Anim
     }
 
     // Real-Time Entity-Space Normalized Head/Neck/Chest Look-At IK (v1.6.0: Bipeds + Multi-Bone Quadrupeds!)
-    if (entity.lookAtEnabled && entity.lookAtWeight > 0.01f && entity.ragdollBlend < 0.75f) {
+    if (look && look->weight > 0.01f && ragdollBlend < 0.75f) {
         const float eyeH = std::max(model.boundCenter.y * std::abs(entity.scale.y) + 0.35f, 0.65f);
-        const float dx = entity.lookAtTarget.x - entity.position.x;
-        const float dy = entity.lookAtTarget.y - (entity.position.y + eyeH);
-        const float dz = entity.lookAtTarget.z - entity.position.z;
+        const float dx = look->target.x - entity.position.x;
+        const float dy = look->target.y - (entity.position.y + eyeH);
+        const float dz = look->target.z - entity.position.z;
         const float horiz = std::sqrt(dx * dx + dz * dz);
         if (horiz > 0.30f) {
             const float targetYaw = std::atan2(dx, dz);
@@ -1848,7 +1851,7 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, Anim
 
             // Smoothly fade look-at if target is far behind character's shoulders
             const float frontFade = 1.0f - std::clamp((std::abs(relYaw) - 1.20f) / 0.85f, 0.0f, 1.0f);
-            const float w = entity.lookAtWeight * frontFade * (1.0f - entity.ragdollBlend);
+            const float w = look->weight * frontFade * (1.0f - ragdollBlend);
             if (w > 0.01f) {
                 const float clampedYaw = std::clamp(relYaw, -0.95f, 0.95f);
                 const float clampedPitch = std::clamp(-std::atan2(dy, std::max(horiz, 0.6f)), -0.38f, 0.38f);
@@ -1877,16 +1880,16 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, Anim
     }
 
     // Euphoria-Style Active-Physics Ragdoll Bone Layer!
-    if (entity.ragdollBlend > 0.004f) {
-        const float b = std::clamp(entity.ragdollBlend, 0.0f, 1.0f);
+    if (rag && ragdollBlend > 0.004f) {
+        const float b = std::clamp(ragdollBlend, 0.0f, 1.0f);
         const float rb = b * b * (3.0f - 2.0f * b);
-        const float t = entity.ragdollElapsed;
+        const float t = rag->elapsed;
         const float speed = std::sqrt(
-            entity.ragdollVel.x * entity.ragdollVel.x +
-            entity.ragdollVel.y * entity.ragdollVel.y +
-            entity.ragdollVel.z * entity.ragdollVel.z);
+            rag->vel.x * rag->vel.x +
+            rag->vel.y * rag->vel.y +
+            rag->vel.z * rag->vel.z);
         const float flailAmp = std::clamp(speed * 0.08f, 0.12f, 1.0f);
-        const float airborneFactor = std::clamp(std::abs(entity.ragdollVel.y) * 0.14f, 0.0f, 1.0f);
+        const float airborneFactor = std::clamp(std::abs(rag->vel.y) * 0.14f, 0.0f, 1.0f);
         const float waveA = std::sin(t * 7.8f) * flailAmp;
         const float waveB = std::cos(t * 6.3f + 0.9f) * flailAmp;
 
@@ -1898,9 +1901,9 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, Anim
             switch (role) {
                 case BoneRole::Hips: {
                     const glm::quat qTumble =
-                        glm::angleAxis(entity.ragdollAngle.y, glm::vec3(0.0f, 1.0f, 0.0f)) *
-                        glm::angleAxis(entity.ragdollAngle.x, glm::vec3(1.0f, 0.0f, 0.0f)) *
-                        glm::angleAxis(entity.ragdollAngle.z, glm::vec3(0.0f, 0.0f, 1.0f));
+                        glm::angleAxis(rag->angle.y, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                        glm::angleAxis(rag->angle.x, glm::vec3(1.0f, 0.0f, 0.0f)) *
+                        glm::angleAxis(rag->angle.z, glm::vec3(0.0f, 0.0f, 1.0f));
                     deltaQ = qTumble;
                     const float groundFactor = 1.0f - airborneFactor;
                     sc.T[i].y = glm::mix(sc.T[i].y, sc.T[i].y - 0.62f * groundFactor, rb);
@@ -2556,6 +2559,7 @@ public:
         if (!m_initialized) return;
         GpuProfilerFrameScope gpuFrame(m_gpuProfiler);
         m_gpuProfiler.begin("setup");
+        m_frameWorld = &world; // Component lookups (look-at, ragdoll) while posing models
 
         const CameraState& cam = world.camera();
         const SkySettings& sky = world.sky();
@@ -3688,7 +3692,9 @@ private:
     const std::vector<glm::mat4>& getOrEvaluatePose(const GpuModel& model, const Entity& e) {
         CachedPose& entry = m_framePoseCache[&e];
         if (entry.frameId != m_frameCounter || entry.worldMats.size() != model.nodes.size()) {
-            evaluateModelNodeMatrices(model, e, m_animScratch, entry.worldMats);
+            const LookAtComponent* look = m_frameWorld ? m_frameWorld->lookAt(e.handle) : nullptr;
+            const RagdollComponent* rag = m_frameWorld ? m_frameWorld->ragdoll(e.handle) : nullptr;
+            evaluateModelNodeMatrices(model, e, look, rag, m_animScratch, entry.worldMats);
             entry.frameId = m_frameCounter;
         }
         return entry.worldMats;
@@ -4433,6 +4439,7 @@ private:
     GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh, m_terrainMesh;
     bool m_terrainMeshBuilt = false;
     GpuPassProfiler m_gpuProfiler;
+    const World* m_frameWorld = nullptr; // World being rendered (valid during renderWorld)
     std::vector<std::pair<float, const Entity*>> m_opaqueOrderScratch; // Reused every frame (no allocations)
     std::vector<const Entity*> m_opaqueGroundScratch;
     std::vector<const Entity*> m_opaqueDrawList;
