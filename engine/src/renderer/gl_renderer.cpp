@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -1967,6 +1968,9 @@ public:
     }
 
     void beginFrame() {
+        // CPU side (always on): how long the renderer spends issuing each pass.
+        m_cpuCurrent.clear();
+        m_cpuPassName = nullptr;
         if (!m_enabled || m_inFrame) return;
         m_inFrame = true;
         Slot& slot = m_slots[static_cast<std::size_t>(m_slotIndex)];
@@ -1979,6 +1983,9 @@ public:
 
     // Starts timing a named pass (ends the previous one). `name` must be a string literal.
     void begin(const char* name) {
+        closeCpuPass();
+        m_cpuPassName = name;
+        m_cpuPassStart = std::chrono::steady_clock::now();
         if (!m_enabled || !m_inFrame) return;
         Slot& slot = m_slots[static_cast<std::size_t>(m_slotIndex)];
         if (m_passOpen) {
@@ -1993,6 +2000,8 @@ public:
     }
 
     void endFrame() {
+        closeCpuPass();
+        m_cpuLast = m_cpuCurrent;
         if (!m_enabled || !m_inFrame) return;
         if (m_passOpen) {
             gl::endQuery(GL_TIME_ELAPSED);
@@ -2005,6 +2014,7 @@ public:
     }
 
     const std::vector<GpuPassTiming>& last() const { return m_last; }
+    const std::vector<TimingSample>& lastCpu() const { return m_cpuLast; }
     std::uint64_t completedFrames() const { return m_completedFrames; }
 
 private:
@@ -2013,6 +2023,13 @@ private:
         int count = 0;
         bool pending = false;
     };
+
+    void closeCpuPass() {
+        if (!m_cpuPassName) return;
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - m_cpuPassStart).count();
+        m_cpuCurrent.push_back({m_cpuPassName, static_cast<float>(ms)});
+        m_cpuPassName = nullptr;
+    }
 
     GLuint queryFor(int slot, int pass) const {
         return m_queries[static_cast<std::size_t>(slot * kMaxPasses + pass)];
@@ -2045,6 +2062,10 @@ private:
     std::vector<GpuPassTiming> m_last;
     std::uint64_t m_completedFrames = 0;
     std::uint64_t m_droppedFrames = 0;
+    const char* m_cpuPassName = nullptr;
+    std::chrono::steady_clock::time_point m_cpuPassStart{};
+    std::vector<TimingSample> m_cpuCurrent;
+    std::vector<TimingSample> m_cpuLast;
 };
 
 // Ends the profiler frame however renderWorld() exits (including early returns).
@@ -3256,6 +3277,7 @@ public:
     std::size_t lastSavedDrawCalls() const override { return m_lastSavedDrawCalls; }
     std::vector<GpuPassTiming> lastGpuPassTimings() const override { return m_gpuProfiler.last(); }
     std::uint64_t gpuTimingFrameId() const override { return m_gpuProfiler.completedFrames(); }
+    std::vector<TimingSample> lastCpuPassTimings() const override { return m_gpuProfiler.lastCpu(); }
 
 private:
     bool m_hdrProgramReady() const { return m_compositeProgram != 0; }

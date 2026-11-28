@@ -249,14 +249,24 @@ void Engine::shutdown() {
 
 void Engine::fixedTick(double dt) {
     // Remember the pre-tick state so render() can blend smoothly toward the post-tick state.
-    m_world.captureTickSnapshot();
+    {
+        CpuScope scope(m_cpuProfiler, "animation");
+        m_world.captureTickSnapshot();
+    }
     if (!m_freeFlyMode) {
+        CpuScope scope(m_cpuProfiler, "lua");
         m_lua.tick(dt);
     }
     // Physics samples the animated water at simulation time (never wall-clock), so the
     // same inputs always produce the same buoyancy result regardless of frame pacing.
-    m_physics.step(static_cast<float>(dt), m_world, static_cast<float>(m_simTime));
-    m_world.updateAnimations(static_cast<float>(dt));
+    {
+        CpuScope scope(m_cpuProfiler, "physics");
+        m_physics.step(static_cast<float>(dt), m_world, static_cast<float>(m_simTime));
+    }
+    {
+        CpuScope scope(m_cpuProfiler, "animation");
+        m_world.updateAnimations(static_cast<float>(dt));
+    }
     m_simTime += dt;
 }
 
@@ -265,13 +275,22 @@ void Engine::renderWorldInterpolated(const ClearColor& clearColor, double elapse
     // the real simulation state BEFORE the editor/Lua UI can read or edit it.
     // Free-fly and --cam cameras are already per-frame, so they are never blended.
     if (m_config.renderInterpolation) {
+        CpuScope scope(m_cpuProfiler, "interpolation");
         const bool blendCamera = !m_freeFlyMode && !m_config.overrideCamera;
         m_world.applyRenderInterpolation(m_interpAlpha, blendCamera);
     }
-    m_renderer->beginFrame(clearColor);
-    m_renderer->renderWorld(m_world, static_cast<float>(elapsedSeconds));
-    m_renderer->endFrame();
-    m_world.restoreFromRenderInterpolation();
+    {
+        // Everything the renderer does on the CPU: culling, sorting, state changes,
+        // uniform uploads and draw-call submission (split per pass in renderPasses).
+        CpuScope scope(m_cpuProfiler, "renderSubmit");
+        m_renderer->beginFrame(clearColor);
+        m_renderer->renderWorld(m_world, static_cast<float>(elapsedSeconds));
+        m_renderer->endFrame();
+    }
+    {
+        CpuScope scope(m_cpuProfiler, "interpolation");
+        m_world.restoreFromRenderInterpolation();
+    }
 }
 
 void Engine::render(double elapsedSeconds) {
@@ -301,6 +320,7 @@ void Engine::render(double elapsedSeconds) {
     stats.luaResources = m_lua.activeResourceCount();
     stats.freeFlyMode = m_freeFlyMode;
     stats.gpuPasses = m_renderer->lastGpuPassTimings();
+    stats.cpuSections = m_cpuProfiler.last(); // Previous frame (this one is still running)
 
     EditorActions actions;
     actions.onHotReload = [this]() {
@@ -326,11 +346,19 @@ void Engine::render(double elapsedSeconds) {
         return SceneLoader::saveToFile(exportPath, m_world, std::string("SAGE v") + kEngineVersion + " Exported World");
     };
     actions.onRenderCustomUi = [this]() {
+        CpuScope scope(m_cpuProfiler, "luaUI");
         m_lua.renderUI();
     };
 
-    m_editor.render(m_world, m_physics, m_audio, stats, actions);
-    m_window.swapBuffers();
+    {
+        CpuScope scope(m_cpuProfiler, "ui"); // Dear ImGui editor/HUD (Lua UI is its own section)
+        m_editor.render(m_world, m_physics, m_audio, stats, actions);
+    }
+    {
+        // Buffer swap: includes any wait for the driver/GPU to accept the frame.
+        CpuScope scope(m_cpuProfiler, "present");
+        m_window.swapBuffers();
+    }
 }
 
 namespace {
@@ -352,6 +380,17 @@ nlohmann::json summarizeSamples(std::vector<float> samples) {
     out["p95Ms"] = pct(95.0);
     out["maxMs"] = samples.back();
     return out;
+}
+
+// One summary object per name: [{name, meanMs, p50Ms, p95Ms, maxMs}, ...].
+nlohmann::json summarizeSeries(const std::vector<std::string>& names, const std::vector<std::vector<float>>& samples) {
+    nlohmann::json arr = nlohmann::json::array();
+    for (std::size_t i = 0; i < names.size() && i < samples.size(); ++i) {
+        nlohmann::json entry = summarizeSamples(samples[i]);
+        entry["name"] = names[i];
+        arr.push_back(entry);
+    }
+    return arr;
 }
 
 // Steady-state statistics over frames AFTER the warm-up window. Percentiles matter
@@ -395,24 +434,40 @@ nlohmann::json computeFrameStats(const std::vector<float>& frameTimesMs, int war
 
 } // namespace
 
+void Engine::SampleSeries::add(const std::vector<TimingSample>& frame) {
+    std::vector<float> row(names.size(), 0.0f);
+    for (const TimingSample& t : frame) {
+        auto it = std::find(names.begin(), names.end(), t.name);
+        if (it == names.end()) {
+            // New name: back-fill zeros for the frames before it first appeared.
+            names.emplace_back(t.name);
+            samples.emplace_back(frames, 0.0f);
+            row.push_back(0.0f);
+            it = std::prev(names.end());
+        }
+        row[static_cast<std::size_t>(it - names.begin())] += t.ms;
+    }
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        samples[i].push_back(row[i]);
+    }
+    ++frames;
+}
+
 void Engine::recordGpuPassTimings() {
     if (!m_renderer) return;
+    // CPU timings are immediate: record every measured frame.
+    m_cpuSectionSeries.add(m_cpuProfiler.last());
+    m_cpuRenderPassSeries.add(m_renderer->lastCpuPassTimings());
+
     const std::uint64_t id = m_renderer->gpuTimingFrameId();
     if (id == m_lastGpuTimingId) return; // No newly completed GPU frame yet
     m_lastGpuTimingId = id;
+    const std::vector<GpuPassTiming> gpu = m_renderer->lastGpuPassTimings();
     float total = 0.0f;
-    for (const GpuPassTiming& t : m_renderer->lastGpuPassTimings()) {
-        const std::string name(t.name);
-        auto it = std::find(m_gpuPassNames.begin(), m_gpuPassNames.end(), name);
-        std::size_t idx = static_cast<std::size_t>(it - m_gpuPassNames.begin());
-        if (it == m_gpuPassNames.end()) {
-            m_gpuPassNames.push_back(name);
-            m_gpuPassSamples.emplace_back();
-            idx = m_gpuPassNames.size() - 1;
-        }
-        m_gpuPassSamples[idx].push_back(t.ms);
+    for (const GpuPassTiming& t : gpu) {
         total += t.ms;
     }
+    m_gpuPassSeries.add(gpu);
     m_gpuTotalSamples.push_back(total);
 }
 
@@ -463,14 +518,19 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
         gpuTimes["note"] = "GPU milliseconds per render pass (GL_TIME_ELAPSED), after warm-up. Excludes the ImGui overlay.";
         gpuTimes["frames"] = m_gpuTotalSamples.size();
         gpuTimes["total"] = summarizeSamples(m_gpuTotalSamples);
-        nlohmann::json passes = nlohmann::json::array();
-        for (std::size_t i = 0; i < m_gpuPassNames.size(); ++i) {
-            nlohmann::json p = summarizeSamples(m_gpuPassSamples[i]);
-            p["name"] = m_gpuPassNames[i];
-            passes.push_back(p);
-        }
-        gpuTimes["passes"] = passes;
+        gpuTimes["passes"] = summarizeSeries(m_gpuPassSeries.names, m_gpuPassSeries.samples);
         j["steadyState"]["gpu"] = gpuTimes;
+    }
+    if (m_cpuSectionSeries.frames > 0) {
+        // CPU time per engine-loop section (exclusive: nested sections are not double-counted;
+        // "other" = frame time not covered by any section). renderPasses splits "renderSubmit".
+        nlohmann::json cpuTimes;
+        cpuTimes["note"] = "CPU milliseconds per frame (mean includes frames where a section didn't run), after warm-up. "
+                           "'present' includes waiting for the driver/GPU at buffer swap.";
+        cpuTimes["frames"] = m_cpuSectionSeries.frames;
+        cpuTimes["sections"] = summarizeSeries(m_cpuSectionSeries.names, m_cpuSectionSeries.samples);
+        cpuTimes["renderPasses"] = summarizeSeries(m_cpuRenderPassSeries.names, m_cpuRenderPassSeries.samples);
+        j["steadyState"]["cpu"] = cpuTimes;
     }
     if (m_config.benchmarkMode && j["steadyState"].value("measuredFrames", 0) > 0) {
         const auto& s = j["steadyState"];
@@ -487,6 +547,18 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
                   << gpuTimes["total"]["p50Ms"].get<double>() << " ms | mean per pass:";
         for (const auto& p : gpuTimes["passes"]) {
             std::cout << " " << p["name"].get<std::string>() << " " << p["meanMs"].get<double>();
+        }
+        std::cout << " ms\n";
+    }
+    if (m_config.benchmarkMode && j["steadyState"].contains("cpu")) {
+        const auto& cpuTimes = j["steadyState"]["cpu"];
+        std::cout << std::fixed << std::setprecision(2) << "[SAGE][Benchmark][CPU] mean per frame:";
+        for (const auto& sec : cpuTimes["sections"]) {
+            std::cout << " " << sec["name"].get<std::string>() << " " << sec["meanMs"].get<double>();
+        }
+        std::cout << " ms\n[SAGE][Benchmark][CPU] renderSubmit by pass:";
+        for (const auto& pass : cpuTimes["renderPasses"]) {
+            std::cout << " " << pass["name"].get<std::string>() << " " << pass["meanMs"].get<double>();
         }
         std::cout << " ms\n";
     }
@@ -572,7 +644,11 @@ int Engine::run() {
             m_frameTimesMs.push_back(m_lastFrameMs);
         }
 
-        m_window.pollEvents(m_input);
+        m_cpuProfiler.beginFrame();
+        {
+            CpuScope scope(m_cpuProfiler, "events");
+            m_window.pollEvents(m_input);
+        }
 
         if (m_window.wasResized()) {
             m_renderer->onResize(m_window.width(), m_window.height());
@@ -611,6 +687,7 @@ int Engine::run() {
         hotReloadTimer += frameDelta;
         if (hotReloadTimer >= kHotReloadInterval) {
             hotReloadTimer = 0.0;
+            CpuScope scope(m_cpuProfiler, "hotReload");
             if (!checkSceneHotReload() && m_lua.checkHotReload()) {
                 m_scriptTitle.clear();
             }
@@ -634,6 +711,7 @@ int Engine::run() {
         m_interpAlpha = static_cast<float>(accumulator / m_config.fixedTimeStep);
         render(m_renderTime);
 
+        m_cpuProfiler.endFrame();
         ++totalFrames;
         if (m_config.maxFrames > 0 && totalFrames > m_config.warmupFrames) {
             recordGpuPassTimings();

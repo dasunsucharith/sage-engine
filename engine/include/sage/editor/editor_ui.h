@@ -29,7 +29,8 @@ struct EditorStats {
     std::size_t savedDrawCalls = 0;
     std::size_t luaResources = 0;
     bool freeFlyMode = false;
-    std::vector<GpuPassTiming> gpuPasses; // Latest completed GPU frame, per render pass
+    std::vector<GpuPassTiming> gpuPasses;  // Latest completed GPU frame, per render pass
+    std::vector<TimingSample> cpuSections; // Previous frame, CPU ms per engine-loop section
 };
 
 struct EditorActions {
@@ -77,6 +78,7 @@ private:
     float m_fpsHistory[90]{};
     int m_fpsOffset = 0;
     std::vector<std::pair<std::string, float>> m_gpuPassSmoothed; // Smoothed for readable display
+    std::vector<std::pair<std::string, float>> m_cpuSectionSmoothed;
 };
 
 } // namespace sage

@@ -5,6 +5,7 @@
 #include "sage/physics/physics_world.h"
 #include "sage/platform/input.h"
 #include "sage/platform/window.h"
+#include "sage/profiling/profiler.h"
 #include "sage/renderer/renderer.h"
 #include "sage/scripting/lua_engine.h"
 #include "sage/world/world.h"
@@ -84,11 +85,20 @@ private:
     float m_peakFrameMs = 0.0f;
     double m_frameMsAccum = 0.0;
     std::vector<float> m_frameTimesMs;  // Raw (unclamped) per-frame CPU wall times for percentile telemetry
-    // Per-pass GPU times (ms) collected after warm-up in --benchmark / --smoke-test runs,
-    // in first-seen pass order. Index 0..N-1 matches m_gpuPassNames.
-    std::vector<std::string> m_gpuPassNames;
-    std::vector<std::vector<float>> m_gpuPassSamples;
+    // Named per-frame timings collected after warm-up in --benchmark / --smoke-test runs.
+    // Every frame records a value for every known name (0 if it didn't run that frame),
+    // so means are true per-frame costs and columns stay aligned.
+    struct SampleSeries {
+        std::vector<std::string> names;          // First-seen order
+        std::vector<std::vector<float>> samples; // samples[i] belongs to names[i]
+        std::size_t frames = 0;
+        void add(const std::vector<TimingSample>& frame);
+    };
+    SampleSeries m_gpuPassSeries;        // GPU ms per render pass
+    SampleSeries m_cpuSectionSeries;     // CPU ms per engine-loop section (exclusive)
+    SampleSeries m_cpuRenderPassSeries;  // CPU ms the renderer spent issuing each pass
     std::vector<float> m_gpuTotalSamples;
+    CpuProfiler m_cpuProfiler;
     std::uint64_t m_lastGpuTimingId = 0;
 
     // Simulation clock: advances by exactly fixedTimeStep per fixedTick, so physics,

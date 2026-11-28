@@ -23,7 +23,7 @@ Release build, RTX 5050 Laptop GPU, 1280×720, VSync off:
 | Stunt City | 2.71 ms | 1.76 ms | opaque 1.18, shadows 0.41, post 0.17, grass 0.11 |
 | Echo Island | 2.27 ms | 1.13 ms | opaque 0.56, shadows 0.30, grass 0.20, post 0.18 |
 
-**SAGE is CPU-bound.** The GPU finishes its work in roughly half to two-thirds of the frame and then waits. Faster shaders would barely change the frame rate. The CPU-side work is what matters: about 1,900 draw calls per frame in Stunt City, per-entity uniform setup, Lua and physics.
+> **Correction (see [025](025-cpu-frame-timing.md)):** this entry first concluded "SAGE is CPU-bound" because GPU total was well below frame time. CPU section timing then showed the CPU spends ~1.7 ms per frame *waiting* for the GPU at buffer swap, with only 0.25–1.2 ms of real work. GPU timer queries don't cover the ImGui overlay, clears or desktop compositing, so a gap between GPU total and frame time doesn't prove CPU-boundness. **SAGE is GPU/driver-bound** at these settings.
 
 ## How SAGE Uses This
 * `--benchmark` prints a GPU line, and the telemetry gains `steadyState.gpu` (`total` plus per-pass mean/p50/p95/max).

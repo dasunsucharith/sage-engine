@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "sage/profiling/profiler.h"
+
 namespace sage {
 
 class World;
@@ -18,11 +20,8 @@ struct ClearColor {
     float a = 1.0f;
 };
 
-// GPU time spent in one render pass (from GPU timer queries, a few frames behind).
-struct GpuPassTiming {
-    const char* name = "";  // Static string, e.g. "shadows", "opaque", "post"
-    float ms = 0.0f;
-};
+// Time spent in one render pass, e.g. "shadows", "opaque", "post".
+using GpuPassTiming = TimingSample;
 
 struct RendererInfo {
     std::string backendName;
@@ -66,6 +65,9 @@ public:
     virtual std::vector<GpuPassTiming> lastGpuPassTimings() const { return {}; }
     // Increments each time lastGpuPassTimings() holds a newly completed frame.
     virtual std::uint64_t gpuTimingFrameId() const { return 0; }
+    // CPU time the renderer spent issuing each pass in the LAST renderWorld() call
+    // (state changes, uniform uploads, draw-call submission). Available immediately.
+    virtual std::vector<TimingSample> lastCpuPassTimings() const { return {}; }
 };
 
 // Creates the default OpenGL 3.3 Core 3D renderer backend.
