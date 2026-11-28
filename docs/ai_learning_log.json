@@ -100,6 +100,12 @@
       "version": "1.6.0+",
       "domain": "CPU Frame Profiling & Bottleneck Diagnosis",
       "lesson": "Never infer 'CPU-bound' from GPU-timer total < frame time alone. Exclusive CPU sections (nested scopes subtract child time; 'other' = uncovered time; sums matched frame time within 0.01 ms) showed real CPU work of only ~1.2 ms (Stunt City) / ~0.25 ms (Echo Island), while ~1.7 ms per frame was spent BLOCKED waiting for the GPU/driver: in SwapBuffers ('present') in Stunt City, and inside ImGui's GL calls ('ui') on Echo Island, because the driver can stall on any GL call once its frame queue is full. GPU timer queries exclude the ImGui overlay, clears and desktop compositing, which explains the gap. So SAGE is GPU/driver-bound at 1280x720 on an RTX 5050 Laptop: optimize the opaque (0.6-1.1 ms GPU) and shadow passes. CPU submission is smaller but led by shadows (0.49 ms, 3 cascades) over opaque (0.25 ms); Lua (0.06 ms) and physics (0.03 ms) are negligible. Treat 'present' + driver stalls as GPU wait when reading profiles."
+    },
+    {
+      "id": "L017",
+      "version": "1.6.0+",
+      "domain": "Shadow Pass Analysis",
+      "lesson": "Measure before optimizing, then measure the optimization. Per-cascade GPU timing showed the whole shadow pass costs only ~0.37 ms GPU (near 0.15, mid 0.16, far 0.05 in Stunt City), terrain contributes ~0, and the opaque pass (~0.95 ms) dominates. So shadows were not a big lever. Merging sub-meshes into depth-only shadow meshes (static: whole model; animated: per node) cut static shadow draws from ~73 to ~15 per cascade for ~5 MB extra VRAM, but frame-time change was within run-to-run noise, and animated models gained little because their nodes mostly hold one sub-mesh each. The real win was CORRECTNESS: caster culling used an XZ circle (radius + 26 m) around the focus point, but each cascade is a sun-aligned orthographic box that stretches along the sun direction, so casters along that axis were dropped (counters: up to ~27 missed casters per frame in the mid cascade). Testing a rotation-safe bounding sphere against the light-space box restored them: screenshot diffs showed 16,946 pixels gaining shadow vs 55 losing. Use counters that compare the old and new tests on the same frames before trusting either."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [

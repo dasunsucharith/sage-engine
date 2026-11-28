@@ -31,6 +31,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [023](023-per-resource-saves.md) | Per-Resource Save Folders, Crash-Safe Writes & Automatic Save Migration | Foundation Fix (post-`v1.6.0`) |
 | [024](024-gpu-pass-timing.md) | Non-Blocking GPU Timer Queries per Render Pass | Foundation Fix (post-`v1.6.0`) |
 | [025](025-cpu-frame-timing.md) | CPU Frame Sections, Per-Pass Submission Cost & Why SAGE Is Actually GPU/Driver-Bound | Foundation Fix (post-`v1.6.0`) |
+| [026](026-shadow-pass-analysis.md) | Shadow Pass Analysis: Exact Light-Space Caster Culling (Missing-Shadow Fix), Merged Depth-Only Meshes & Per-Cascade Timing | Foundation Fix (post-`v1.6.0`) |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:

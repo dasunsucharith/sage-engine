@@ -12,7 +12,7 @@ The benchmark told us *how long* a frame took, but not *why*. A frame is a relay
 
 **No nesting.** `GL_TIME_ELAPSED` queries can't overlap, so `begin("opaque")` automatically ends the previous pass. An RAII `GpuProfilerFrameScope` closes the frame even if `renderWorld` returns early. The timer functions are loaded as *optional*, so a driver without them just disables profiling.
 
-**Passes timed:** `setup`, `shadows`, `sky`, `opaque`, `grass`, `water`, `particles`, `rain`, `post`. The ImGui overlay and buffer swap aren't included.
+**Passes timed:** `setup`, `shadowNear`, `shadowMid`, `shadowFar` (one per cascade, see [026](026-shadow-pass-analysis.md)), `sky`, `opaque`, `grass`, `water`, `particles`, `rain`, `post`. The ImGui overlay and buffer swap aren't included.
 
 ## What it revealed
 

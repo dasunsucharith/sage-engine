@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdio>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -1413,9 +1414,18 @@ struct GpuModel {
     bool hasAnimations = false;
     bool hasSkins = false;
 
+    // Depth-only shadow meshes. The shadow pass ignores materials, so all sub-meshes that
+    // move together can be drawn in ONE call: per node for animated/skinned models, or the
+    // whole model for static ones. indexCount == 0 means "not merged, draw sub-meshes".
+    std::vector<GpuSubMesh> shadowNodeMeshes; // Indexed like `nodes` (animated/skinned models)
+    GpuSubMesh shadowWholeMesh;               // Static models
+
     void destroy() {
         for (auto& sm : subMeshes) sm.destroy();
         subMeshes.clear();
+        for (auto& sm : shadowNodeMeshes) sm.destroy();
+        shadowNodeMeshes.clear();
+        shadowWholeMesh.destroy();
         nodes.clear();
         skins.clear();
         animations.clear();
@@ -2492,6 +2502,8 @@ public:
             std::cout << "[SAGE][Preload] Pre-warmed " << preloaded
                       << " .glb model(s) + 3D Terrain + " << m_grassCount
                       << " grass clumps + GPU shaders before Frame 1!\n";
+            std::cout << "[SAGE][Shadows] Merged depth-only shadow meshes use "
+                      << (m_shadowMergedBytes / 1024) << " KB of extra GPU memory\n";
         }
     }
 
@@ -2589,7 +2601,6 @@ public:
             m_framePoseCache.clear();
         }
 
-        m_gpuProfiler.begin("shadows");
         // --- Pass 0: Texel-Snapped Time-Sliced 3-Split 2048x2048 Cascaded Shadow Maps (24m / 92m / 255m!) ---
         const bool useShadows = sky.shadowsEnabled && (m_shadowFbo != 0) && (m_shadowFboMid != 0) && (m_shadowFboFar != 0);
         glm::mat4 lightViewProj(1.0f);
@@ -2607,7 +2618,8 @@ public:
                 lightView[3][0] += std::floor(originLS.x / texelWorld) * texelWorld - originLS.x;
                 lightView[3][1] += std::floor(originLS.y / texelWorld) * texelWorld - originLS.y;
 
-                const glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, 5.0f, farDist);
+                constexpr float kShadowNear = 5.0f;
+                const glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, kShadowNear, farDist);
                 const glm::mat4 lvp = lightProj * lightView;
 
                 gl::bindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -2632,7 +2644,6 @@ public:
                 }
 
                 m_instBatchesScratch.clear();
-                const float cullDistSq = (radius + 26.0f) * (radius + 26.0f);
                 const float minWorldRadius = (cascadeIdx == 2) ? 3.2f : ((cascadeIdx == 1) ? 1.1f : 0.0f);
                 for (const Entity& e : world.entities()) {
                     if (!e.visible || e.shape == EntityShape::Plane || e.shape == EntityShape::Water || e.shape == EntityShape::Ring) {
@@ -2641,8 +2652,26 @@ public:
                     const float dx = e.position.x - focusPoint.x;
                     const float dz = e.position.z - focusPoint.z;
                     const float distSq = dx * dx + dz * dz;
-                    if (distSq > cullDistSq) {
-                        continue;
+                    // Cull against this cascade's actual light-space box (an orthographic box
+                    // aligned with the sun), using a rotation-safe bounding sphere. The old XZ
+                    // circle around the focus point missed casters lying along the sun direction,
+                    // so their shadows vanished from the mid/far cascades.
+                    {
+                        const float maxS = std::max({std::abs(e.scale.x), std::abs(e.scale.y), std::abs(e.scale.z), 0.1f});
+                        float casterRadius = maxS * 0.9f + 0.5f;
+                        if (e.shape == EntityShape::Model) {
+                            if (const auto it = m_modelCache.find(e.modelPath); it != m_modelCache.end()) {
+                                casterRadius = (glm::length(it->second.boundCenter) + it->second.boundRadius) * maxS;
+                            }
+                        }
+                        const glm::vec4 ls = lightView * glm::vec4(e.position.x, e.position.y, e.position.z, 1.0f);
+                        const bool inBox = std::abs(ls.x) <= radius + casterRadius &&
+                                           std::abs(ls.y) <= radius + casterRadius &&
+                                           -ls.z >= kShadowNear - casterRadius &&
+                                           -ls.z <= farDist + casterRadius;
+                        if (!inBox) {
+                            continue;
+                        }
                     }
                     const float maxScale = std::max({std::abs(e.scale.x), std::abs(e.scale.y), std::abs(e.scale.z), 0.1f});
                     if (e.shape == EntityShape::Model) {
@@ -2673,10 +2702,18 @@ public:
                                     const glm::mat4 fullMat = entityMat * nodeWorld[ni];
                                     gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(fullMat));
                                 }
-                                for (const std::size_t smIdx : node.subMeshIndices) {
-                                    gl::bindVertexArray(gpuModel->subMeshes[smIdx].vao);
-                                    glDrawElements(GL_TRIANGLES, gpuModel->subMeshes[smIdx].indexCount, GL_UNSIGNED_INT, nullptr);
+                                if (ni < gpuModel->shadowNodeMeshes.size() && gpuModel->shadowNodeMeshes[ni].indexCount > 0) {
+                                    // All of this node's sub-meshes merged into one depth-only draw.
+                                    const GpuSubMesh& merged = gpuModel->shadowNodeMeshes[ni];
+                                    gl::bindVertexArray(merged.vao);
+                                    glDrawElements(GL_TRIANGLES, merged.indexCount, GL_UNSIGNED_INT, nullptr);
                                     ++m_lastDrawCalls;
+                                } else {
+                                    for (const std::size_t smIdx : node.subMeshIndices) {
+                                        gl::bindVertexArray(gpuModel->subMeshes[smIdx].vao);
+                                        glDrawElements(GL_TRIANGLES, gpuModel->subMeshes[smIdx].indexCount, GL_UNSIGNED_INT, nullptr);
+                                        ++m_lastDrawCalls;
+                                    }
                                 }
                             }
                             gl::uniform1i(m_shadowHasSkin, 0);
@@ -2685,11 +2722,11 @@ public:
                         } else {
                             gl::uniform1i(m_shadowHasSkin, 0);
                             gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
-                            for (const GpuSubMesh& sm : gpuModel->subMeshes) {
+                            forEachShadowMesh(*gpuModel, [&](const GpuSubMesh& sm) {
                                 gl::bindVertexArray(sm.vao);
                                 glDrawElements(GL_TRIANGLES, sm.indexCount, GL_UNSIGNED_INT, nullptr);
                                 ++m_lastDrawCalls;
-                            }
+                            });
                         }
                     } else {
                         if (maxScale < minWorldRadius) continue;
@@ -2716,22 +2753,22 @@ public:
                                 instances.data(),
                                 GL_DYNAMIC_DRAW);
                             gl::uniform1i(m_shadowUseInstancing, 1);
-                            for (const GpuSubMesh& sm : gpuModel->subMeshes) {
+                            forEachShadowMesh(*gpuModel, [&](const GpuSubMesh& sm) {
                                 gl::bindVertexArray(sm.vao);
                                 gl::drawElementsInstanced(
                                     GL_TRIANGLES, sm.indexCount, GL_UNSIGNED_INT, nullptr,
                                     static_cast<GLsizei>(count));
                                 ++m_lastDrawCalls;
                                 m_lastSavedDrawCalls += (count - 1);
-                            }
+                            });
                         } else {
                             gl::uniform1i(m_shadowUseInstancing, 0);
                             gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(instances[0].model));
-                            for (const GpuSubMesh& sm : gpuModel->subMeshes) {
+                            forEachShadowMesh(*gpuModel, [&](const GpuSubMesh& sm) {
                                 gl::bindVertexArray(sm.vao);
                                 glDrawElements(GL_TRIANGLES, sm.indexCount, GL_UNSIGNED_INT, nullptr);
                                 ++m_lastDrawCalls;
-                            }
+                            });
                         }
                     }
                     gl::uniform1i(m_shadowUseInstancing, 0);
@@ -2741,8 +2778,11 @@ public:
                 return lvp;
             };
 
+            m_gpuProfiler.begin("shadowNear");
             lightViewProj = renderShadowCascade(m_shadowFbo, kShadowMapSize, 0, 24.0f, 80.0f, 190.0f);
+            m_gpuProfiler.begin("shadowMid");
             lightViewProjMid = renderShadowCascade(m_shadowFboMid, kShadowMapSizeFar, 1, 92.0f, 145.0f, 340.0f);
+            m_gpuProfiler.begin("shadowFar");
             const bool needFarUpdate =
                 !m_farShadowValid ||
                 ((m_frameCounter & 1u) == 0u) ||
@@ -3730,6 +3770,10 @@ private:
         glm::vec3 bbMax(-1e9f, -1e9f, -1e9f);
         bool hasBounds = false;
 
+        // CPU copy of each sub-mesh's geometry (aligned with gpuModel.subMeshes), kept only
+        // while loading so depth-only shadow meshes can be merged afterwards.
+        std::vector<std::pair<std::vector<Vertex3D>, std::vector<std::uint32_t>>> cpuGeom;
+
         auto uploadMeshPrimitives = [&](const cgltf_mesh* mesh, const glm::mat4& bakeTransform, std::vector<std::size_t>* outIndices) {
             const glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(bakeTransform)));
             for (cgltf_size pIdx = 0; pIdx < mesh->primitives_count; ++pIdx) {
@@ -3809,6 +3853,7 @@ private:
                     }
                 }
 
+                cpuGeom.emplace_back(vertices, indices);
                 GpuSubMesh sm;
                 sm.upload(vertices, indices);
                 sm.attachInstanceBuffer(m_propInstVbo);
@@ -4030,6 +4075,7 @@ private:
 
             for (auto& bucket : buckets) {
                 if (bucket.verts.empty() || bucket.indices.empty()) continue;
+                cpuGeom.emplace_back(bucket.verts, bucket.indices);
                 GpuSubMesh sm;
                 sm.upload(bucket.verts, bucket.indices);
                 sm.attachInstanceBuffer(m_propInstVbo);
@@ -4058,6 +4104,7 @@ private:
 
         cgltf_free(data);
         if (gpuModel.subMeshes.empty()) { m_failedModels.insert(rawPath); return nullptr; }
+        buildShadowMeshes(gpuModel, cpuGeom);
         if (hasBounds) {
             gpuModel.boundCenter = (bbMin + bbMax) * 0.5f;
             gpuModel.boundRadius = std::max(glm::length(bbMax - bbMin) * 0.5f, 0.5f);
@@ -4072,6 +4119,56 @@ private:
         auto [it, inserted] = m_modelCache.emplace(rawPath, std::move(gpuModel));
         return &it->second;
     }
+
+    // Calls fn for the mesh(es) to draw into a shadow map: the merged whole-model mesh when
+    // available, otherwise each sub-mesh.
+    template <typename Fn>
+    static void forEachShadowMesh(const GpuModel& model, Fn&& fn) {
+        if (model.shadowWholeMesh.indexCount > 0) {
+            fn(model.shadowWholeMesh);
+            return;
+        }
+        for (const GpuSubMesh& sm : model.subMeshes) fn(sm);
+    }
+
+    // Concatenates sub-mesh geometry into single depth-only meshes for the shadow pass.
+    // Positions/skin attributes are kept; materials are irrelevant to depth rendering.
+    void buildShadowMeshes(GpuModel& model,
+                           const std::vector<std::pair<std::vector<Vertex3D>, std::vector<std::uint32_t>>>& geom) {
+        if (geom.size() != model.subMeshes.size()) {
+            return; // Defensive: alignment broken, keep per-sub-mesh shadow drawing.
+        }
+        const auto mergeInto = [&geom, this](GpuSubMesh& out, const std::vector<std::size_t>& subMeshIdx) {
+            std::vector<Vertex3D> verts;
+            std::vector<std::uint32_t> indices;
+            for (const std::size_t i : subMeshIdx) {
+                const auto base = static_cast<std::uint32_t>(verts.size());
+                verts.insert(verts.end(), geom[i].first.begin(), geom[i].first.end());
+                for (const std::uint32_t idx : geom[i].second) {
+                    indices.push_back(base + idx);
+                }
+            }
+            if (!indices.empty()) {
+                out.upload(verts, indices);
+                out.attachInstanceBuffer(m_propInstVbo);
+                m_shadowMergedBytes += verts.size() * sizeof(Vertex3D) + indices.size() * sizeof(std::uint32_t);
+            }
+        };
+        if (model.hasAnimations || model.hasSkins) {
+            model.shadowNodeMeshes.resize(model.nodes.size());
+            for (std::size_t n = 0; n < model.nodes.size(); ++n) {
+                if (model.nodes[n].subMeshIndices.size() >= 2) {
+                    mergeInto(model.shadowNodeMeshes[n], model.nodes[n].subMeshIndices);
+                }
+            }
+        } else if (model.subMeshes.size() >= 2) {
+            std::vector<std::size_t> all(model.subMeshes.size());
+            for (std::size_t i = 0; i < all.size(); ++i) all[i] = i;
+            mergeInto(model.shadowWholeMesh, all);
+        }
+    }
+
+    std::size_t m_shadowMergedBytes = 0; // Extra GPU memory used by merged shadow meshes
 
     RendererInfo m_info;
     std::filesystem::path m_assetRoot;
