@@ -59,6 +59,16 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
 
     const std::string sceneName = root.value("name", scenePath.stem().string());
 
+    if (root.contains("terrain") && root["terrain"].is_object()) {
+        const auto& tJson = root["terrain"];
+        world.terrain().enabled = tJson.value("enabled", world.terrain().enabled);
+        const std::string modeStr = tJson.value("mode", "city");
+        world.terrain().mode = (modeStr == "island" || modeStr == "wilderness") ? 1 : 0;
+        world.terrain().halfSize = tJson.value("halfSize", world.terrain().halfSize);
+        world.terrain().maxHeight = tJson.value("maxHeight", world.terrain().maxHeight);
+        world.terrain().gridResolution = tJson.value("gridResolution", world.terrain().gridResolution);
+    }
+
     if (root.contains("sky") && root["sky"].is_object()) {
         const auto& skyJson = root["sky"];
         if (skyJson.contains("timeOfDay") && skyJson["timeOfDay"].is_number()) {
@@ -114,11 +124,23 @@ bool SceneLoader::loadFromFile(const std::filesystem::path& scenePath, World& wo
             const bool emissive = e.value("emissive", false);
             const bool visible = e.value("visible", true);
 
-            // Auto-ground off-road 3D models cleanly onto sculpted 3D terrain hills (zero buried trees or floating cabins!)
+            // Auto-ground off-road 3D models cleanly onto sculpted 3D terrain hills using 5-point footprint sampling
+            // so buildings, boulders & trees embed firmly on steep slopes and NEVER float in mid-air!
             if (type == "model" && world.terrain().enabled && std::abs(pos.y) < 0.05f) {
-                const float th = world.sampleTerrain(pos.x, pos.z).height;
-                if (th > 0.05f) {
-                    pos.y += th;
+                const float hc = world.sampleTerrain(pos.x, pos.z).height;
+                if (world.terrain().mode == 1) {
+                    const float footR = std::clamp(std::max(scale.x, scale.z) * 1.45f, 0.8f, 3.6f);
+                    const float hMin = std::min({
+                        hc,
+                        world.sampleTerrain(pos.x + footR, pos.z).height,
+                        world.sampleTerrain(pos.x - footR, pos.z).height,
+                        world.sampleTerrain(pos.x, pos.z + footR).height,
+                        world.sampleTerrain(pos.x, pos.z - footR).height
+                    });
+                    // Sink gently toward lowest edge of footprint so slopes never expose floating undersides!
+                    pos.y += (hMin * 0.78f + hc * 0.22f) - 0.14f;
+                } else if (hc > 0.05f) {
+                    pos.y += hc;
                 }
             }
 

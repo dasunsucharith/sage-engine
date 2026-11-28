@@ -25,6 +25,11 @@ struct EngineConfig {
     bool silentAudio = false;          // true during --smoke-test
     std::filesystem::path resourcesPath = "resources";
     std::filesystem::path scenePath = "scenes/stunt_city.json";
+    std::string onlyResource;          // Optional: load only this single Lua resource (e.g., --resource survival_game)
+    std::filesystem::path screenshotPath; // Optional: save a PNG of the 3D rendered frame on exit
+    bool overrideCamera = false;
+    Vec3 overrideCamPos{};
+    Vec3 overrideCamTarget{};
 };
 
 class Engine {

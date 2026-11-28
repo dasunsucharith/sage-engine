@@ -1,0 +1,10 @@
+{
+  "name": "survival_game",
+  "version": "0.1.0",
+  "author": "Dasun Sucharith & SAGE AI",
+  "enabled": false,
+  "description": "Wild Frontier: Echo Island — AAA Open-World Wilderness Survival Game built on SAGE Engine v1.5.0 with vitals, day/night & storms, resource gathering, base building, crafting, hunting, Look-At IK & Euphoria Ragdoll wildlife/raiders, helicopter rescue, persistent save/load, and automatic Meshy .glb drop-in asset swapping.",
+  "scripts": [
+    "main.lua"
+  ]
+}

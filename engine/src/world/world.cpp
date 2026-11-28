@@ -71,11 +71,73 @@ float fbmTerrain(float x, float z) {
     return sum;
 }
 
-// Deterministic 3D open-world heightmap: flat on all highways, ring roads, Downtown Plaza & Marina Lagoon,
-// rolling drivable hills in Alpine Highlands & Red Rock Desert, and panoramic mountain ranges framing the island!
+// Deterministic 3D open-world heightmap:
+//   mode == 0 (StuntCity): flat highways/ring roads/plaza + rolling hills + surrounding snow mountains
+//   mode == 1 (WildernessIsland): true organic domain-warped coastal island rising out of the ocean
+//             with sandy coves, inland freshwater lake, rolling pine valleys, cliffs & 56m Mount Echo summit!
 float evaluateTerrainHeightRaw(float x, float z, const TerrainSettings& cfg) {
     if (!cfg.enabled) {
         return 0.0f;
+    }
+
+    if (cfg.mode == 1) {
+        // Domain-warp coordinates with multi-octave FBM so coastlines & ridges are 100% organic (zero blocks!)
+        const float warpX = (fbmTerrain(x * 0.0046f + 1.7f, z * 0.0046f - 2.9f) - 0.5f) * 84.0f;
+        const float warpZ = (fbmTerrain(x * 0.0046f - 3.8f, z * 0.0046f + 2.1f) - 0.5f) * 84.0f;
+        const float wx = x + warpX;
+        const float wz = z + warpZ;
+        const float r = std::sqrt(wx * wx + wz * wz);
+        const float ang = std::atan2(wz, wx);
+
+        // Organic coastline radius with natural peninsulas, coves & bays (~235m avg radius)
+        const float coastRad = 228.0f
+            + std::sin(ang * 3.0f + 0.65f) * 26.0f
+            + std::cos(ang * 5.0f - 1.20f) * 15.0f
+            + std::sin(ang * 2.0f - 0.40f) * 18.0f;
+
+        // Smooth shoreline transition from deep ocean seabed (-6.5m) up onto island landmass
+        const float landMask = 1.0f - smoothstepf(coastRad - 68.0f, coastRad + 34.0f, r);
+        const float seabed = -6.2f * (1.0f - landMask);
+
+        const float nBroad = fbmTerrain(x * 0.0075f + 5.1f, z * 0.0075f + 3.4f);
+        const float nMid   = fbmTerrain(x * 0.0170f - 2.3f, z * 0.0170f + 8.1f);
+        const float nRidge = 1.0f - std::abs(fbmTerrain(x * 0.0125f + 1.1f, z * 0.0125f - 4.7f) * 2.0f - 1.0f);
+
+        // Base gently rolling island hills (2m beaches -> 18m lush wooded ridges)
+        float h = (1.6f + nBroad * 13.5f + nMid * 4.5f + (nRidge * nRidge) * 7.5f) * landMask;
+
+        // Dramatic Northern Volcanic Peak: Mount Echo (centered at -26, 108, rising up to ~56m snow summit!)
+        const float dPeak = std::sqrt((x + 26.0f) * (x + 26.0f) + (z - 108.0f) * (z - 108.0f));
+        const float peakMask = 1.0f - smoothstepf(14.0f, 152.0f, dPeak);
+        const float peakShape = peakMask * peakMask * (0.58f + 0.42f * nRidge) * cfg.maxHeight;
+        h += peakShape;
+
+        // Secondary Eastern Highland Ridge (centered at 112, 74, ~26m alpine overlooks)
+        const float dEast = std::sqrt((x - 112.0f) * (x - 112.0f) + (z - 74.0f) * (z - 74.0f));
+        const float eastMask = 1.0f - smoothstepf(12.0f, 118.0f, dEast);
+        h += eastMask * eastMask * (0.55f + 0.45f * nBroad) * 20.0f;
+
+        // Western Coastal Cliff Bluff (centered at -132, -46, ~19m rocky promontory for ancient ruins!)
+        const float dWest = std::sqrt((x + 132.0f) * (x + 132.0f) + (z + 46.0f) * (z + 46.0f));
+        const float westMask = 1.0f - smoothstepf(18.0f, 92.0f, dWest);
+        h += westMask * (0.62f + 0.38f * nRidge) * 14.0f;
+
+        // Carve Crescent Crash Cove Beach (South-East bay around 84, -134 -> gentle sandy shoreline!)
+        const float dCove = std::sqrt((x - 96.0f) * (x - 96.0f) + (z + 148.0f) * (z + 148.0f));
+        const float coveCarve = 1.0f - smoothstepf(24.0f, 94.0f, dCove);
+        h = h * (1.0f - coveCarve * 0.78f) - coveCarve * 3.8f;
+
+        // Carve Inland Freshwater Emerald Lake (Central valley around 22, -4 -> scenic drinking & swimming lake!)
+        const float dLake = std::sqrt((x - 22.0f) * (x - 22.0f) + (z + 4.0f) * (z + 4.0f));
+        const float lakeCarve = 1.0f - smoothstepf(22.0f, 62.0f, dLake);
+        h = h * (1.0f - lakeCarve * 0.85f) - lakeCarve * 3.2f;
+
+        // Flatten a small natural alpine plateau for Echo Ridge Radio Tower (-96, 128)
+        const float dTower = std::sqrt((x + 96.0f) * (x + 96.0f) + (z - 128.0f) * (z - 128.0f));
+        const float towerFlat = 1.0f - smoothstepf(10.0f, 26.0f, dTower);
+        h = h + (18.5f - h) * towerFlat;
+
+        return h + seabed;
     }
 
     const float ax = std::abs(x);
@@ -576,6 +638,9 @@ void World::spawnParticles(
 
 WaterSampleResult World::sampleWater(float x, float z, float timeSeconds) const {
     WaterSampleResult best{};
+    const bool islandMode = (m_terrain.enabled && m_terrain.mode == 1);
+    const float islandTerrainY = islandMode ? evaluateTerrainHeightRaw(x, z, m_terrain) : 0.0f;
+
     for (const Entity& e : m_entities) {
         if (!e.visible || e.shape != EntityShape::Water) {
             continue;
@@ -587,6 +652,22 @@ WaterSampleResult World::sampleWater(float x, float z, float timeSeconds) const 
         if (dx <= hx && dz <= hz) {
             const float shoreDist = std::min(hx - dx, hz - dz);
             const float waveY = e.position.y + evaluateOceanWaveOffset(x, z, timeSeconds);
+
+            if (islandMode) {
+                // Organic island mode: water exists wherever animated sea/lake level rises above sculpted terrain!
+                if (waveY <= islandTerrainY + 0.03f) {
+                    continue;
+                }
+                const float depth = waveY - islandTerrainY;
+                if (!best.inWater || waveY > best.surfaceY) {
+                    best.inWater = true;
+                    best.surfaceY = waveY;
+                    best.seabedY = islandTerrainY;
+                    best.depth = depth;
+                    best.shoreDist = depth * 3.5f;
+                }
+                continue;
+            }
 
             // Smooth natural sloping beach bank over the first 4.2m from the shoreline!
             const float slopeT = std::clamp(shoreDist / 4.2f, 0.0f, 1.0f);

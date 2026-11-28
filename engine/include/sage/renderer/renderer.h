@@ -39,6 +39,10 @@ public:
     virtual void beginFrame(const ClearColor& clearColor) = 0;
     virtual void renderWorld(const World& world, float timeSeconds) = 0;
     virtual void endFrame() = 0;
+    virtual bool captureScreenshot(const std::filesystem::path& outputPath) const {
+        (void)outputPath;
+        return false;
+    }
 
     virtual RendererInfo info() const = 0;
     virtual std::size_t loadedModelCount() const = 0;

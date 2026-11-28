@@ -135,7 +135,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v1.5.0 — GPU Prop Instancing + 3-CSM + Euphoria Ragdoll + Spline AI\n";
+    std::cout << "  SAGE Engine v1.6.0 — Material-Merged Instancing + Pose Cache + Time-Sliced 3-CSM + Soft Water\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -178,6 +178,7 @@ bool Engine::initialize() {
     }
 
     m_audio.initialize(m_config.silentAudio);
+    m_audio.setAssetRoot(m_projectRoot);
 
     if (m_editor.initialize(m_window)) {
         m_window.setRawEventCallback([this](const void* sdlEvent) {
@@ -217,6 +218,7 @@ bool Engine::initialize() {
         return m_editor.wantsCaptureMouse();
     };
 
+    m_lua.setResourceFilter(m_config.onlyResource);
     m_lua.initialize(resolvedResources, m_world, m_physics, m_audio, m_input, std::move(callbacks));
     if (m_renderer) {
         // Pre-warm all scene & Lua .glb models, 3D terrain & instanced grass BEFORE Frame 1 (eliminates v1.3 226ms hitch!)
@@ -249,10 +251,18 @@ void Engine::fixedTick(double dt) {
 }
 
 void Engine::render(double elapsedSeconds) {
+    if (m_config.overrideCamera) {
+        m_world.camera().position = m_config.overrideCamPos;
+        m_world.camera().target = m_config.overrideCamTarget;
+    }
     const ClearColor clearColor{0.05f, 0.07f, 0.11f, 1.0f};
     m_renderer->beginFrame(clearColor);
     m_renderer->renderWorld(m_world, static_cast<float>(elapsedSeconds));
     m_renderer->endFrame();
+
+    if (!m_config.screenshotPath.empty() && m_config.maxFrames > 0) {
+        // Captured on the final frame right before ImGui overlay so 3D world is 100% unobstructed!
+    }
 
     EditorStats stats;
     stats.fps = m_smoothedFps;
@@ -292,7 +302,7 @@ void Engine::render(double elapsedSeconds) {
     };
     actions.onSaveScene = [this]() -> bool {
         const fs::path exportPath = m_projectRoot / "scenes" / "exported_scene.json";
-        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.5.0 Exported World");
+        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.6.0 Exported World");
     };
     actions.onRenderCustomUi = [this]() {
         m_lua.renderUI();
@@ -317,7 +327,7 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     const SkySettings& sky = m_world.sky();
 
     nlohmann::json j;
-    j["engineVersion"] = "1.5.0";
+    j["engineVersion"] = "1.6.0";
     j["smokeTest"] = (m_config.maxFrames > 0);
     j["gpu"] = {
         {"renderer", gpu.gpuRenderer},
@@ -441,6 +451,9 @@ int Engine::run() {
             std::cout << "\n[SAGE][HotReload] Manual reload triggered (F5)...\n";
             m_scriptTitle.clear();
             m_lua.reloadAll();
+            if (m_renderer) {
+                m_renderer->preloadModels(m_world);
+            }
         }
 
         hotReloadTimer += frameDelta;
@@ -464,6 +477,13 @@ int Engine::run() {
         render(currentTime - m_startTime);
 
         ++totalFrames;
+        if (!m_config.screenshotPath.empty() && m_config.maxFrames > 0 && totalFrames == m_config.maxFrames) {
+            // Re-render pure 3D world cleanly (no MENU overlay) & read back exact backbuffer PNG!
+            m_renderer->beginFrame({0.05f, 0.07f, 0.11f, 1.0f});
+            m_renderer->renderWorld(m_world, static_cast<float>(currentTime - m_startTime));
+            m_renderer->endFrame();
+            m_renderer->captureScreenshot(m_config.screenshotPath);
+        }
         ++fpsFrames;
         fpsTimer += frameDelta;
         if (fpsTimer >= 0.25) {
@@ -475,7 +495,7 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v1.5.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v1.6.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()

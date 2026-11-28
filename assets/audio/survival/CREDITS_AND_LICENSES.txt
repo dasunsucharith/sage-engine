@@ -1,0 +1,17 @@
+WILD FRONTIER: ECHO ISLAND — ROYALTY-FREE AUDIO CREDITS & LICENSES
+==================================================================
+
+1. Real Wilderness Ambient Field Recordings (MIT / CC0 Open Source):
+   - Source: remvze/moodist (https://github.com/remvze/moodist)
+   - Files: amb_forest_wind.mp3, amb_ocean_waves.mp3, amb_campfire.mp3,
+     amb_mountain_wind.mp3, amb_river.mp3, amb_rain_heavy.mp3,
+     amb_rain_light.mp3, amb_birds.mp3, amb_night_crickets.mp3,
+     amb_seagulls.mp3, sfx_thunder.mp3, sfx_wolf_howl.mp3, sfx_owl.mp3
+
+2. Real Foley Sound Effects (CC0 1.0 Public Domain):
+   - Source: Kenney (https://kenney.nl/assets/impact-sounds & rpg-audio)
+   - License: CC0 1.0 Universal (Public Domain — free for personal & commercial games)
+   - Files: sfx_step_*.wav, sfx_wood_chop_*.wav, sfx_rock_mine_*.wav,
+     sfx_hit_impact.wav, sfx_heavy_slam.wav, sfx_melee_swing.wav,
+     sfx_axe_hit.wav, sfx_cloth_heal.wav, sfx_craft_ok.wav,
+     sfx_build_place.wav, sfx_water_splash.wav

@@ -1,0 +1,4630 @@
+{
+  "name": "Wild Frontier: Echo Island \u2014 Organic 3D Wilderness Survival (SAGE Engine v1.6.0)",
+  "version": 2,
+  "terrain": {
+    "enabled": true,
+    "mode": "island",
+    "halfSize": 440.0,
+    "maxHeight": 56.0,
+    "gridResolution": 220
+  },
+  "sky": {
+    "timeOfDay": 9.2,
+    "ambientIntensity": 0.46,
+    "fogStart": 205.0,
+    "fogEnd": 680.0
+  },
+  "camera": {
+    "position": [
+      58.0,
+      9.17,
+      -102.0
+    ],
+    "target": [
+      62.0,
+      6.17,
+      -108.0
+    ],
+    "fov": 62.0
+  },
+  "lights": [
+    {
+      "id": "radio_beacon_light",
+      "position": [
+        -96.0,
+        36.0,
+        128.0
+      ],
+      "color": [
+        1.0,
+        0.25,
+        0.18
+      ],
+      "radius": 54.0,
+      "intensity": 3.8
+    },
+    {
+      "id": "trapper_lantern",
+      "position": [
+        68.0,
+        23.97,
+        28.0
+      ],
+      "color": [
+        1.0,
+        0.72,
+        0.32
+      ],
+      "radius": 24.0,
+      "intensity": 2.2
+    },
+    {
+      "id": "bluff_torch",
+      "position": [
+        -118.0,
+        31.84,
+        -46.0
+      ],
+      "color": [
+        1.0,
+        0.52,
+        0.18
+      ],
+      "radius": 28.0,
+      "intensity": 2.5
+    }
+  ],
+  "entities": [
+    {
+      "id": "echo_ocean",
+      "type": "water",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        960.0,
+        1.0,
+        960.0
+      ],
+      "color": [
+        0.04,
+        0.44,
+        0.58
+      ],
+      "seabedY": -6.2
+    },
+    {
+      "id": "radio_tower",
+      "type": "model",
+      "model": "assets/models/lighthouse.glb",
+      "position": [
+        -96.0,
+        0.0,
+        128.0
+      ],
+      "scale": [
+        1.25,
+        1.4,
+        1.25
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 4.0,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "radio_turbine",
+      "type": "model",
+      "model": "assets/models/wind_turbine.glb",
+      "position": [
+        -114.0,
+        0.0,
+        136.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.2,
+        "height": 18.0
+      }
+    },
+    {
+      "id": "radio_shack",
+      "type": "model",
+      "model": "assets/models/alpine_cabin.glb",
+      "position": [
+        -84.0,
+        0.0,
+        122.0
+      ],
+      "rotation": [
+        0.0,
+        -35.0,
+        0.0
+      ],
+      "scale": [
+        1.05,
+        1.05,
+        1.05
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          3.4,
+          2.4,
+          3.1
+        ],
+        "offsetY": 2.4
+      }
+    },
+    {
+      "id": "trapper_cabin",
+      "type": "model",
+      "model": "assets/models/alpine_cabin.glb",
+      "position": [
+        68.0,
+        0.0,
+        28.0
+      ],
+      "rotation": [
+        0.0,
+        235.0,
+        0.0
+      ],
+      "scale": [
+        1.18,
+        1.18,
+        1.18
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          3.6,
+          2.5,
+          3.3
+        ],
+        "offsetY": 2.5
+      }
+    },
+    {
+      "id": "bluff_ruin",
+      "type": "model",
+      "model": "assets/models/warehouse.glb",
+      "position": [
+        -126.0,
+        0.0,
+        -42.0
+      ],
+      "rotation": [
+        0.0,
+        42.0,
+        0.0
+      ],
+      "scale": [
+        0.85,
+        0.85,
+        0.85
+      ],
+      "color": [
+        0.7,
+        0.62,
+        0.56
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          4.2,
+          2.6,
+          4.2
+        ],
+        "offsetY": 2.6
+      }
+    },
+    {
+      "id": "bluff_watchtower",
+      "type": "model",
+      "model": "assets/models/lifeguard_tower.glb",
+      "position": [
+        -108.0,
+        0.0,
+        -54.0
+      ],
+      "rotation": [
+        0.0,
+        120.0,
+        0.0
+      ],
+      "scale": [
+        1.1,
+        1.1,
+        1.1
+      ],
+      "collider": {
+        "type": "box",
+        "halfExtents": [
+          1.8,
+          2.6,
+          1.8
+        ],
+        "offsetY": 2.6
+      }
+    },
+    {
+      "id": "wreck_sailboat",
+      "type": "model",
+      "model": "assets/models/sailboat.glb",
+      "position": [
+        116.0,
+        -0.35,
+        -142.0
+      ],
+      "rotation": [
+        10.0,
+        132.0,
+        -16.0
+      ],
+      "scale": [
+        1.1,
+        1.1,
+        1.1
+      ]
+    },
+    {
+      "id": "island_pine_1",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -171.4,
+        0.0,
+        1.1
+      ],
+      "rotation": [
+        0.0,
+        309.6,
+        0.0
+      ],
+      "scale": [
+        1.36,
+        1.29,
+        1.36
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.88,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_2",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -124.5,
+        0.0,
+        45.5
+      ],
+      "rotation": [
+        0.0,
+        282.0,
+        0.0
+      ],
+      "scale": [
+        1.4,
+        1.48,
+        1.4
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.91,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_3",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        103.7,
+        0.0,
+        120.7
+      ],
+      "rotation": [
+        0.0,
+        211.1,
+        0.0
+      ],
+      "scale": [
+        1.55,
+        1.52,
+        1.55
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.01,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_4",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        51.4,
+        0.0,
+        -175.2
+      ],
+      "rotation": [
+        0.0,
+        161.9,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.81,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.04,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_5",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -130.4,
+        0.0,
+        -111.8
+      ],
+      "rotation": [
+        0.0,
+        334.6,
+        0.0
+      ],
+      "scale": [
+        1.73,
+        1.96,
+        1.73
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.13,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_6",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        224.8,
+        0.0,
+        6.1
+      ],
+      "rotation": [
+        0.0,
+        122.5,
+        0.0
+      ],
+      "scale": [
+        1.01,
+        1.08,
+        1.01
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.66,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_7",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -93.5,
+        0.0,
+        -19.1
+      ],
+      "rotation": [
+        0.0,
+        253.4,
+        0.0
+      ],
+      "scale": [
+        1.65,
+        1.77,
+        1.65
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.07,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_8",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -61.4,
+        0.0,
+        -35.0
+      ],
+      "rotation": [
+        0.0,
+        210.9,
+        0.0
+      ],
+      "scale": [
+        1.27,
+        1.33,
+        1.27
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.82,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_9",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -172.6,
+        0.0,
+        2.9
+      ],
+      "rotation": [
+        0.0,
+        216.1,
+        0.0
+      ],
+      "scale": [
+        1.55,
+        1.62,
+        1.55
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.01,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_10",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -36.0,
+        0.0,
+        191.8
+      ],
+      "rotation": [
+        0.0,
+        186.5,
+        0.0
+      ],
+      "scale": [
+        1.33,
+        1.24,
+        1.33
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.87,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_11",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -124.0,
+        0.0,
+        -167.0
+      ],
+      "rotation": [
+        0.0,
+        253.7,
+        0.0
+      ],
+      "scale": [
+        0.99,
+        1.14,
+        0.99
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.64,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_12",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -178.8,
+        0.0,
+        55.0
+      ],
+      "rotation": [
+        0.0,
+        173.6,
+        0.0
+      ],
+      "scale": [
+        1.33,
+        1.3,
+        1.33
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.86,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_13",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        173.7,
+        0.0,
+        57.0
+      ],
+      "rotation": [
+        0.0,
+        169.0,
+        0.0
+      ],
+      "scale": [
+        1.32,
+        1.53,
+        1.32
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.86,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_14",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        219.3,
+        0.0,
+        20.5
+      ],
+      "rotation": [
+        0.0,
+        241.1,
+        0.0
+      ],
+      "scale": [
+        1.4,
+        1.4,
+        1.4
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.91,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_15",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        134.9,
+        0.0,
+        0.9
+      ],
+      "rotation": [
+        0.0,
+        318.4,
+        0.0
+      ],
+      "scale": [
+        1.33,
+        1.38,
+        1.33
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.87,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_16",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -92.5,
+        0.0,
+        -103.9
+      ],
+      "rotation": [
+        0.0,
+        236.0,
+        0.0
+      ],
+      "scale": [
+        0.98,
+        1.05,
+        0.98
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.63,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_18",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        146.8,
+        0.0,
+        138.6
+      ],
+      "rotation": [
+        0.0,
+        326.6,
+        0.0
+      ],
+      "scale": [
+        1.4,
+        1.59,
+        1.4
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.91,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_19",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -82.5,
+        0.0,
+        187.6
+      ],
+      "rotation": [
+        0.0,
+        248.2,
+        0.0
+      ],
+      "scale": [
+        1.03,
+        1.16,
+        1.03
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.67,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_20",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        154.1,
+        0.0,
+        -9.4
+      ],
+      "rotation": [
+        0.0,
+        95.9,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.05,
+        1.0
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.65,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_21",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -181.5,
+        0.0,
+        111.4
+      ],
+      "rotation": [
+        0.0,
+        161.8,
+        0.0
+      ],
+      "scale": [
+        1.28,
+        1.18,
+        1.28
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.83,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_22",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        205.4,
+        0.0,
+        75.8
+      ],
+      "rotation": [
+        0.0,
+        55.7,
+        0.0
+      ],
+      "scale": [
+        1.46,
+        1.46,
+        1.46
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.95,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_23",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        202.5,
+        0.0,
+        -3.6
+      ],
+      "rotation": [
+        0.0,
+        48.6,
+        0.0
+      ],
+      "scale": [
+        1.53,
+        1.49,
+        1.53
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.99,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_24",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        39.6,
+        0.0,
+        206.2
+      ],
+      "rotation": [
+        0.0,
+        181.7,
+        0.0
+      ],
+      "scale": [
+        1.65,
+        1.55,
+        1.65
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.07,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_25",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -87.3,
+        0.0,
+        -39.6
+      ],
+      "rotation": [
+        0.0,
+        187.2,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.55,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.04,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_26",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -68.8,
+        0.0,
+        -66.0
+      ],
+      "rotation": [
+        0.0,
+        9.3,
+        0.0
+      ],
+      "scale": [
+        1.57,
+        1.65,
+        1.57
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.02,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_27",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -77.5,
+        0.0,
+        -88.3
+      ],
+      "rotation": [
+        0.0,
+        43.7,
+        0.0
+      ],
+      "scale": [
+        1.21,
+        1.41,
+        1.21
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.79,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_28",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -155.7,
+        0.0,
+        8.8
+      ],
+      "rotation": [
+        0.0,
+        121.1,
+        0.0
+      ],
+      "scale": [
+        1.3,
+        1.39,
+        1.3
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.84,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_29",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -45.4,
+        0.0,
+        -137.0
+      ],
+      "rotation": [
+        0.0,
+        16.3,
+        0.0
+      ],
+      "scale": [
+        1.69,
+        1.79,
+        1.69
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.1,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_30",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        152.5,
+        0.0,
+        -21.7
+      ],
+      "rotation": [
+        0.0,
+        67.9,
+        0.0
+      ],
+      "scale": [
+        1.55,
+        1.72,
+        1.55
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.01,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_31",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        7.6,
+        0.0,
+        205.5
+      ],
+      "rotation": [
+        0.0,
+        304.0,
+        0.0
+      ],
+      "scale": [
+        1.08,
+        1.1,
+        1.08
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.7,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_32",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -33.6,
+        0.0,
+        -38.7
+      ],
+      "rotation": [
+        0.0,
+        109.8,
+        0.0
+      ],
+      "scale": [
+        1.01,
+        1.02,
+        1.01
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.66,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_33",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -106.5,
+        0.0,
+        -1.1
+      ],
+      "rotation": [
+        0.0,
+        149.7,
+        0.0
+      ],
+      "scale": [
+        1.57,
+        1.64,
+        1.57
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.02,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_34",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -78.4,
+        0.0,
+        -8.1
+      ],
+      "rotation": [
+        0.0,
+        286.8,
+        0.0
+      ],
+      "scale": [
+        1.05,
+        1.18,
+        1.05
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.68,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_35",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        170.4,
+        0.0,
+        65.6
+      ],
+      "rotation": [
+        0.0,
+        282.0,
+        0.0
+      ],
+      "scale": [
+        1.28,
+        1.46,
+        1.28
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.83,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_36",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -66.6,
+        0.0,
+        -154.5
+      ],
+      "rotation": [
+        0.0,
+        206.0,
+        0.0
+      ],
+      "scale": [
+        1.4,
+        1.48,
+        1.4
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.91,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_37",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -175.6,
+        0.0,
+        97.2
+      ],
+      "rotation": [
+        0.0,
+        204.5,
+        0.0
+      ],
+      "scale": [
+        1.39,
+        1.36,
+        1.39
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.91,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_38",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -92.4,
+        0.0,
+        -104.4
+      ],
+      "rotation": [
+        0.0,
+        36.5,
+        0.0
+      ],
+      "scale": [
+        1.39,
+        1.38,
+        1.39
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.91,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_39",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -100.4,
+        0.0,
+        151.8
+      ],
+      "rotation": [
+        0.0,
+        113.3,
+        0.0
+      ],
+      "scale": [
+        1.18,
+        1.17,
+        1.18
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.77,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_40",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        179.1,
+        0.0,
+        124.6
+      ],
+      "rotation": [
+        0.0,
+        5.6,
+        0.0
+      ],
+      "scale": [
+        1.28,
+        1.21,
+        1.28
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.83,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_41",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        83.9,
+        0.0,
+        162.6
+      ],
+      "rotation": [
+        0.0,
+        332.5,
+        0.0
+      ],
+      "scale": [
+        1.5,
+        1.53,
+        1.5
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.97,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_42",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        105.9,
+        0.0,
+        -28.5
+      ],
+      "rotation": [
+        0.0,
+        250.3,
+        0.0
+      ],
+      "scale": [
+        0.97,
+        0.96,
+        0.97
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.63,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_43",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -170.0,
+        0.0,
+        120.6
+      ],
+      "rotation": [
+        0.0,
+        325.1,
+        0.0
+      ],
+      "scale": [
+        1.21,
+        1.28,
+        1.21
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.78,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_44",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -70.9,
+        0.0,
+        27.4
+      ],
+      "rotation": [
+        0.0,
+        40.5,
+        0.0
+      ],
+      "scale": [
+        1.53,
+        1.65,
+        1.53
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.99,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_45",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        35.2,
+        0.0,
+        -64.8
+      ],
+      "rotation": [
+        0.0,
+        86.2,
+        0.0
+      ],
+      "scale": [
+        1.26,
+        1.29,
+        1.26
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.82,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_46",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -126.2,
+        0.0,
+        -168.7
+      ],
+      "rotation": [
+        0.0,
+        238.2,
+        0.0
+      ],
+      "scale": [
+        1.38,
+        1.61,
+        1.38
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.9,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_47",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        82.7,
+        0.0,
+        -46.4
+      ],
+      "rotation": [
+        0.0,
+        53.2,
+        0.0
+      ],
+      "scale": [
+        1.15,
+        1.07,
+        1.15
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.75,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_48",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -106.3,
+        0.0,
+        -83.4
+      ],
+      "rotation": [
+        0.0,
+        213.7,
+        0.0
+      ],
+      "scale": [
+        1.71,
+        1.94,
+        1.71
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.11,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_49",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        207.6,
+        0.0,
+        6.3
+      ],
+      "rotation": [
+        0.0,
+        227.9,
+        0.0
+      ],
+      "scale": [
+        1.16,
+        1.3,
+        1.16
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.76,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_50",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -13.3,
+        0.0,
+        211.6
+      ],
+      "rotation": [
+        0.0,
+        310.4,
+        0.0
+      ],
+      "scale": [
+        1.49,
+        1.73,
+        1.49
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.97,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_51",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        182.7,
+        0.0,
+        -45.4
+      ],
+      "rotation": [
+        0.0,
+        342.4,
+        0.0
+      ],
+      "scale": [
+        1.73,
+        1.7,
+        1.73
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.13,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_52",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        148.1,
+        0.0,
+        -70.3
+      ],
+      "rotation": [
+        0.0,
+        129.3,
+        0.0
+      ],
+      "scale": [
+        1.11,
+        1.21,
+        1.11
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.72,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_53",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -140.4,
+        0.0,
+        57.6
+      ],
+      "rotation": [
+        0.0,
+        321.8,
+        0.0
+      ],
+      "scale": [
+        1.07,
+        1.25,
+        1.07
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.7,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_54",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        141.2,
+        0.0,
+        150.8
+      ],
+      "rotation": [
+        0.0,
+        286.3,
+        0.0
+      ],
+      "scale": [
+        1.51,
+        1.64,
+        1.51
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.98,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_55",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        156.9,
+        0.0,
+        37.1
+      ],
+      "rotation": [
+        0.0,
+        344.0,
+        0.0
+      ],
+      "scale": [
+        1.41,
+        1.43,
+        1.41
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.92,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_56",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        208.4,
+        0.0,
+        7.5
+      ],
+      "rotation": [
+        0.0,
+        56.9,
+        0.0
+      ],
+      "scale": [
+        1.47,
+        1.54,
+        1.47
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.95,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_57",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -186.5,
+        0.0,
+        104.7
+      ],
+      "rotation": [
+        0.0,
+        94.1,
+        0.0
+      ],
+      "scale": [
+        1.22,
+        1.13,
+        1.22
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.79,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_58",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -152.0,
+        0.0,
+        -93.2
+      ],
+      "rotation": [
+        0.0,
+        128.6,
+        0.0
+      ],
+      "scale": [
+        1.38,
+        1.62,
+        1.38
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.9,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_59",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -140.1,
+        0.0,
+        111.2
+      ],
+      "rotation": [
+        0.0,
+        218.1,
+        0.0
+      ],
+      "scale": [
+        0.96,
+        1.0,
+        0.96
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.62,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_60",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        7.3,
+        0.0,
+        -144.2
+      ],
+      "rotation": [
+        0.0,
+        59.0,
+        0.0
+      ],
+      "scale": [
+        1.38,
+        1.59,
+        1.38
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.9,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_61",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -56.4,
+        0.0,
+        -59.4
+      ],
+      "rotation": [
+        0.0,
+        55.5,
+        0.0
+      ],
+      "scale": [
+        1.12,
+        1.21,
+        1.12
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.73,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_62",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        102.0,
+        0.0,
+        -53.5
+      ],
+      "rotation": [
+        0.0,
+        233.1,
+        0.0
+      ],
+      "scale": [
+        1.44,
+        1.46,
+        1.44
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.94,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_63",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        82.6,
+        0.0,
+        -19.8
+      ],
+      "rotation": [
+        0.0,
+        29.7,
+        0.0
+      ],
+      "scale": [
+        1.42,
+        1.59,
+        1.42
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.92,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_64",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -185.5,
+        0.0,
+        -2.3
+      ],
+      "rotation": [
+        0.0,
+        271.2,
+        0.0
+      ],
+      "scale": [
+        1.2,
+        1.17,
+        1.2
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.78,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_65",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -78.7,
+        0.0,
+        2.8
+      ],
+      "rotation": [
+        0.0,
+        326.6,
+        0.0
+      ],
+      "scale": [
+        1.22,
+        1.35,
+        1.22
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.79,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_66",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        160.8,
+        0.0,
+        -43.6
+      ],
+      "rotation": [
+        0.0,
+        290.3,
+        0.0
+      ],
+      "scale": [
+        1.09,
+        1.07,
+        1.09
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.71,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_67",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        85.1,
+        0.0,
+        -68.2
+      ],
+      "rotation": [
+        0.0,
+        147.5,
+        0.0
+      ],
+      "scale": [
+        1.58,
+        1.78,
+        1.58
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.03,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_68",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -53.3,
+        0.0,
+        -155.5
+      ],
+      "rotation": [
+        0.0,
+        236.5,
+        0.0
+      ],
+      "scale": [
+        1.54,
+        1.47,
+        1.54
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.0,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_69",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -104.6,
+        0.0,
+        151.0
+      ],
+      "rotation": [
+        0.0,
+        302.8,
+        0.0
+      ],
+      "scale": [
+        1.21,
+        1.25,
+        1.21
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.78,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_70",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -159.6,
+        0.0,
+        57.1
+      ],
+      "rotation": [
+        0.0,
+        350.0,
+        0.0
+      ],
+      "scale": [
+        1.14,
+        1.21,
+        1.14
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.74,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_71",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -169.5,
+        0.0,
+        -92.9
+      ],
+      "rotation": [
+        0.0,
+        144.4,
+        0.0
+      ],
+      "scale": [
+        1.32,
+        1.22,
+        1.32
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.86,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_72",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -76.3,
+        0.0,
+        190.3
+      ],
+      "rotation": [
+        0.0,
+        3.8,
+        0.0
+      ],
+      "scale": [
+        1.53,
+        1.63,
+        1.53
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.99,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_73",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -111.5,
+        0.0,
+        -74.7
+      ],
+      "rotation": [
+        0.0,
+        149.3,
+        0.0
+      ],
+      "scale": [
+        1.47,
+        1.64,
+        1.47
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.95,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_74",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -72.6,
+        0.0,
+        -208.1
+      ],
+      "rotation": [
+        0.0,
+        43.5,
+        0.0
+      ],
+      "scale": [
+        1.13,
+        1.29,
+        1.13
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.73,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_75",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -104.1,
+        0.0,
+        -217.0
+      ],
+      "rotation": [
+        0.0,
+        164.6,
+        0.0
+      ],
+      "scale": [
+        1.12,
+        1.11,
+        1.12
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.73,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_76",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        86.6,
+        0.0,
+        17.5
+      ],
+      "rotation": [
+        0.0,
+        34.4,
+        0.0
+      ],
+      "scale": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.62,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_77",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -85.7,
+        0.0,
+        30.4
+      ],
+      "rotation": [
+        0.0,
+        245.2,
+        0.0
+      ],
+      "scale": [
+        1.52,
+        1.62,
+        1.52
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.99,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_78",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -36.2,
+        0.0,
+        -141.6
+      ],
+      "rotation": [
+        0.0,
+        355.9,
+        0.0
+      ],
+      "scale": [
+        1.54,
+        1.81,
+        1.54
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.0,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_79",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        184.7,
+        0.0,
+        71.0
+      ],
+      "rotation": [
+        0.0,
+        125.1,
+        0.0
+      ],
+      "scale": [
+        1.22,
+        1.32,
+        1.22
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.79,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_80",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -110.1,
+        0.0,
+        172.5
+      ],
+      "rotation": [
+        0.0,
+        13.2,
+        0.0
+      ],
+      "scale": [
+        1.62,
+        1.7,
+        1.62
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.05,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_81",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -135.6,
+        0.0,
+        -101.9
+      ],
+      "rotation": [
+        0.0,
+        144.0,
+        0.0
+      ],
+      "scale": [
+        1.62,
+        1.59,
+        1.62
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.06,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_82",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        119.6,
+        0.0,
+        -90.6
+      ],
+      "rotation": [
+        0.0,
+        32.7,
+        0.0
+      ],
+      "scale": [
+        1.34,
+        1.41,
+        1.34
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.87,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_83",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        10.1,
+        0.0,
+        -78.7
+      ],
+      "rotation": [
+        0.0,
+        122.3,
+        0.0
+      ],
+      "scale": [
+        1.2,
+        1.16,
+        1.2
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.78,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_84",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -146.5,
+        0.0,
+        -109.1
+      ],
+      "rotation": [
+        0.0,
+        313.8,
+        0.0
+      ],
+      "scale": [
+        1.71,
+        1.8,
+        1.71
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.11,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "island_pine_85",
+      "type": "model",
+      "model": "assets/models/survival/survival_pine.glb",
+      "position": [
+        -52.7,
+        0.0,
+        -177.1
+      ],
+      "rotation": [
+        0.0,
+        77.3,
+        0.0
+      ],
+      "scale": [
+        1.44,
+        1.5,
+        1.44
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.93,
+        "height": 7.5
+      }
+    },
+    {
+      "id": "coast_palm_1",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        59.3,
+        0.0,
+        -143.7
+      ],
+      "rotation": [
+        0.0,
+        353.9,
+        0.0
+      ],
+      "scale": [
+        1.32,
+        1.32,
+        1.32
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.73,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_2",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -178.1,
+        0.0,
+        -150.5
+      ],
+      "rotation": [
+        0.0,
+        40.0,
+        0.0
+      ],
+      "scale": [
+        1.05,
+        1.05,
+        1.05
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.58,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_3",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -195.1,
+        0.0,
+        126.0
+      ],
+      "rotation": [
+        0.0,
+        249.8,
+        0.0
+      ],
+      "scale": [
+        1.34,
+        1.34,
+        1.34
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.74,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_4",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -191.7,
+        0.0,
+        113.7
+      ],
+      "rotation": [
+        0.0,
+        252.3,
+        0.0
+      ],
+      "scale": [
+        0.89,
+        0.89,
+        0.89
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.49,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_6",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -181.3,
+        0.0,
+        -75.2
+      ],
+      "rotation": [
+        0.0,
+        277.0,
+        0.0
+      ],
+      "scale": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.54,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_7",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -194.3,
+        0.0,
+        7.4
+      ],
+      "rotation": [
+        0.0,
+        61.1,
+        0.0
+      ],
+      "scale": [
+        0.95,
+        0.95,
+        0.95
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.52,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_8",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -174.5,
+        0.0,
+        -174.5
+      ],
+      "rotation": [
+        0.0,
+        44.3,
+        0.0
+      ],
+      "scale": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.53,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_10",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -168.2,
+        0.0,
+        139.3
+      ],
+      "rotation": [
+        0.0,
+        152.5,
+        0.0
+      ],
+      "scale": [
+        1.25,
+        1.25,
+        1.25
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.69,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_12",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -177.3,
+        0.0,
+        -148.2
+      ],
+      "rotation": [
+        0.0,
+        336.7,
+        0.0
+      ],
+      "scale": [
+        1.2,
+        1.2,
+        1.2
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.66,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_13",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -199.9,
+        0.0,
+        59.6
+      ],
+      "rotation": [
+        0.0,
+        332.0,
+        0.0
+      ],
+      "scale": [
+        0.99,
+        0.99,
+        0.99
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.55,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_14",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -189.5,
+        0.0,
+        -51.3
+      ],
+      "rotation": [
+        0.0,
+        295.7,
+        0.0
+      ],
+      "scale": [
+        1.14,
+        1.14,
+        1.14
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.63,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_16",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -176.7,
+        0.0,
+        -148.5
+      ],
+      "rotation": [
+        0.0,
+        81.2,
+        0.0
+      ],
+      "scale": [
+        1.21,
+        1.21,
+        1.21
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.67,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_17",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -171.5,
+        0.0,
+        -193.8
+      ],
+      "rotation": [
+        0.0,
+        280.0,
+        0.0
+      ],
+      "scale": [
+        1.27,
+        1.27,
+        1.27
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.7,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_18",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -175.7,
+        0.0,
+        139.4
+      ],
+      "rotation": [
+        0.0,
+        15.2,
+        0.0
+      ],
+      "scale": [
+        1.06,
+        1.06,
+        1.06
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.58,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_19",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        50.0,
+        0.0,
+        -138.7
+      ],
+      "rotation": [
+        0.0,
+        24.3,
+        0.0
+      ],
+      "scale": [
+        1.27,
+        1.27,
+        1.27
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.7,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_20",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -186.3,
+        0.0,
+        -71.7
+      ],
+      "rotation": [
+        0.0,
+        293.7,
+        0.0
+      ],
+      "scale": [
+        1.33,
+        1.33,
+        1.33
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.73,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_21",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        187.2,
+        0.0,
+        135.6
+      ],
+      "rotation": [
+        0.0,
+        338.8,
+        0.0
+      ],
+      "scale": [
+        1.09,
+        1.09,
+        1.09
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.6,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_22",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        54.6,
+        0.0,
+        -184.6
+      ],
+      "rotation": [
+        0.0,
+        132.2,
+        0.0
+      ],
+      "scale": [
+        1.02,
+        1.02,
+        1.02
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.56,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_23",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -192.4,
+        0.0,
+        111.4
+      ],
+      "rotation": [
+        0.0,
+        52.1,
+        0.0
+      ],
+      "scale": [
+        1.32,
+        1.32,
+        1.32
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.72,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "coast_palm_24",
+      "type": "model",
+      "model": "assets/models/survival/survival_palm.glb",
+      "position": [
+        -182.4,
+        0.0,
+        -130.5
+      ],
+      "rotation": [
+        0.0,
+        263.6,
+        0.0
+      ],
+      "scale": [
+        1.25,
+        1.25,
+        1.25
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 0.69,
+        "height": 6.5
+      }
+    },
+    {
+      "id": "island_rock_2",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -110.2,
+        0.0,
+        59.7
+      ],
+      "rotation": [
+        0.0,
+        14.2,
+        0.0
+      ],
+      "scale": [
+        1.44,
+        1.4,
+        1.44
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.79,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_3",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        189.2,
+        0.0,
+        -14.8
+      ],
+      "rotation": [
+        0.0,
+        81.9,
+        0.0
+      ],
+      "scale": [
+        1.17,
+        1.23,
+        1.17
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.47,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_4",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        72.8,
+        0.0,
+        -71.8
+      ],
+      "rotation": [
+        0.0,
+        141.9,
+        0.0
+      ],
+      "scale": [
+        1.26,
+        1.4,
+        1.26
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.58,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_5",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -73.0,
+        0.0,
+        -105.8
+      ],
+      "rotation": [
+        0.0,
+        73.2,
+        0.0
+      ],
+      "scale": [
+        1.17,
+        1.06,
+        1.17
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.46,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_6",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -150.0,
+        0.0,
+        19.7
+      ],
+      "rotation": [
+        0.0,
+        39.3,
+        0.0
+      ],
+      "scale": [
+        1.55,
+        1.4,
+        1.55
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.94,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_7",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        189.9,
+        0.0,
+        -44.4
+      ],
+      "rotation": [
+        0.0,
+        143.8,
+        0.0
+      ],
+      "scale": [
+        1.22,
+        1.19,
+        1.22
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.52,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_8",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -115.2,
+        0.0,
+        -144.7
+      ],
+      "rotation": [
+        0.0,
+        194.2,
+        0.0
+      ],
+      "scale": [
+        1.3,
+        1.4,
+        1.3
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.63,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_9",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        1.7,
+        0.0,
+        199.5
+      ],
+      "rotation": [
+        0.0,
+        147.3,
+        0.0
+      ],
+      "scale": [
+        1.36,
+        1.11,
+        1.36
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.7,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_10",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -198.8,
+        0.0,
+        28.0
+      ],
+      "rotation": [
+        0.0,
+        238.1,
+        0.0
+      ],
+      "scale": [
+        1.1,
+        1.26,
+        1.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.38,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_11",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        32.7,
+        0.0,
+        -148.1
+      ],
+      "rotation": [
+        0.0,
+        209.1,
+        0.0
+      ],
+      "scale": [
+        1.11,
+        1.05,
+        1.11
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.39,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_13",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -1.0,
+        0.0,
+        -174.4
+      ],
+      "rotation": [
+        0.0,
+        204.7,
+        0.0
+      ],
+      "scale": [
+        0.89,
+        0.87,
+        0.89
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.11,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_14",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        199.0,
+        0.0,
+        57.8
+      ],
+      "rotation": [
+        0.0,
+        345.3,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.52,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_15",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -141.2,
+        0.0,
+        -0.8
+      ],
+      "rotation": [
+        0.0,
+        252.7,
+        0.0
+      ],
+      "scale": [
+        1.06,
+        1.11,
+        1.06
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.32,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_16",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        140.0,
+        0.0,
+        -100.6
+      ],
+      "rotation": [
+        0.0,
+        22.6,
+        0.0
+      ],
+      "scale": [
+        1.24,
+        1.12,
+        1.24
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.55,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_17",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -27.4,
+        0.0,
+        -33.7
+      ],
+      "rotation": [
+        0.0,
+        97.7,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.52,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_18",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -11.5,
+        0.0,
+        -27.2
+      ],
+      "rotation": [
+        0.0,
+        30.5,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.2,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.14,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_19",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -57.4,
+        0.0,
+        204.6
+      ],
+      "rotation": [
+        0.0,
+        273.5,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.62,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_20",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -165.0,
+        0.0,
+        -67.1
+      ],
+      "rotation": [
+        0.0,
+        191.4,
+        0.0
+      ],
+      "scale": [
+        1.1,
+        1.07,
+        1.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.37,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_21",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -149.3,
+        0.0,
+        -167.7
+      ],
+      "rotation": [
+        0.0,
+        142.6,
+        0.0
+      ],
+      "scale": [
+        1.48,
+        1.3,
+        1.48
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.85,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_22",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        40.6,
+        0.0,
+        214.7
+      ],
+      "rotation": [
+        0.0,
+        300.7,
+        0.0
+      ],
+      "scale": [
+        1.09,
+        0.84,
+        1.09
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.36,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_23",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -140.2,
+        0.0,
+        121.4
+      ],
+      "rotation": [
+        0.0,
+        203.5,
+        0.0
+      ],
+      "scale": [
+        1.1,
+        1.16,
+        1.1
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.37,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_24",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -5.0,
+        0.0,
+        -57.9
+      ],
+      "rotation": [
+        0.0,
+        346.4,
+        0.0
+      ],
+      "scale": [
+        0.89,
+        0.64,
+        0.89
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.11,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_25",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -157.8,
+        0.0,
+        -143.5
+      ],
+      "rotation": [
+        0.0,
+        61.6,
+        0.0
+      ],
+      "scale": [
+        1.56,
+        1.35,
+        1.56
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.95,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_26",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -80.5,
+        0.0,
+        31.1
+      ],
+      "rotation": [
+        0.0,
+        35.1,
+        0.0
+      ],
+      "scale": [
+        1.12,
+        1.16,
+        1.12
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.41,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_27",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -127.3,
+        0.0,
+        -78.2
+      ],
+      "rotation": [
+        0.0,
+        286.8,
+        0.0
+      ],
+      "scale": [
+        1.47,
+        1.4,
+        1.47
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.84,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_28",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -190.1,
+        0.0,
+        -56.3
+      ],
+      "rotation": [
+        0.0,
+        103.3,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.79,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_29",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        181.9,
+        0.0,
+        -31.4
+      ],
+      "rotation": [
+        0.0,
+        228.2,
+        0.0
+      ],
+      "scale": [
+        1.37,
+        1.11,
+        1.37
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.72,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_32",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        126.9,
+        0.0,
+        -32.2
+      ],
+      "rotation": [
+        0.0,
+        245.7,
+        0.0
+      ],
+      "scale": [
+        1.22,
+        1.17,
+        1.22
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.53,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_33",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        5.2,
+        0.0,
+        181.6
+      ],
+      "rotation": [
+        0.0,
+        298.4,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.17,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_34",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        193.3,
+        0.0,
+        -35.6
+      ],
+      "rotation": [
+        0.0,
+        5.5,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.73,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_35",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        34.0,
+        0.0,
+        206.7
+      ],
+      "rotation": [
+        0.0,
+        256.4,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.57,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_36",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -65.3,
+        0.0,
+        -5.4
+      ],
+      "rotation": [
+        0.0,
+        89.0,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.41,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_37",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -164.7,
+        0.0,
+        -193.9
+      ],
+      "rotation": [
+        0.0,
+        126.4,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.27,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_38",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        110.7,
+        0.0,
+        159.1
+      ],
+      "rotation": [
+        0.0,
+        301.3,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.17,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_39",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        153.8,
+        0.0,
+        22.5
+      ],
+      "rotation": [
+        0.0,
+        297.2,
+        0.0
+      ],
+      "scale": [
+        1.58,
+        1.4,
+        1.58
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.98,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_40",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -97.5,
+        0.0,
+        46.7
+      ],
+      "rotation": [
+        0.0,
+        27.3,
+        0.0
+      ],
+      "scale": [
+        1.21,
+        0.99,
+        1.21
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.51,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_41",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -125.5,
+        0.0,
+        56.8
+      ],
+      "rotation": [
+        0.0,
+        137.7,
+        0.0
+      ],
+      "scale": [
+        1.16,
+        1.12,
+        1.16
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 1.45,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "island_rock_42",
+      "type": "model",
+      "model": "assets/models/survival/survival_boulder.glb",
+      "position": [
+        -24.9,
+        0.0,
+        -81.5
+      ],
+      "rotation": [
+        0.0,
+        150.3,
+        0.0
+      ],
+      "scale": [
+        1.6,
+        1.4,
+        1.6
+      ],
+      "collider": {
+        "type": "cylinder",
+        "radius": 2.87,
+        "height": 3.2
+      }
+    },
+    {
+      "id": "wild_shrub_1",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -170.02,
+        0.0,
+        16.37
+      ],
+      "rotation": [
+        0.0,
+        269.4,
+        0.0
+      ],
+      "scale": [
+        1.21,
+        1.22,
+        1.21
+      ]
+    },
+    {
+      "id": "wild_shrub_2",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        113.73,
+        0.0,
+        -17.65
+      ],
+      "rotation": [
+        0.0,
+        39.1,
+        0.0
+      ],
+      "scale": [
+        1.05,
+        1.07,
+        1.05
+      ]
+    },
+    {
+      "id": "wild_shrub_3",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -62.22,
+        0.0,
+        -131.51
+      ],
+      "rotation": [
+        0.0,
+        86.1,
+        0.0
+      ],
+      "scale": [
+        1.32,
+        1.41,
+        1.32
+      ]
+    },
+    {
+      "id": "wild_shrub_4",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        169.09,
+        0.0,
+        131.91
+      ],
+      "rotation": [
+        0.0,
+        10.5,
+        0.0
+      ],
+      "scale": [
+        0.98,
+        0.96,
+        0.98
+      ]
+    },
+    {
+      "id": "wild_shrub_5",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -139.9,
+        0.0,
+        59.12
+      ],
+      "rotation": [
+        0.0,
+        347.9,
+        0.0
+      ],
+      "scale": [
+        1.32,
+        1.37,
+        1.32
+      ]
+    },
+    {
+      "id": "wild_shrub_6",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        13.12,
+        0.0,
+        -134.17
+      ],
+      "rotation": [
+        0.0,
+        84.6,
+        0.0
+      ],
+      "scale": [
+        1.13,
+        1.24,
+        1.13
+      ]
+    },
+    {
+      "id": "wild_shrub_7",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -162.04,
+        0.0,
+        77.67
+      ],
+      "rotation": [
+        0.0,
+        356.1,
+        0.0
+      ],
+      "scale": [
+        1.18,
+        1.26,
+        1.18
+      ]
+    },
+    {
+      "id": "wild_shrub_8",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        10.65,
+        0.0,
+        -45.73
+      ],
+      "rotation": [
+        0.0,
+        338.2,
+        0.0
+      ],
+      "scale": [
+        1.06,
+        1.04,
+        1.06
+      ]
+    },
+    {
+      "id": "wild_shrub_9",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        81.52,
+        0.0,
+        -76.58
+      ],
+      "rotation": [
+        0.0,
+        265.3,
+        0.0
+      ],
+      "scale": [
+        1.13,
+        1.25,
+        1.13
+      ]
+    },
+    {
+      "id": "wild_shrub_10",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        16.0,
+        0.0,
+        -140.45
+      ],
+      "rotation": [
+        0.0,
+        328.3,
+        0.0
+      ],
+      "scale": [
+        1.08,
+        1.13,
+        1.08
+      ]
+    },
+    {
+      "id": "wild_shrub_11",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -163.1,
+        0.0,
+        -27.42
+      ],
+      "rotation": [
+        0.0,
+        56.1,
+        0.0
+      ],
+      "scale": [
+        1.09,
+        1.18,
+        1.09
+      ]
+    },
+    {
+      "id": "wild_shrub_12",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -48.03,
+        0.0,
+        -15.57
+      ],
+      "rotation": [
+        0.0,
+        119.7,
+        0.0
+      ],
+      "scale": [
+        0.99,
+        0.97,
+        0.99
+      ]
+    },
+    {
+      "id": "wild_shrub_13",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -80.71,
+        0.0,
+        -94.13
+      ],
+      "rotation": [
+        0.0,
+        347.9,
+        0.0
+      ],
+      "scale": [
+        1.29,
+        1.39,
+        1.29
+      ]
+    },
+    {
+      "id": "wild_shrub_14",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -10.25,
+        0.0,
+        4.82
+      ],
+      "rotation": [
+        0.0,
+        126.0,
+        0.0
+      ],
+      "scale": [
+        1.16,
+        1.27,
+        1.16
+      ]
+    },
+    {
+      "id": "wild_shrub_15",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -42.92,
+        0.0,
+        -20.64
+      ],
+      "rotation": [
+        0.0,
+        57.7,
+        0.0
+      ],
+      "scale": [
+        1.07,
+        1.0,
+        1.07
+      ]
+    },
+    {
+      "id": "wild_shrub_16",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        131.76,
+        0.0,
+        -88.56
+      ],
+      "rotation": [
+        0.0,
+        347.1,
+        0.0
+      ],
+      "scale": [
+        0.91,
+        0.9,
+        0.91
+      ]
+    },
+    {
+      "id": "wild_shrub_17",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -159.73,
+        0.0,
+        144.79
+      ],
+      "rotation": [
+        0.0,
+        91.0,
+        0.0
+      ],
+      "scale": [
+        1.34,
+        1.31,
+        1.34
+      ]
+    },
+    {
+      "id": "wild_shrub_18",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        124.89,
+        0.0,
+        -57.12
+      ],
+      "rotation": [
+        0.0,
+        298.6,
+        0.0
+      ],
+      "scale": [
+        0.93,
+        1.02,
+        0.93
+      ]
+    },
+    {
+      "id": "wild_shrub_19",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -136.29,
+        0.0,
+        69.92
+      ],
+      "rotation": [
+        0.0,
+        1.6,
+        0.0
+      ],
+      "scale": [
+        1.09,
+        1.06,
+        1.09
+      ]
+    },
+    {
+      "id": "wild_shrub_20",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        46.4,
+        0.0,
+        -106.22
+      ],
+      "rotation": [
+        0.0,
+        216.1,
+        0.0
+      ],
+      "scale": [
+        1.21,
+        1.18,
+        1.21
+      ]
+    },
+    {
+      "id": "wild_shrub_21",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -139.92,
+        0.0,
+        54.46
+      ],
+      "rotation": [
+        0.0,
+        68.9,
+        0.0
+      ],
+      "scale": [
+        0.98,
+        1.05,
+        0.98
+      ]
+    },
+    {
+      "id": "wild_shrub_22",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -158.44,
+        0.0,
+        85.34
+      ],
+      "rotation": [
+        0.0,
+        62.3,
+        0.0
+      ],
+      "scale": [
+        0.92,
+        0.85,
+        0.92
+      ]
+    },
+    {
+      "id": "wild_shrub_23",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -162.6,
+        0.0,
+        87.34
+      ],
+      "rotation": [
+        0.0,
+        214.9,
+        0.0
+      ],
+      "scale": [
+        0.86,
+        0.87,
+        0.86
+      ]
+    },
+    {
+      "id": "wild_shrub_24",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        23.39,
+        0.0,
+        -77.28
+      ],
+      "rotation": [
+        0.0,
+        262.2,
+        0.0
+      ],
+      "scale": [
+        1.19,
+        1.06,
+        1.19
+      ]
+    },
+    {
+      "id": "wild_shrub_25",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -85.3,
+        0.0,
+        8.51
+      ],
+      "rotation": [
+        0.0,
+        1.7,
+        0.0
+      ],
+      "scale": [
+        0.92,
+        0.85,
+        0.92
+      ]
+    },
+    {
+      "id": "wild_shrub_26",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -78.47,
+        0.0,
+        -103.68
+      ],
+      "rotation": [
+        0.0,
+        42.1,
+        0.0
+      ],
+      "scale": [
+        1.34,
+        1.26,
+        1.34
+      ]
+    },
+    {
+      "id": "wild_shrub_27",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        115.43,
+        0.0,
+        -9.98
+      ],
+      "rotation": [
+        0.0,
+        44.5,
+        0.0
+      ],
+      "scale": [
+        1.08,
+        1.05,
+        1.08
+      ]
+    },
+    {
+      "id": "wild_shrub_28",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        114.36,
+        0.0,
+        -80.2
+      ],
+      "rotation": [
+        0.0,
+        16.6,
+        0.0
+      ],
+      "scale": [
+        0.94,
+        0.97,
+        0.94
+      ]
+    },
+    {
+      "id": "wild_shrub_29",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -70.3,
+        0.0,
+        -22.19
+      ],
+      "rotation": [
+        0.0,
+        148.5,
+        0.0
+      ],
+      "scale": [
+        1.27,
+        1.4,
+        1.27
+      ]
+    },
+    {
+      "id": "wild_shrub_30",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        135.35,
+        0.0,
+        132.5
+      ],
+      "rotation": [
+        0.0,
+        335.0,
+        0.0
+      ],
+      "scale": [
+        0.86,
+        0.81,
+        0.86
+      ]
+    },
+    {
+      "id": "wild_shrub_31",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        0.26,
+        0.0,
+        -136.7
+      ],
+      "rotation": [
+        0.0,
+        154.3,
+        0.0
+      ],
+      "scale": [
+        0.96,
+        0.86,
+        0.96
+      ]
+    },
+    {
+      "id": "wild_shrub_32",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        91.92,
+        0.0,
+        11.55
+      ],
+      "rotation": [
+        0.0,
+        127.0,
+        0.0
+      ],
+      "scale": [
+        0.94,
+        0.86,
+        0.94
+      ]
+    },
+    {
+      "id": "wild_shrub_33",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -122.43,
+        0.0,
+        41.59
+      ],
+      "rotation": [
+        0.0,
+        87.8,
+        0.0
+      ],
+      "scale": [
+        1.13,
+        1.11,
+        1.13
+      ]
+    },
+    {
+      "id": "wild_shrub_34",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -153.85,
+        0.0,
+        132.64
+      ],
+      "rotation": [
+        0.0,
+        286.6,
+        0.0
+      ],
+      "scale": [
+        1.28,
+        1.18,
+        1.28
+      ]
+    },
+    {
+      "id": "wild_shrub_35",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -86.01,
+        0.0,
+        134.83
+      ],
+      "rotation": [
+        0.0,
+        121.3,
+        0.0
+      ],
+      "scale": [
+        1.14,
+        1.24,
+        1.14
+      ]
+    },
+    {
+      "id": "wild_shrub_36",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        154.53,
+        0.0,
+        121.79
+      ],
+      "rotation": [
+        0.0,
+        73.2,
+        0.0
+      ],
+      "scale": [
+        0.98,
+        1.08,
+        0.98
+      ]
+    },
+    {
+      "id": "wild_shrub_37",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -148.74,
+        0.0,
+        110.2
+      ],
+      "rotation": [
+        0.0,
+        294.6,
+        0.0
+      ],
+      "scale": [
+        1.14,
+        1.06,
+        1.14
+      ]
+    },
+    {
+      "id": "wild_shrub_38",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -105.53,
+        0.0,
+        129.91
+      ],
+      "rotation": [
+        0.0,
+        17.2,
+        0.0
+      ],
+      "scale": [
+        0.89,
+        0.98,
+        0.89
+      ]
+    },
+    {
+      "id": "wild_shrub_39",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        152.67,
+        0.0,
+        120.32
+      ],
+      "rotation": [
+        0.0,
+        31.0,
+        0.0
+      ],
+      "scale": [
+        1.17,
+        1.21,
+        1.17
+      ]
+    },
+    {
+      "id": "wild_shrub_40",
+      "type": "model",
+      "model": "assets/models/survival/survival_bush.glb",
+      "position": [
+        -164.64,
+        0.0,
+        -91.06
+      ],
+      "rotation": [
+        0.0,
+        320.4,
+        0.0
+      ],
+      "scale": [
+        1.04,
+        1.04,
+        1.04
+      ]
+    }
+  ]
+}

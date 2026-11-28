@@ -467,20 +467,27 @@ bool PhysicsWorld::buildTerrainCollider(const World& world) {
     const float halfSize = world.terrain().halfSize;
     const float cellSize = (halfSize * 2.0f) / static_cast<float>(kSampleCount - 1);
 
+    const bool islandMode = (world.terrain().mode == 1);
     std::vector<float> samples(static_cast<std::size_t>(kSampleCount * kSampleCount), 0.0f);
     for (int iz = 0; iz < kSampleCount; ++iz) {
         const float z = -halfSize + static_cast<float>(iz) * cellSize;
         for (int ix = 0; ix < kSampleCount; ++ix) {
             const float x = -halfSize + static_cast<float>(ix) * cellSize;
-            const WaterSampleResult w = world.sampleWater(x, z, 0.0f);
-            if (w.inWater) {
-                // Leave carved water lagoon open so dynamic bodies sink to seabed and float via Archimedes buoyancy!
-                samples[static_cast<std::size_t>(iz * kSampleCount + ix)] = JPH::HeightFieldShapeConstants::cNoCollisionValue;
-            } else {
-                const float h = world.sampleTerrain(x, z).height;
-                // Only emit solid Jolt collision where terrain rises above flat roads (avoids double-floor collision!)
+            const float h = world.sampleTerrain(x, z).height;
+            if (islandMode) {
+                // Organic island: full solid terrain collision across all dry beaches, valleys & peaks!
                 samples[static_cast<std::size_t>(iz * kSampleCount + ix)] =
-                    (h > 0.05f) ? h : JPH::HeightFieldShapeConstants::cNoCollisionValue;
+                    (h > -4.8f) ? h : JPH::HeightFieldShapeConstants::cNoCollisionValue;
+            } else {
+                const WaterSampleResult w = world.sampleWater(x, z, 0.0f);
+                if (w.inWater) {
+                    // Leave carved water lagoon open so dynamic bodies sink to seabed and float via Archimedes buoyancy!
+                    samples[static_cast<std::size_t>(iz * kSampleCount + ix)] = JPH::HeightFieldShapeConstants::cNoCollisionValue;
+                } else {
+                    // Only emit solid Jolt collision where terrain rises above flat roads (avoids double-floor collision!)
+                    samples[static_cast<std::size_t>(iz * kSampleCount + ix)] =
+                        (h > 0.05f) ? h : JPH::HeightFieldShapeConstants::cNoCollisionValue;
+                }
             }
         }
     }

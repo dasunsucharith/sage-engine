@@ -13,7 +13,6 @@
 #pragma warning(push, 0)
 #endif
 #define MINIAUDIO_IMPLEMENTATION
-#define MA_NO_DECODING
 #define MA_NO_ENCODING
 #include <miniaudio.h>
 #ifdef _MSC_VER
@@ -25,6 +24,8 @@
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+#include <mutex>
+#include <vector>
 
 namespace sage {
 
@@ -70,6 +71,41 @@ float combustionWave(float phase01, float harmonicMix) {
 struct AudioEngine::Impl {
     ma_device device{};
     bool deviceStarted = false;
+
+    // Real file-backed 2D/3D Audio Engine (ma_engine in noDevice mode mixed into our 48kHz stereo callback!)
+    ma_engine fileEngine{};
+    bool fileEngineReady = false;
+    std::filesystem::path assetRoot;
+    std::mutex fileEngineMutex;
+
+    static constexpr int kMaxOneShotVoices = 16;
+    struct OneShotVoice {
+        ma_sound sound{};
+        bool active = false;
+    };
+    OneShotVoice oneShots[kMaxOneShotVoices]{};
+    int nextOneShotIdx = 0;
+
+    static constexpr int kMaxAmbientLoops = 8;
+    struct AmbientLoopSlot {
+        ma_sound sound{};
+        std::string path;
+        bool active = false;
+    };
+    AmbientLoopSlot ambientLoops[kMaxAmbientLoops]{};
+    std::vector<float> fileMixScratch;
+
+    std::filesystem::path resolveAudioPath(const std::string& rawPath) const {
+        const std::filesystem::path p(rawPath);
+        if (std::filesystem::exists(p)) return p;
+        if (!assetRoot.empty()) {
+            const std::filesystem::path fromRoot = assetRoot / p;
+            if (std::filesystem::exists(fromRoot)) return fromRoot;
+        }
+        const std::filesystem::path parentCand = std::filesystem::path("..") / p;
+        if (std::filesystem::exists(parentCand)) return parentCand;
+        return p;
+    }
 
     // Lock-free parameters written by game thread, read by audio thread
     std::atomic<int> vehicleProfile{0}; // 0=V12 Supercar, 1=Superbike, 2=Speedboat, 3=V8 Coupe
@@ -463,10 +499,35 @@ struct AudioEngine::Impl {
             }
 
             const float sharedFx = popSig + boostRoar + turboWhine + driftSig + impactSig + chimeSig + expSig + footSig;
-            const float left  = std::tanh((engL + windBand * windVol + sharedFx + spL) * gain);
-            const float right = std::tanh((engR + (windBand * 0.85f + self->lpNoise2 * 0.15f) * windVol + sharedFx + spR) * gain);
+            const float left  = (engL + windBand * windVol + sharedFx + spL) * gain;
+            const float right = (engR + (windBand * 0.85f + self->lpNoise2 * 0.15f) * windVol + sharedFx + spR) * gain;
             out[i * 2 + 0] = left;
             out[i * 2 + 1] = right;
+        }
+
+        // Mix real decoded 2D/3D file-backed SFX & wilderness ambient loops from ma_engine!
+        if (self->fileEngineReady && gain > 0.0001f) {
+            std::unique_lock<std::mutex> lock(self->fileEngineMutex, std::try_to_lock);
+            if (lock.owns_lock()) {
+                const std::size_t sampleCount = static_cast<std::size_t>(frameCount) * 2;
+                if (self->fileMixScratch.size() < sampleCount) {
+                    self->fileMixScratch.resize(sampleCount, 0.0f);
+                }
+                std::fill(self->fileMixScratch.begin(), self->fileMixScratch.begin() + sampleCount, 0.0f);
+                ma_engine_read_pcm_frames(&self->fileEngine, self->fileMixScratch.data(), frameCount, nullptr);
+                const float fileGain = gain * 1.45f;
+                for (std::size_t s = 0; s < sampleCount; ++s) {
+                    out[s] = std::tanh(out[s] + self->fileMixScratch[s] * fileGain);
+                }
+            } else {
+                for (ma_uint32 s = 0; s < frameCount * 2; ++s) {
+                    out[s] = std::tanh(out[s]);
+                }
+            }
+        } else {
+            for (ma_uint32 s = 0; s < frameCount * 2; ++s) {
+                out[s] = std::tanh(out[s]);
+            }
         }
     }
 };
@@ -497,22 +558,210 @@ bool AudioEngine::initialize(bool silentMode) {
     }
 
     m_impl->sampleRate = static_cast<float>(m_impl->device.sampleRate);
+
+    // Initialize headless ma_engine (noDevice = MA_TRUE) for real 2D/3D .wav/.mp3/.flac audio playback!
+    ma_engine_config engCfg = ma_engine_config_init();
+    engCfg.noDevice = MA_TRUE;
+    engCfg.channels = 2;
+    engCfg.sampleRate = m_impl->device.sampleRate;
+    engCfg.listenerCount = 1;
+    if (ma_engine_init(&engCfg, &m_impl->fileEngine) == MA_SUCCESS) {
+        m_impl->fileEngineReady = true;
+        ma_engine_listener_set_world_up(&m_impl->fileEngine, 0, 0.0f, 1.0f, 0.0f);
+    } else {
+        std::cerr << "[SAGE][Audio] Warning: could not initialize file-backed ma_engine.\n";
+    }
+
     if (ma_device_start(&m_impl->device) != MA_SUCCESS) {
         std::cerr << "[SAGE][Audio] Warning: failed to start audio playback device.\n";
+        if (m_impl->fileEngineReady) {
+            ma_engine_uninit(&m_impl->fileEngine);
+            m_impl->fileEngineReady = false;
+        }
         ma_device_uninit(&m_impl->device);
         return false;
     }
 
     m_impl->deviceStarted = true;
     std::cout << "[SAGE][Audio] miniaudio 0.11 active (" << m_impl->device.sampleRate
-              << " Hz stereo, 4-profile combustion + exhaust formant synth ready)\n";
+              << " Hz stereo, real 2D/3D .wav/.mp3 file engine + vehicle synth ready)\n";
     return true;
 }
 
 void AudioEngine::shutdown() {
-    if (m_impl && m_impl->deviceStarted) {
+    if (!m_impl) return;
+    if (m_impl->deviceStarted) {
         ma_device_uninit(&m_impl->device);
         m_impl->deviceStarted = false;
+    }
+    if (m_impl->fileEngineReady) {
+        std::lock_guard<std::mutex> lock(m_impl->fileEngineMutex);
+        for (int i = 0; i < Impl::kMaxOneShotVoices; ++i) {
+            if (m_impl->oneShots[i].active) {
+                ma_sound_uninit(&m_impl->oneShots[i].sound);
+                m_impl->oneShots[i].active = false;
+            }
+        }
+        for (int i = 0; i < Impl::kMaxAmbientLoops; ++i) {
+            if (m_impl->ambientLoops[i].active) {
+                ma_sound_uninit(&m_impl->ambientLoops[i].sound);
+                m_impl->ambientLoops[i].active = false;
+                m_impl->ambientLoops[i].path.clear();
+            }
+        }
+        ma_engine_uninit(&m_impl->fileEngine);
+        m_impl->fileEngineReady = false;
+    }
+}
+
+void AudioEngine::setAssetRoot(const std::filesystem::path& assetRoot) {
+    if (m_impl) {
+        m_impl->assetRoot = assetRoot;
+    }
+}
+
+bool AudioEngine::playSfx(const std::string& relPath, float volume, float pitch) {
+    if (!m_impl || !m_impl->fileEngineReady || relPath.empty()) return false;
+    const std::filesystem::path fullPath = m_impl->resolveAudioPath(relPath);
+    if (!std::filesystem::exists(fullPath)) return false;
+
+    std::lock_guard<std::mutex> lock(m_impl->fileEngineMutex);
+    int slot = m_impl->nextOneShotIdx;
+    for (int i = 0; i < Impl::kMaxOneShotVoices; ++i) {
+        const int cand = (m_impl->nextOneShotIdx + i) % Impl::kMaxOneShotVoices;
+        if (!m_impl->oneShots[cand].active || ma_sound_at_end(&m_impl->oneShots[cand].sound)) {
+            slot = cand;
+            break;
+        }
+    }
+    m_impl->nextOneShotIdx = (slot + 1) % Impl::kMaxOneShotVoices;
+
+    auto& v = m_impl->oneShots[slot];
+    if (v.active) {
+        ma_sound_uninit(&v.sound);
+        v.active = false;
+    }
+    const ma_uint32 flags = MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION;
+    if (ma_sound_init_from_file(&m_impl->fileEngine, fullPath.string().c_str(), flags, nullptr, nullptr, &v.sound) != MA_SUCCESS) {
+        return false;
+    }
+    ma_sound_set_volume(&v.sound, std::clamp(volume, 0.0f, 2.0f));
+    ma_sound_set_pitch(&v.sound, std::clamp(pitch, 0.4f, 2.5f));
+    ma_sound_start(&v.sound);
+    v.active = true;
+    return true;
+}
+
+bool AudioEngine::playSfx3D(
+    const std::string& relPath,
+    float x, float y, float z,
+    float volume,
+    float minDist,
+    float maxDist,
+    float pitch) {
+    if (!m_impl || !m_impl->fileEngineReady || relPath.empty()) return false;
+    const std::filesystem::path fullPath = m_impl->resolveAudioPath(relPath);
+    if (!std::filesystem::exists(fullPath)) return false;
+
+    std::lock_guard<std::mutex> lock(m_impl->fileEngineMutex);
+    int slot = m_impl->nextOneShotIdx;
+    for (int i = 0; i < Impl::kMaxOneShotVoices; ++i) {
+        const int cand = (m_impl->nextOneShotIdx + i) % Impl::kMaxOneShotVoices;
+        if (!m_impl->oneShots[cand].active || ma_sound_at_end(&m_impl->oneShots[cand].sound)) {
+            slot = cand;
+            break;
+        }
+    }
+    m_impl->nextOneShotIdx = (slot + 1) % Impl::kMaxOneShotVoices;
+
+    auto& v = m_impl->oneShots[slot];
+    if (v.active) {
+        ma_sound_uninit(&v.sound);
+        v.active = false;
+    }
+    if (ma_sound_init_from_file(&m_impl->fileEngine, fullPath.string().c_str(), MA_SOUND_FLAG_DECODE, nullptr, nullptr, &v.sound) != MA_SUCCESS) {
+        return false;
+    }
+    ma_sound_set_spatialization_enabled(&v.sound, MA_TRUE);
+    ma_sound_set_attenuation_model(&v.sound, ma_attenuation_model_linear);
+    ma_sound_set_min_distance(&v.sound, std::max(minDist, 1.0f));
+    ma_sound_set_max_distance(&v.sound, std::max(maxDist, minDist + 2.0f));
+    ma_sound_set_position(&v.sound, x, y, z);
+    ma_sound_set_volume(&v.sound, std::clamp(volume, 0.0f, 2.0f));
+    ma_sound_set_pitch(&v.sound, std::clamp(pitch, 0.4f, 2.5f));
+    ma_sound_start(&v.sound);
+    v.active = true;
+    return true;
+}
+
+bool AudioEngine::setAmbientLoop(
+    int slot,
+    const std::string& relPath,
+    float volume,
+    bool spatial,
+    float x, float y, float z,
+    float maxDist) {
+    if (!m_impl || !m_impl->fileEngineReady || slot < 0 || slot >= Impl::kMaxAmbientLoops) return false;
+    std::lock_guard<std::mutex> lock(m_impl->fileEngineMutex);
+    auto& amb = m_impl->ambientLoops[slot];
+
+    if (relPath.empty()) {
+        if (amb.active) {
+            ma_sound_uninit(&amb.sound);
+            amb.active = false;
+            amb.path.clear();
+        }
+        return true;
+    }
+
+    const float clampedVol = std::clamp(volume, 0.0f, 2.0f);
+    if (!amb.active || amb.path != relPath) {
+        const std::filesystem::path fullPath = m_impl->resolveAudioPath(relPath);
+        if (!std::filesystem::exists(fullPath)) return false;
+        if (amb.active) {
+            ma_sound_uninit(&amb.sound);
+            amb.active = false;
+        }
+        const ma_uint32 flags = MA_SOUND_FLAG_STREAM | (spatial ? 0u : MA_SOUND_FLAG_NO_SPATIALIZATION);
+        if (ma_sound_init_from_file(&m_impl->fileEngine, fullPath.string().c_str(), flags, nullptr, nullptr, &amb.sound) != MA_SUCCESS) {
+            return false;
+        }
+        ma_sound_set_looping(&amb.sound, MA_TRUE);
+        if (spatial) {
+            ma_sound_set_spatialization_enabled(&amb.sound, MA_TRUE);
+            ma_sound_set_attenuation_model(&amb.sound, ma_attenuation_model_linear);
+            ma_sound_set_min_distance(&amb.sound, 4.0f);
+            ma_sound_set_max_distance(&amb.sound, std::max(maxDist, 10.0f));
+            ma_sound_set_position(&amb.sound, x, y, z);
+        }
+        ma_sound_set_volume(&amb.sound, clampedVol);
+        ma_sound_start(&amb.sound);
+        amb.path = relPath;
+        amb.active = true;
+    } else {
+        ma_sound_set_volume(&amb.sound, clampedVol);
+        if (spatial) {
+            ma_sound_set_position(&amb.sound, x, y, z);
+            ma_sound_set_max_distance(&amb.sound, std::max(maxDist, 10.0f));
+        }
+    }
+    return true;
+}
+
+void AudioEngine::stopAmbientLoop(int slot) {
+    if (!m_impl || !m_impl->fileEngineReady || slot < 0 || slot >= Impl::kMaxAmbientLoops) return;
+    std::lock_guard<std::mutex> lock(m_impl->fileEngineMutex);
+    auto& amb = m_impl->ambientLoops[slot];
+    if (amb.active) {
+        ma_sound_uninit(&amb.sound);
+        amb.active = false;
+        amb.path.clear();
+    }
+}
+
+void AudioEngine::stopAllAmbientLoops() {
+    for (int i = 0; i < Impl::kMaxAmbientLoops; ++i) {
+        stopAmbientLoop(i);
     }
 }
 
@@ -555,6 +804,13 @@ void AudioEngine::setListener(float x, float y, float z, float fwdX, float fwdZ)
     m_impl->listenerZ.store(z, std::memory_order_relaxed);
     m_impl->listenerFwdX.store(fwdX, std::memory_order_relaxed);
     m_impl->listenerFwdZ.store(fwdZ, std::memory_order_relaxed);
+    if (m_impl->fileEngineReady) {
+        ma_engine_listener_set_position(&m_impl->fileEngine, 0, x, y, z);
+        const float fLen = std::sqrt(fwdX * fwdX + fwdZ * fwdZ);
+        if (fLen > 0.001f) {
+            ma_engine_listener_set_direction(&m_impl->fileEngine, 0, fwdX / fLen, 0.0f, fwdZ / fLen);
+        }
+    }
 }
 
 void AudioEngine::setSpatialEmitter(int slot, int type, float x, float y, float z, float radius, float gain) {

@@ -60,6 +60,7 @@ struct LuaEngine::Impl {
     std::vector<LoadedResource> resources;
     std::unordered_map<std::string, fs::file_time_type> watchedTimestamps;
     std::size_t reloadCount = 0;
+    std::string onlyResourceFilter;
 
     void bindSageApi(sol::state& state) {
         // --- sage.* namespace ---
@@ -108,6 +109,14 @@ struct LuaEngine::Impl {
             std::ifstream in(filePath);
             if (!in.is_open()) return "";
             return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        });
+        sageTbl.set_function("fileExists", [this](const std::string& relPath) -> bool {
+            if (relPath.empty()) return false;
+            std::error_code ec;
+            const fs::path direct(relPath);
+            if (fs::exists(direct, ec)) return true;
+            const fs::path fromRoot = resourcesRoot.parent_path() / direct;
+            return fs::exists(fromRoot, ec);
         });
 
         // --- input.* namespace ---
@@ -227,6 +236,11 @@ struct LuaEngine::Impl {
         worldTbl.set_function("setTerrainEnabled", [this](bool enabled) {
             if (world) {
                 world->terrain().enabled = enabled;
+            }
+        });
+        worldTbl.set_function("setTerrainMode", [this](const std::string& modeName) {
+            if (world) {
+                world->terrain().mode = (modeName == "island" || modeName == "wilderness") ? 1 : 0;
             }
         });
         worldTbl.set_function("setSSR", [this](bool enabled, sol::optional<float> intensity) {
@@ -573,6 +587,30 @@ struct LuaEngine::Impl {
                 audio->setSpatialEmitter(slot, type, x, y, z, radius.value_or(65.0f), gain.value_or(0.65f));
             }
         });
+        audioTbl.set_function("playSfx", [this](const std::string& path, sol::optional<float> vol, sol::optional<float> pitch) -> bool {
+            return audio ? audio->playSfx(path, vol.value_or(0.85f), pitch.value_or(1.0f)) : false;
+        });
+        audioTbl.set_function("playSfx3D", [this](
+            const std::string& path, float x, float y, float z,
+            sol::optional<float> vol, sol::optional<float> minDist, sol::optional<float> maxDist, sol::optional<float> pitch) -> bool {
+            return audio ? audio->playSfx3D(
+                path, x, y, z, vol.value_or(0.90f), minDist.value_or(6.0f), maxDist.value_or(85.0f), pitch.value_or(1.0f)) : false;
+        });
+        audioTbl.set_function("setAmbientLoop", [this](
+            int slot, const std::string& path, sol::optional<float> vol,
+            sol::optional<float> x, sol::optional<float> y, sol::optional<float> z, sol::optional<float> maxDist) -> bool {
+            if (!audio) return false;
+            const bool isSpatial = x.has_value() && y.has_value() && z.has_value();
+            return audio->setAmbientLoop(
+                slot, path, vol.value_or(0.55f), isSpatial,
+                x.value_or(0.0f), y.value_or(0.0f), z.value_or(0.0f), maxDist.value_or(80.0f));
+        });
+        audioTbl.set_function("stopAmbientLoop", [this](int slot) {
+            if (audio) audio->stopAmbientLoop(slot);
+        });
+        audioTbl.set_function("stopAllAmbientLoops", [this]() {
+            if (audio) audio->stopAllAmbientLoops();
+        });
 
         // --- ui.* namespace (Lua-driven Dear ImGui Game HUDs & Fullscreen Menus!) ---
         sol::table uiTbl = state.create_named_table("ui");
@@ -741,7 +779,7 @@ struct LuaEngine::Impl {
         resources.clear();
     }
 
-    bool loadSingleResource(const fs::path& resourceDir) {
+    bool loadSingleResource(const fs::path& resourceDir, bool forceEnabled = false) {
         const fs::path manifestPath = resourceDir / "manifest.json";
         if (!fs::exists(manifestPath)) {
             return false;
@@ -764,7 +802,7 @@ struct LuaEngine::Impl {
 
         const bool enabled = manifest.value("enabled", true);
         const std::string name = manifest.value("name", resourceDir.filename().string());
-        if (!enabled) {
+        if (!forceEnabled && !enabled) {
             std::cout << "[SAGE][Lua] Skipping disabled resource: " << name << "\n";
             return false;
         }
@@ -855,8 +893,16 @@ bool LuaEngine::initialize(
     return reloadAll();
 }
 
+void LuaEngine::setResourceFilter(const std::string& onlyResourceName) {
+    m_impl->onlyResourceFilter = onlyResourceName;
+}
+
 bool LuaEngine::reloadAll() {
     m_impl->callShutdownHooks();
+    if (m_impl->audio) {
+        m_impl->audio->stopAllAmbientLoops();
+        m_impl->audio->clearSpatialEmitters();
+    }
     if (m_impl->physics) {
         m_impl->physics->clearBodies();
     }
@@ -895,7 +941,14 @@ bool LuaEngine::reloadAll() {
     std::sort(resourceDirs.begin(), resourceDirs.end());
 
     for (const auto& dir : resourceDirs) {
-        m_impl->loadSingleResource(dir);
+        if (!m_impl->onlyResourceFilter.empty()) {
+            if (dir.filename().string() != m_impl->onlyResourceFilter) {
+                continue;
+            }
+            m_impl->loadSingleResource(dir, true);
+        } else {
+            m_impl->loadSingleResource(dir, false);
+        }
     }
 
     m_impl->snapshotWatchedFiles();

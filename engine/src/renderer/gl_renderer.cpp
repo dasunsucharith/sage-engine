@@ -15,6 +15,8 @@
 #include <cgltf.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
@@ -261,6 +263,7 @@ uniform sampler2D uMetRoughTex;
 uniform float uPulse;
 uniform float uTime;
 uniform int uIsGround;
+uniform int uTerrainMode;
 uniform float uWetness;
 uniform int uCloudShadowsEnabled;
 
@@ -400,10 +403,34 @@ vec3 perturbNormalFromMap(vec3 N, vec3 worldPos, vec2 uv) {
     vec3 Q2 = dFdy(worldPos);
     vec2 st1 = dFdx(uv);
     vec2 st2 = dFdy(uv);
-    vec3 T = normalize(Q1 * st2.t - Q2 * st1.t);
-    vec3 B = -normalize(cross(N, T));
+    vec3 rawT = Q1 * st2.t - Q2 * st1.t;
+    float tLenSq = dot(rawT, rawT);
+    if (tLenSq < 1e-10) {
+        return N;
+    }
+    vec3 T = rawT * inversesqrt(tLenSq);
+    T = T - N * dot(N, T);
+    float tOrthoSq = dot(T, T);
+    if (tOrthoSq < 1e-10) {
+        return N;
+    }
+    T *= inversesqrt(tOrthoSq);
+    vec3 B = -cross(N, T);
     mat3 TBN = mat3(T, B, N);
-    return normalize(TBN * mapN);
+    vec3 res = TBN * mapN;
+    float rSq = dot(res, res);
+    return (rSq > 1e-10) ? (res * inversesqrt(rSq)) : N;
+}
+
+float terrainFbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.50;
+    for (int i = 0; i < 3; ++i) {
+        v += a * groundNoise(p);
+        p = p * 2.13 + vec2(17.3, 9.1);
+        a *= 0.50;
+    }
+    return v;
 }
 
 void main() {
@@ -422,6 +449,11 @@ void main() {
         metal = clamp(metal * mr.b, 0.0, 1.0);
     }
 
+    vec3 N = normalize(vWorldNormal);
+    if (!gl_FrontFacing) {
+        N = -N;
+    }
+
     if (uIsGround == 1) {
         float nLarge = groundNoise(vWorldPos.xz * 0.14);
         float nFine  = groundNoise(vWorldPos.xz * 1.65);
@@ -437,43 +469,85 @@ void main() {
             metal = mix(metal, 0.48, puddle * 0.78);
         }
     } else if (uIsGround == 2) {
-        // Multi-Biome 3D Heightmap Terrain PBR Splatting (Alpine Grass, Red Rock Strata, Sand, Cliff Rock & Snow Peaks!)
-        float nMacro = groundNoise(vWorldPos.xz * 0.035);
-        float nMed   = groundNoise(vWorldPos.xz * 0.22);
-        float nFine  = groundNoise(vWorldPos.xz * 1.40);
-        float detail = (nMacro * 0.45 + nMed * 0.35 + nFine * 0.20) - 0.5;
-
-        float bx = smoothstep(-28.0, 28.0, vWorldPos.x);
-        float bz = smoothstep(-28.0, 28.0, vWorldPos.z);
-
-        vec3 alpineGrass = vec3(0.11, 0.26, 0.10) * (1.0 + detail * 0.32);
-        vec3 parkGrass   = vec3(0.14, 0.28, 0.13) * (1.0 + detail * 0.28);
-        vec3 coastSand   = vec3(0.56, 0.46, 0.28) * (1.0 + detail * 0.24);
-        float strata     = 0.86 + 0.14 * sin(vWorldPos.y * 2.1 + nMacro * 3.5);
-        vec3 desertRock  = vec3(0.52, 0.24, 0.13) * strata * (1.0 + detail * 0.26);
-
-        vec3 northCol = mix(parkGrass, alpineGrass, bx);
-        vec3 southCol = mix(desertRock, coastSand, bx);
-        vec3 baseBiome = mix(southCol, northCol, bz);
-
-        vec3 Ngeom = normalize(vWorldNormal);
+        // Multi-Biome 3D Heightmap Terrain PBR Splatting + Multi-Scale Micro-Normal Detail (v1.6.0)!
+        float nMacro = terrainFbm(vWorldPos.xz * 0.028);
+        float nMed   = terrainFbm(vWorldPos.xz * 0.16);
+        float nFine  = groundNoise(vWorldPos.xz * 1.85);
+        float nMicro = groundNoise(vWorldPos.xz * 6.40);
+        float detail = (nMacro * 0.36 + nMed * 0.30 + nFine * 0.22 + nMicro * 0.12) - 0.5;
+        vec3 Ngeom = normalize(vWorldPos.y > -99.0 ? normalize(vWorldNormal) : vec3(0, 1, 0));
         float slope = 1.0 - clamp(Ngeom.y, 0.0, 1.0);
-        vec3 cliffGranite = mix(vec3(0.24, 0.22, 0.21), vec3(0.42, 0.21, 0.13), (1.0 - bx) * (1.0 - bz)) * (1.0 + detail * 0.35);
-        albedo = mix(baseBiome, cliffGranite, smoothstep(0.14, 0.38, slope));
 
-        // Crisp Snow Caps on High Alpine Mountain Peaks (vWorldPos.y > 17m in Northern Mountain Range!)
-        float snowMask = smoothstep(16.0, 25.0, vWorldPos.y + detail * 4.5) * smoothstep(-35.0, 35.0, vWorldPos.z) * smoothstep(0.42, 0.72, Ngeom.y);
-        albedo = mix(albedo, vec3(0.86, 0.90, 0.96), snowMask);
+        // Compute multi-scale procedural micro-bump normal gradient (crisp sand, meadow soil & craggy granite!)
+        float bEps = 0.16;
+        float bFreq = mix(0.85, 1.45, smoothstep(0.12, 0.35, slope));
+        float b0 = terrainFbm(vWorldPos.xz * bFreq) * 0.60 + groundNoise(vWorldPos.xz * 4.8) * 0.40;
+        float bx = terrainFbm((vWorldPos.xz + vec2(bEps, 0.0)) * bFreq) * 0.60 + groundNoise((vWorldPos.xz + vec2(bEps, 0.0)) * 4.8) * 0.40;
+        float bz = terrainFbm((vWorldPos.xz + vec2(0.0, bEps)) * bFreq) * 0.60 + groundNoise((vWorldPos.xz + vec2(0.0, bEps)) * 4.8) * 0.40;
+        float bumpAmp = mix(0.42, 1.05, smoothstep(0.08, 0.36, slope));
+        N = normalize(Ngeom + vec3((b0 - bx) * bumpAmp, 0.0, (b0 - bz) * bumpAmp));
 
-        rough = clamp(mix(0.88, 0.62, snowMask) + detail * 0.12, 0.35, 0.96);
-        metal = 0.02;
-        if (uWetness > 0.01) {
-            albedo *= (1.0 - 0.28 * uWetness);
-            rough = mix(rough, 0.24, uWetness * 0.55);
+        if (uTerrainMode == 1) {
+            // ORGANIC PHOTOREALISTIC WILDERNESS ISLAND (Rich earthy woodland tones + fractured granite!)
+            float hN = vWorldPos.y + detail * 2.4;
+            vec3 wetSand    = vec3(0.22, 0.18, 0.12) * (1.0 + detail * 0.32);
+            vec3 goldSand   = vec3(0.52, 0.43, 0.28) * (1.0 + detail * 0.34);
+            vec3 dryGrass   = vec3(0.14, 0.20, 0.08) * (1.0 + detail * 0.44);
+            vec3 lushForest = mix(vec3(0.072, 0.150, 0.052), vec3(0.140, 0.222, 0.074), nMacro) * (1.0 + detail * 0.48);
+            vec3 pineHumus  = vec3(0.115, 0.095, 0.062) * (1.0 + detail * 0.44);
+            vec3 alpineMoss = vec3(0.16, 0.15, 0.10) * (1.0 + detail * 0.42);
+            // Non-repeating 3D-warped fractured alpine granite (ZERO horizontal banding!)
+            float rockCragA = terrainFbm(vec2(vWorldPos.x * 0.07 + vWorldPos.y * 0.11, vWorldPos.z * 0.07 - vWorldPos.y * 0.08));
+            float rockCragB = terrainFbm(vec2(vWorldPos.x * 0.24 - vWorldPos.y * 0.19, vWorldPos.z * 0.24 + vWorldPos.y * 0.17));
+            vec3 cliffRock  = mix(vec3(0.11, 0.108, 0.105), vec3(0.26, 0.255, 0.242), clamp(rockCragA * 0.58 + rockCragB * 0.42, 0.0, 1.0));
+            vec3 snowCap    = vec3(0.84, 0.88, 0.94) * (0.95 + 0.07 * nMicro);
+
+            vec3 col = mix(wetSand, goldSand, smoothstep(-0.2, 1.3, hN));
+            col = mix(col, dryGrass, smoothstep(2.2, 4.0, hN));
+            col = mix(col, lushForest, smoothstep(3.6, 6.2, hN));
+            col = mix(col, pineHumus, smoothstep(0.46, 0.78, nMed) * smoothstep(4.2, 9.5, hN) * 0.55);
+            col = mix(col, alpineMoss, smoothstep(15.5, 22.0, hN));
+            col = mix(col, cliffRock, smoothstep(0.12, 0.30, slope));
+            float snowMask = smoothstep(27.5, 35.5, vWorldPos.y + detail * 4.5) * smoothstep(0.38, 0.70, Ngeom.y);
+            albedo = mix(col, snowCap, snowMask);
+
+            float shoreWet = 1.0 - smoothstep(-0.2, 1.35, vWorldPos.y);
+            rough = clamp(mix(0.90, 0.62, snowMask) - shoreWet * 0.45 + detail * 0.12, 0.20, 0.98);
+            metal = shoreWet * 0.16;
+            if (uWetness > 0.01) {
+                albedo *= (1.0 - 0.32 * uWetness);
+                rough = mix(rough, 0.16, uWetness * 0.65);
+            }
+        } else {
+            // Stunt City 4-Biome Open World Splatting (Alpine Grass, Red Rock Strata, Sand, Cliff Rock & Snow Peaks!)
+            float bxCity = smoothstep(-28.0, 28.0, vWorldPos.x);
+            float bzCity = smoothstep(-28.0, 28.0, vWorldPos.z);
+
+            vec3 alpineGrass = vec3(0.11, 0.26, 0.10) * (1.0 + detail * 0.32);
+            vec3 parkGrass   = vec3(0.14, 0.28, 0.13) * (1.0 + detail * 0.28);
+            vec3 coastSand   = vec3(0.56, 0.46, 0.28) * (1.0 + detail * 0.24);
+            float strata     = 0.86 + 0.14 * sin(vWorldPos.y * 2.1 + nMacro * 3.5);
+            vec3 desertRock  = vec3(0.52, 0.24, 0.13) * strata * (1.0 + detail * 0.26);
+
+            vec3 northCol = mix(parkGrass, alpineGrass, bxCity);
+            vec3 southCol = mix(desertRock, coastSand, bxCity);
+            vec3 baseBiome = mix(southCol, northCol, bzCity);
+
+            vec3 cliffGranite = mix(vec3(0.24, 0.22, 0.21), vec3(0.42, 0.21, 0.13), (1.0 - bxCity) * (1.0 - bzCity)) * (1.0 + detail * 0.35);
+            albedo = mix(baseBiome, cliffGranite, smoothstep(0.14, 0.38, slope));
+
+            float snowMask = smoothstep(16.0, 25.0, vWorldPos.y + detail * 4.5) * smoothstep(-35.0, 35.0, vWorldPos.z) * smoothstep(0.42, 0.72, Ngeom.y);
+            albedo = mix(albedo, vec3(0.86, 0.90, 0.96), snowMask);
+
+            rough = clamp(mix(0.88, 0.62, snowMask) + detail * 0.12, 0.35, 0.96);
+            metal = 0.02;
+            if (uWetness > 0.01) {
+                albedo *= (1.0 - 0.28 * uWetness);
+                rough = mix(rough, 0.24, uWetness * 0.55);
+            }
         }
     }
 
-    vec3 N = normalize(vWorldNormal);
     if (uHasNormalTex == 1) {
         N = perturbNormalFromMap(N, vWorldPos, vUV);
     }
@@ -483,44 +557,42 @@ void main() {
 
     float shadowVis = computeShadowVisibility(vWorldPos, N, L);
 
-    // Drifting FBM Cloud Shadows across the 560m open world & 3D mountain ridges (v1.3.0)!
+    // Drifting FBM Cloud Shadows across the 560m open world & 3D mountain ridges!
     if (uCloudShadowsEnabled == 1) {
         float c1 = groundNoise(vWorldPos.xz * 0.0085 + vec2(uTime * 0.022, uTime * 0.011));
         float c2 = groundNoise(vWorldPos.xz * 0.019 - vec2(uTime * 0.014, -uTime * 0.008));
         float cloudCover = smoothstep(0.48, 0.78, c1 * 0.65 + c2 * 0.35);
-        shadowVis *= mix(1.0, 0.76, cloudCover);
+        shadowVis *= mix(1.0, 0.78, cloudCover);
     }
 
     // Direct Sun Radiance using true Cook-Torrance GGX PBR!
-    vec3 directSun = evaluatePbrLight(N, V, L, uSunColor * 3.45, albedo, metal, rough, F0) * shadowVis;
+    vec3 directSun = evaluatePbrLight(N, V, L, uSunColor * 3.35, albedo, metal, rough, F0) * shadowVis;
 
-    // Hemisphere Sky & Ground Bounce IBL + Glossy Clearcoat Sky Reflections!
+    // Rich Multi-Bounce Hemisphere Sky & Ground IBL (prevents dark/black shadow faces on characters!)
     float hemiT = N.y * 0.5 + 0.5;
-    vec3 skyFill = mix(uSkyHorizon, uSkyZenith, 0.35);
-    vec3 hemiAmbient = mix(uGroundAmbient, skyFill, hemiT) * albedo * (1.0 - 0.55 * metal) * (uAmbientIntensity * 1.40);
+    vec3 skyFill = mix(uSkyHorizon, uSkyZenith, 0.32);
+    vec3 groundBounce = mix(uGroundAmbient, uSkyHorizon * 0.55, 0.35);
+    vec3 hemiAmbient = mix(groundBounce, skyFill, hemiT) * albedo * (1.0 - 0.55 * metal) * (uAmbientIntensity * 1.68);
 
     vec3 R = reflect(-V, N);
     vec3 envSky = mix(uSkyHorizon, uSkyZenith, clamp(R.y * 1.2 + 0.15, 0.0, 1.0));
     vec3 Fenv = fresnelSchlick(max(dot(N, V), 0.0), F0);
     float envGloss = (1.0 - rough) * (1.0 - rough);
-    vec3 iblSpec = envSky * Fenv * (0.28 + 0.92 * envGloss);
+    vec3 iblSpec = envSky * Fenv * (0.04 + 0.92 * envGloss);
 
-    // Subtle ground-contact ambient occlusion for grounded 3D buildings & cars near y=0
-    float contactAO = (uIsGround == 0) ? mix(0.76, 1.0, smoothstep(0.0, 0.65, max(vWorldPos.y, 0.0))) : 1.0;
-
-    // Subtle fresnel rim-light accent on 3D characters & vehicles so silhouettes pop cleanly!
-    float rimTerm = pow(1.0 - max(dot(N, V), 0.0), 3.6) * (uIsGround == 0 ? 1.0 : 0.0);
-    vec3 rimGlow = mix(uSkyHorizon, uSunColor, 0.45) * rimTerm * (0.22 + 0.18 * (1.0 - rough));
+    // Subtle fresnel rim-light accent on 3D characters & vehicles (modulated by sky/gloss so matte cloth never glows white!)
+    float rimTerm = pow(1.0 - max(dot(N, V), 0.0), 4.2) * (uIsGround == 0 ? 1.0 : 0.0);
+    vec3 rimGlow = mix(uSkyHorizon, uSunColor, 0.45) * rimTerm * (0.06 + 0.18 * envGloss);
 
     // Emissive values exceed 1.0 in HDR so Bloom picks up headlights, neon & beacons!
     vec3 baseEmissive = (vInstColorEmissive.a > 0.5) ? (albedo * 0.90) : uEmissive;
-    vec3 emissiveTerm = baseEmissive * 1.55;
+    vec3 emissiveTerm = baseEmissive * 1.35;
     if (uPulse > 0.5) {
         float p = 0.80 + 0.20 * sin(uTime * 5.0);
-        emissiveTerm *= p * 1.35;
+        emissiveTerm *= p * 1.30;
     }
 
-    vec3 color = (hemiAmbient * contactAO) + directSun + iblSpec + rimGlow + emissiveTerm;
+    vec3 color = hemiAmbient + directSun + iblSpec + rimGlow + emissiveTerm;
 
     // Real-time Dynamic Point Lights evaluated with true GGX PBR!
     for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
@@ -534,7 +606,7 @@ void main() {
             vec3 plDir = toL / max(d, 0.001);
             float att = 1.0 - (d / lr);
             att = att * att;
-            color += evaluatePbrLight(N, V, plDir, lc * att * 2.4, albedo, metal, rough, F0);
+            color += evaluatePbrLight(N, V, plDir, lc * att * 2.2, albedo, metal, rough, F0);
         }
     }
 
@@ -542,14 +614,14 @@ void main() {
     float dist = length(uCameraPos - vWorldPos);
     float fogFactor = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1.0), 0.0, 1.0);
     float sunInscatter = pow(max(dot(-V, L), 0.0), 6.0);
-    vec3 fogColor = mix(uSkyHorizon, uSunColor * 1.15, sunInscatter * 0.42);
-    color = mix(color, fogColor, fogFactor * fogFactor * 0.86);
+    vec3 fogColor = mix(uSkyHorizon, uSunColor * 1.12, sunInscatter * 0.36);
+    color = mix(color, fogColor, fogFactor * fogFactor * 0.82);
 
-    // Output linear HDR + per-pixel surface reflectivity in alpha for Screen-Space Reflections (v1.4.0)!
+    // Output sanitized linear HDR + per-pixel reflectivity in alpha for Screen-Space Reflections!
     float wetBoost = (uIsGround == 1) ? (uWetness * 0.85) : 0.0;
-    float reflectivity = clamp((1.0 - rough) * (0.20 + 0.80 * metal + wetBoost), 0.0, 1.0);
-    if (uIsGround == 2) reflectivity *= 0.22; // Natural grassy hills stay mostly matte
-    FragColor = vec4(color, reflectivity);
+    float reflectivity = clamp((1.0 - rough) * (0.14 + 0.86 * metal + wetBoost), 0.0, 1.0);
+    if (uIsGround == 2) reflectivity *= 0.16;
+    FragColor = vec4(clamp(color, vec3(0.0), vec3(48.0)), reflectivity);
 }
 )GLSL";
 
@@ -640,6 +712,11 @@ uniform float uFogStart;
 uniform float uFogEnd;
 uniform float uTime;
 uniform int uCloudShadowsEnabled;
+uniform int uShadowsEnabled;
+uniform mat4 uLightViewProj;
+uniform mat4 uLightViewProjMid;
+uniform sampler2DShadow uShadowMap;
+uniform sampler2DShadow uShadowMapMid;
 
 out vec4 FragColor;
 
@@ -655,44 +732,60 @@ float noiseG(vec2 p) {
                mix(hash21G(i + vec2(0, 1)), hash21G(i + vec2(1, 1)), f.x), f.y);
 }
 
-void main() {
-    vec3 rootCol = vec3(0.045, 0.13, 0.038);
-    vec3 tipCol  = mix(vec3(0.18, 0.39, 0.10), vec3(0.32, 0.44, 0.11), vColorShift);
-    vec3 albedo  = mix(rootCol, tipCol, smoothstep(0.0, 0.95, vHeightFrac));
+float sampleGrassShadow(vec3 wp) {
+    if (uShadowsEnabled == 0) return 1.0;
+    vec4 lc0 = uLightViewProj * vec4(wp + vec3(0.0, 0.14, 0.0), 1.0);
+    vec3 p0 = (lc0.xyz / lc0.w) * 0.5 + 0.5;
+    if (p0.x > 0.02 && p0.x < 0.98 && p0.y > 0.02 && p0.y < 0.98 && p0.z <= 1.0) {
+        return texture(uShadowMap, vec3(p0.xy, p0.z - 0.0012));
+    }
+    vec4 lc1 = uLightViewProjMid * vec4(wp + vec3(0.0, 0.22, 0.0), 1.0);
+    vec3 p1 = (lc1.xyz / lc1.w) * 0.5 + 0.5;
+    if (p1.x > 0.02 && p1.x < 0.98 && p1.y > 0.02 && p1.y < 0.98 && p1.z <= 1.0) {
+        return texture(uShadowMapMid, vec3(p1.xy, p1.z - 0.0022));
+    }
+    return 1.0;
+}
 
-    // Occasional alpine yellow / lavender wildflower tips!
-    if (vFlowerFlag > 0.5 && vHeightFrac > 0.72) {
-        vec3 flw = (vColorShift > 0.5) ? vec3(0.95, 0.78, 0.18) : vec3(0.82, 0.56, 0.95);
-        albedo = mix(albedo, flw, smoothstep(0.72, 0.92, vHeightFrac));
+void main() {
+    // Rich natural woodland grass palette that blends seamlessly with organic terrain floor!
+    vec3 rootCol = vec3(0.052, 0.095, 0.036);
+    vec3 tipCol  = mix(vec3(0.115, 0.225, 0.068), vec3(0.245, 0.280, 0.095), vColorShift);
+    vec3 albedo  = mix(rootCol, tipCol, smoothstep(0.0, 0.92, vHeightFrac));
+
+    // Subtle wildflower tips
+    if (vFlowerFlag > 0.5 && vHeightFrac > 0.76) {
+        vec3 flw = (vColorShift > 0.5) ? vec3(0.88, 0.72, 0.22) : vec3(0.76, 0.58, 0.88);
+        albedo = mix(albedo, flw, smoothstep(0.76, 0.95, vHeightFrac));
     }
 
     vec3 L = normalize(uSunDir);
     vec3 V = normalize(uCameraPos - vWorldPos);
-    float ndotl = clamp(L.y * 0.85 + 0.25, 0.15, 1.0);
-    float translucency = pow(max(dot(-V, L), 0.0), 3.0) * vHeightFrac * 0.55;
+    float ndotl = clamp(L.y * 0.85 + 0.22, 0.12, 1.0);
+    float translucency = pow(max(dot(-V, L), 0.0), 3.0) * vHeightFrac * 0.45;
 
-    float cloudVis = 1.0;
+    float shVis = sampleGrassShadow(vWorldPos);
     if (uCloudShadowsEnabled == 1) {
         float c1 = noiseG(vWorldPos.xz * 0.0085 + vec2(uTime * 0.022, uTime * 0.011));
-        cloudVis = mix(1.0, 0.76, smoothstep(0.48, 0.78, c1));
+        shVis *= mix(1.0, 0.78, smoothstep(0.48, 0.78, c1));
     }
 
-    float rootAO = mix(0.48, 1.0, vHeightFrac);
-    vec3 skyFill = mix(uGroundAmbient, mix(uSkyHorizon, uSkyZenith, 0.35), 0.65);
-    vec3 color = albedo * (skyFill * uAmbientIntensity * 1.45 + uSunColor * (ndotl * 1.55 + translucency) * cloudVis) * rootAO;
+    float rootAO = mix(0.44, 1.0, vHeightFrac);
+    vec3 skyFill = mix(uGroundAmbient, mix(uSkyHorizon, uSkyZenith, 0.35), 0.60);
+    vec3 color = albedo * (skyFill * uAmbientIntensity * 1.48 + uSunColor * (ndotl * 1.40 + translucency) * shVis) * rootAO;
 
     float dist = length(uCameraPos - vWorldPos);
     float fogFactor = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1.0), 0.0, 1.0);
     float sunInscatter = pow(max(dot(-V, L), 0.0), 6.0);
-    vec3 fogColor = mix(uSkyHorizon, uSunColor * 1.15, sunInscatter * 0.42);
-    color = mix(color, fogColor, fogFactor * fogFactor * 0.86);
+    vec3 fogColor = mix(uSkyHorizon, uSunColor * 1.12, sunInscatter * 0.36);
+    color = mix(color, fogColor, fogFactor * fogFactor * 0.82);
 
     FragColor = vec4(color, 0.0);
 }
 )GLSL";
 
 // -----------------------------------------------------------------------------
-// Pass 3: Animated 3D Ocean Water Shader (Multi-Wave Gerstner + Fresnel + Foam!)
+// Pass 3: AAA Depth-Buffered 3D Ocean & Lake Water (Soft Shore Fade + Foam + Fresnel!)
 // -----------------------------------------------------------------------------
 constexpr const char* kWaterVertexShader = R"GLSL(
 #version 330 core
@@ -707,12 +800,13 @@ uniform float uTime;
 out vec3 vWorldPos;
 out vec2 vUV;
 out float vWaveCrest;
+out vec4 vClipPos;
 
 void main() {
     vec4 baseWorld = uModel * vec4(aPos, 1.0);
     vec2 p = baseWorld.xz;
 
-    // 4-directional ocean wave superposition
+    // 4-directional ocean wave superposition (matches World::sampleWater exactly!)
     float w1 = sin(p.x * 0.16 + p.y * 0.11 + uTime * 1.85) * 0.22;
     float w2 = sin(p.x * -0.24 + p.y * 0.19 + uTime * 2.35) * 0.14;
     float w3 = cos(p.x * 0.38 - p.y * 0.31 + uTime * 3.10) * 0.07;
@@ -724,7 +818,8 @@ void main() {
     vWorldPos = baseWorld.xyz;
     vUV = aUV;
     vWaveCrest = clamp((disp + 0.45) / 0.90, 0.0, 1.0);
-    gl_Position = uViewProj * baseWorld;
+    vClipPos = uViewProj * baseWorld;
+    gl_Position = vClipPos;
 }
 )GLSL";
 
@@ -733,6 +828,7 @@ constexpr const char* kWaterFragmentShader = R"GLSL(
 in vec3 vWorldPos;
 in vec2 vUV;
 in float vWaveCrest;
+in vec4 vClipPos;
 
 uniform float uTime;
 uniform vec3 uShallowColor;
@@ -743,6 +839,9 @@ uniform vec3 uSkyZenith;
 uniform vec3 uSkyHorizon;
 uniform float uFogStart;
 uniform float uFogEnd;
+uniform sampler2D uWaterSceneDepthTex;
+uniform float uWaterNearPlane;
+uniform float uWaterFarPlane;
 
 #define MAX_POINT_LIGHTS 16
 uniform int uWaterPointLightCount;
@@ -751,43 +850,69 @@ uniform vec4 uWaterPointLightColorInt[MAX_POINT_LIGHTS];
 
 out vec4 FragColor;
 
+float linearizeW(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * uWaterNearPlane * uWaterFarPlane) / max(uWaterFarPlane + uWaterNearPlane - z * (uWaterFarPlane - uWaterNearPlane), 0.001);
+}
+
+float hash21W(vec2 p) {
+    p = fract(p * vec2(127.1, 311.7));
+    p += dot(p, p + 34.5);
+    return fract(p.x * p.y);
+}
+
+float noiseW(vec2 p) {
+    vec2 i = floor(p); vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash21W(i), hash21W(i + vec2(1.0, 0.0)), f.x),
+               mix(hash21W(i + vec2(0.0, 1.0)), hash21W(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
 void main() {
     vec2 p = vWorldPos.xz;
 
-    // Analytical + high-frequency ripple normal for sparkling water highlights
-    float dHx = cos(p.x * 0.16 + p.y * 0.11 + uTime * 1.85) * 0.055
-              - cos(p.x * -0.24 + p.y * 0.19 + uTime * 2.35) * 0.050
-              - sin(p.x * 0.38 - p.y * 0.31 + uTime * 3.10) * 0.042
-              + cos(p.x * 1.35 + p.y * 0.90 + uTime * 4.20) * 0.025;
-    float dHz = cos(p.x * 0.16 + p.y * 0.11 + uTime * 1.85) * 0.040
-              + cos(p.x * -0.24 + p.y * 0.19 + uTime * 2.35) * 0.045
-              + sin(p.x * 0.38 - p.y * 0.31 + uTime * 3.10) * 0.036
-              + sin(p.x * 0.85 - p.y * 1.40 + uTime * 3.80) * 0.025;
+    // Non-repeating multi-octave organic ocean & lake ripple normals (eliminates repeating stripes!)
+    float e = 0.22;
+    vec2 uvA = p * 0.14 + vec2(uTime * 0.28, uTime * 0.19);
+    vec2 uvB = p * 0.34 - vec2(uTime * 0.42, -uTime * 0.26);
+    vec2 uvC = p * 0.85 + vec2(-uTime * 0.55, uTime * 0.48);
+    float h0 = noiseW(uvA) * 0.55 + noiseW(uvB) * 0.30 + noiseW(uvC) * 0.15;
+    float hx = noiseW(uvA + vec2(e, 0.0)) * 0.55 + noiseW(uvB + vec2(e, 0.0)) * 0.30 + noiseW(uvC + vec2(e, 0.0)) * 0.15;
+    float hz = noiseW(uvA + vec2(0.0, e)) * 0.55 + noiseW(uvB + vec2(0.0, e)) * 0.30 + noiseW(uvC + vec2(0.0, e)) * 0.15;
 
-    vec3 N = normalize(vec3(-dHx, 1.0, -dHz));
+    float swellX = cos(p.x * 0.16 + p.y * 0.11 + uTime * 1.85) * 0.035;
+    float swellZ = cos(p.x * -0.24 + p.y * 0.19 + uTime * 2.35) * 0.032;
+    vec3 N = normalize(vec3((h0 - hx) * 0.42 - swellX, 1.0, (h0 - hz) * 0.42 - swellZ));
     vec3 V = normalize(uCameraPos - vWorldPos);
     vec3 L = normalize(uSunDir);
     vec3 R = reflect(-V, N);
 
-    // Distance from shore edge (vUV near 0/1 = shallow turquoise + animated shoreline foam!)
-    float edgeDist = min(min(vUV.x, 1.0 - vUV.x), min(vUV.y, 1.0 - vUV.y));
-    float shallowFactor = 1.0 - smoothstep(0.0, 0.28, edgeDist);
+    // TRUE PER-PIXEL DEPTH-BUFFER WATER DEPTH (works around EVERY beach, cove, boulder & inland lake!)
+    vec2 screenUV = (vClipPos.xy / max(vClipPos.w, 0.001)) * 0.5 + 0.5;
+    float sceneRawDepth = texture(uWaterSceneDepthTex, clamp(screenUV, vec2(0.001), vec2(0.999))).r;
+    float sceneLinZ = linearizeW(sceneRawDepth);
+    float waterLinZ = linearizeW(gl_FragCoord.z);
+    float waterDepth = max(sceneLinZ - waterLinZ, 0.0);
 
-    vec3 deepColor = uShallowColor * vec3(0.28, 0.42, 0.68);
-    vec3 waterBody = mix(deepColor, uShallowColor * 1.25, shallowFactor);
+    // Rich translucent Caribbean/Pacific turquoise shallows -> deep ocean navy!
+    float shallowT = 1.0 - smoothstep(0.0, 6.5, waterDepth);
+    vec3 deepColor    = vec3(0.012, 0.085, 0.185);
+    vec3 midColor     = uShallowColor * vec3(0.45, 0.82, 0.92);
+    vec3 shallowCol   = vec3(0.08, 0.46, 0.50);
+    vec3 waterBody    = mix(mix(deepColor, midColor, smoothstep(0.0, 0.65, shallowT)), shallowCol, smoothstep(0.55, 1.0, shallowT));
 
-    // Schlick Fresnel reflection of the real dynamic sky gradient!
-    float fresnel = 0.04 + 0.96 * pow(1.0 - max(dot(N, V), 0.0), 4.5);
-    vec3 skyReflect = mix(uSkyHorizon, uSkyZenith, clamp(R.y * 1.4, 0.0, 1.0));
-    vec3 color = mix(waterBody, skyReflect, clamp(fresnel * 0.88, 0.0, 0.92));
+    // Schlick Fresnel reflection of the dynamic sky gradient!
+    float fresnel = 0.03 + 0.97 * pow(1.0 - max(dot(N, V), 0.0), 4.8);
+    vec3 skyReflect = mix(uSkyHorizon, uSkyZenith, clamp(R.y * 1.35 + 0.05, 0.0, 1.0));
+    vec3 color = mix(waterBody, skyReflect, clamp(fresnel * 0.82, 0.0, 0.88));
 
-    // Crisp sun specular sparkle path across the waves (triggers subtle HDR bloom!)
+    // Crisp sparkling sun highlights across ripples!
     vec3 H = normalize(L + V);
-    float specBroad = pow(max(dot(N, H), 0.0), 48.0) * 0.65;
-    float specSharp = pow(max(dot(N, H), 0.0), 320.0) * 3.20;
+    float specBroad = pow(max(dot(N, H), 0.0), 56.0) * 0.45;
+    float specSharp = pow(max(dot(N, H), 0.0), 340.0) * 2.80;
     color += uSunColor * (specBroad + specSharp);
 
-    // Dynamic point-light shimmer & colored reflections across the animated water ripples!
+    // Dynamic point-light shimmer (campfires & radio beacon reflected in water!)
     for (int i = 0; i < MAX_POINT_LIGHTS; ++i) {
         if (i >= uWaterPointLightCount) break;
         vec3 lp = uWaterPointLightPosRadius[i].xyz;
@@ -800,23 +925,27 @@ void main() {
             float att = 1.0 - (d / lr);
             att = att * att;
             vec3 pH = normalize(plDir + V);
-            float wSpec = pow(max(dot(N, pH), 0.0), 72.0) * 2.2 + max(dot(N, plDir), 0.0) * 0.25;
+            float wSpec = pow(max(dot(N, pH), 0.0), 72.0) * 2.0 + max(dot(N, plDir), 0.0) * 0.22;
             color += lc * wSpec * att;
         }
     }
 
-    // Animated shoreline surf foam + subtle wave-crest whitecaps
-    float foamWave = sin(edgeDist * 55.0 - uTime * 4.2 + sin(p.x * 0.35 + p.y * 0.35) * 2.5);
-    float shoreFoam = smoothstep(0.11, 0.0, edgeDist) * smoothstep(0.15, 0.75, foamWave);
-    float crestFoam = smoothstep(0.84, 0.98, vWaveCrest) * 0.35;
-    color = mix(color, vec3(0.95, 0.98, 1.0) * (0.75 + 0.35 * uSunColor), clamp(shoreFoam + crestFoam, 0.0, 0.88));
+    // Animated organic lapping shoreline surf foam + subtle offshore whitecaps!
+    float foamNoise = noiseW(p * 0.55 + vec2(uTime * 0.35, -uTime * 0.25));
+    float surfRipple = sin(waterDepth * 6.5 - uTime * 3.4 + foamNoise * 4.5);
+    float edgeLine = (1.0 - smoothstep(0.0, 0.42, waterDepth)) * (0.65 + 0.35 * foamNoise);
+    float surfBand = (1.0 - smoothstep(0.15, 1.65, waterDepth)) * smoothstep(0.25, 0.85, surfRipple) * foamNoise;
+    float crestFoam = smoothstep(0.86, 0.99, vWaveCrest) * foamNoise * 0.28;
+    float totalFoam = clamp(edgeLine * 0.85 + surfBand * 0.72 + crestFoam, 0.0, 0.90);
+    color = mix(color, vec3(0.92, 0.96, 0.99) * (0.68 + 0.38 * uSunColor), totalFoam);
 
     // Distance atmospheric fog
     float dist = length(uCameraPos - vWorldPos);
     float fogFactor = clamp((dist - uFogStart) / max(uFogEnd - uFogStart, 1.0), 0.0, 1.0);
-    color = mix(color, uSkyHorizon, fogFactor * fogFactor * 0.85);
+    color = mix(color, uSkyHorizon, fogFactor * fogFactor * 0.82);
 
-    float alpha = mix(0.94, 0.62, smoothstep(0.06, 0.0, edgeDist));
+    // Crystal-clear soft shoreline alpha fade (0.0m..0.55m depth — ZERO harsh polygon seam!)
+    float alpha = clamp(smoothstep(0.0, 0.55, waterDepth) * 0.86 + totalFoam * 0.45 + fresnel * 0.14, 0.0, 0.96);
     FragColor = vec4(color, alpha);
 }
 )GLSL";
@@ -1210,6 +1339,7 @@ struct ModelNode {
     glm::vec3 translation{0.0f};
     glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 scale{1.0f};
+    glm::quat restWorldRot{1.0f, 0.0f, 0.0f, 0.0f};
     std::vector<std::size_t> subMeshIndices;
 };
 
@@ -1235,6 +1365,9 @@ struct GpuModel {
     std::vector<AnimClip> animations;
     glm::vec3 boundCenter{0.0f, 1.0f, 0.0f};
     float boundRadius = 4.0f;
+    int headBoneCount = 0;
+    int neckBoneCount = 0;
+    int chestBoneCount = 0;
     bool hasAnimations = false;
     bool hasSkins = false;
 
@@ -1244,6 +1377,9 @@ struct GpuModel {
         nodes.clear();
         skins.clear();
         animations.clear();
+        headBoneCount = 0;
+        neckBoneCount = 0;
+        chestBoneCount = 0;
         hasAnimations = false;
         hasSkins = false;
     }
@@ -1314,6 +1450,19 @@ GLuint createTextureFromPixels(const unsigned char* pixels, int width, int heigh
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // 8x Anisotropic Filtering (GL_EXT_texture_filter_anisotropic) for crisp oblique ground/bark/fabric textures!
+    constexpr GLenum kTexMaxAniso = 0x84FE;
+    constexpr GLenum kMaxTexMaxAniso = 0x84FF;
+    static float s_maxAniso = -1.0f;
+    if (s_maxAniso < 0.0f) {
+        float queried = 1.0f;
+        glGetFloatv(kMaxTexMaxAniso, &queried);
+        if (glGetError() != GL_NO_ERROR || queried < 1.0f) queried = 1.0f;
+        s_maxAniso = std::min(queried, 8.0f);
+    }
+    if (s_maxAniso > 1.0f) {
+        glTexParameterf(GL_TEXTURE_2D, kTexMaxAniso, s_maxAniso);
+    }
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     gl::generateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -1502,6 +1651,14 @@ glm::mat4 buildEntityMatrix(const Entity& e) {
     return model;
 }
 
+struct AnimEvalScratch {
+    std::vector<glm::vec3> T, S, prevT, prevS;
+    std::vector<glm::quat> R, prevR;
+    std::vector<std::uint8_t> flag, prevFlag, computed;
+    std::vector<glm::mat4> local;
+    std::vector<const AnimClip*> clips;
+};
+
 void sampleModelClips(
     const GpuModel& model,
     const std::string& clipQuery,
@@ -1510,19 +1667,20 @@ void sampleModelClips(
     std::vector<glm::vec3>& T,
     std::vector<glm::quat>& R,
     std::vector<glm::vec3>& S,
-    std::vector<bool>& animatedFlag) {
+    std::vector<std::uint8_t>& animatedFlag,
+    std::vector<const AnimClip*>& clipsToEval) {
     const std::size_t n = model.nodes.size();
     T.resize(n);
     R.resize(n);
     S.resize(n);
-    animatedFlag.assign(n, false);
+    animatedFlag.assign(n, 0);
     for (std::size_t i = 0; i < n; ++i) {
         T[i] = model.nodes[i].translation;
         R[i] = model.nodes[i].rotation;
         S[i] = model.nodes[i].scale;
     }
 
-    std::vector<const AnimClip*> clipsToEval;
+    clipsToEval.clear();
     if (!model.animations.empty() && clipQuery != "none") {
         if (!clipQuery.empty()) {
             for (const auto& c : model.animations) {
@@ -1553,7 +1711,7 @@ void sampleModelClips(
         }
         for (const auto& ch : clip->channels) {
             if (ch.nodeIdx < 0 || static_cast<std::size_t>(ch.nodeIdx) >= n || ch.times.empty()) continue;
-            animatedFlag[ch.nodeIdx] = true;
+            animatedFlag[static_cast<std::size_t>(ch.nodeIdx)] = 1;
             std::size_t i0 = 0, i1 = 0;
             float alpha = 0.0f;
             if (t <= ch.times.front()) { i0 = i1 = 0; }
@@ -1567,52 +1725,48 @@ void sampleModelClips(
             }
             const glm::vec4& v0 = ch.values[i0];
             const glm::vec4& v1 = ch.values[i1];
-            if (ch.path == AnimPath::Translation) T[ch.nodeIdx] = glm::mix(glm::vec3(v0), glm::vec3(v1), alpha);
-            else if (ch.path == AnimPath::Scale) S[ch.nodeIdx] = glm::mix(glm::vec3(v0), glm::vec3(v1), alpha);
+            const std::size_t ni = static_cast<std::size_t>(ch.nodeIdx);
+            if (ch.path == AnimPath::Translation) T[ni] = glm::mix(glm::vec3(v0), glm::vec3(v1), alpha);
+            else if (ch.path == AnimPath::Scale) S[ni] = glm::mix(glm::vec3(v0), glm::vec3(v1), alpha);
             else if (ch.path == AnimPath::Rotation) {
-                R[ch.nodeIdx] = glm::slerp(glm::normalize(glm::quat(v0.w, v0.x, v0.y, v0.z)),
-                                           glm::normalize(glm::quat(v1.w, v1.x, v1.y, v1.z)), alpha);
+                R[ni] = glm::slerp(glm::normalize(glm::quat(v0.w, v0.x, v0.y, v0.z)),
+                                   glm::normalize(glm::quat(v1.w, v1.x, v1.y, v1.z)), alpha);
             }
         }
     }
 }
 
-void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std::vector<glm::mat4>& outWorld) {
+void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, AnimEvalScratch& sc, std::vector<glm::mat4>& outWorld) {
     const std::size_t n = model.nodes.size();
-    outWorld.assign(n, glm::mat4(1.0f));
+    outWorld.resize(n);
     if (n == 0) return;
 
-    std::vector<glm::vec3> T, S;
-    std::vector<glm::quat> R;
-    std::vector<bool> animatedFlag;
-    sampleModelClips(model, entity.activeAnimation, entity.animTime, entity.animLoop, T, R, S, animatedFlag);
+    sampleModelClips(model, entity.activeAnimation, entity.animTime, entity.animLoop, sc.T, sc.R, sc.S, sc.flag, sc.clips);
 
-    // Real-time bone-level crossfade blending between outgoing & incoming animation clips (v1.2.0)!
+    // Real-time bone-level crossfade blending between outgoing & incoming animation clips!
     if (entity.blendDuration > 0.001f && !entity.prevAnimation.empty() && entity.blendElapsed < entity.blendDuration) {
-        std::vector<glm::vec3> prevT, prevS;
-        std::vector<glm::quat> prevR;
-        std::vector<bool> prevFlag;
-        sampleModelClips(model, entity.prevAnimation, entity.prevAnimTime, entity.prevAnimLoop, prevT, prevR, prevS, prevFlag);
+        sampleModelClips(model, entity.prevAnimation, entity.prevAnimTime, entity.prevAnimLoop, sc.prevT, sc.prevR, sc.prevS, sc.prevFlag, sc.clips);
 
         const float rawW = std::clamp(entity.blendElapsed / entity.blendDuration, 0.0f, 1.0f);
         const float w = rawW * rawW * (3.0f - 2.0f * rawW); // Smoothstep S-curve!
         for (std::size_t i = 0; i < n; ++i) {
-            if (animatedFlag[i] || prevFlag[i]) {
-                T[i] = glm::mix(prevT[i], T[i], w);
-                R[i] = glm::slerp(prevR[i], R[i], w);
-                S[i] = glm::mix(prevS[i], S[i], w);
-                animatedFlag[i] = true;
+            if (sc.flag[i] || sc.prevFlag[i]) {
+                sc.T[i] = glm::mix(sc.prevT[i], sc.T[i], w);
+                sc.R[i] = glm::slerp(sc.prevR[i], sc.R[i], w);
+                sc.S[i] = glm::mix(sc.prevS[i], sc.S[i], w);
+                sc.flag[i] = 1;
             }
         }
     }
 
-    // Real-Time Procedural Head/Neck/Chest Look-At IK (v1.5.0)!
+    // Real-Time Entity-Space Normalized Head/Neck/Chest Look-At IK (v1.6.0: Bipeds + Multi-Bone Quadrupeds!)
     if (entity.lookAtEnabled && entity.lookAtWeight > 0.01f && entity.ragdollBlend < 0.75f) {
+        const float eyeH = std::max(model.boundCenter.y * std::abs(entity.scale.y) + 0.35f, 0.65f);
         const float dx = entity.lookAtTarget.x - entity.position.x;
-        const float dy = entity.lookAtTarget.y - (entity.position.y + 1.55f);
+        const float dy = entity.lookAtTarget.y - (entity.position.y + eyeH);
         const float dz = entity.lookAtTarget.z - entity.position.z;
         const float horiz = std::sqrt(dx * dx + dz * dz);
-        if (horiz > 0.25f) {
+        if (horiz > 0.30f) {
             const float targetYaw = std::atan2(dx, dz);
             const float entYaw = glm::radians(entity.rotation.y);
             float relYaw = targetYaw - entYaw;
@@ -1620,29 +1774,36 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std:
             while (relYaw < -kPi) relYaw += 2.0f * kPi;
 
             // Smoothly fade look-at if target is far behind character's shoulders
-            const float frontFade = 1.0f - std::clamp((std::abs(relYaw) - 1.35f) / 0.85f, 0.0f, 1.0f);
+            const float frontFade = 1.0f - std::clamp((std::abs(relYaw) - 1.20f) / 0.85f, 0.0f, 1.0f);
             const float w = entity.lookAtWeight * frontFade * (1.0f - entity.ragdollBlend);
             if (w > 0.01f) {
-                const float clampedYaw = std::clamp(relYaw, -1.12f, 1.12f);
-                const float clampedPitch = std::clamp(-std::atan2(dy, std::max(horiz, 0.5f)), -0.45f, 0.45f);
+                const float clampedYaw = std::clamp(relYaw, -0.95f, 0.95f);
+                const float clampedPitch = std::clamp(-std::atan2(dy, std::max(horiz, 0.6f)), -0.38f, 0.38f);
+                const float headShare = (model.headBoneCount > 0) ? (0.50f / static_cast<float>(model.headBoneCount)) : 0.0f;
+                const float neckShare = (model.neckBoneCount > 0) ? (0.32f / static_cast<float>(model.neckBoneCount)) : 0.0f;
+                const float chestShare = (model.chestBoneCount > 0) ? (0.18f / static_cast<float>(model.chestBoneCount)) : 0.0f;
                 for (std::size_t i = 0; i < n; ++i) {
                     const BoneRole role = model.nodes[i].boneRole;
                     float frac = 0.0f;
-                    if (role == BoneRole::Head) frac = 0.56f;
-                    else if (role == BoneRole::Neck) frac = 0.24f;
-                    else if (role == BoneRole::Chest) frac = 0.20f;
+                    if (role == BoneRole::Head) frac = headShare;
+                    else if (role == BoneRole::Neck) frac = neckShare;
+                    else if (role == BoneRole::Chest) frac = chestShare;
                     if (frac > 0.0f) {
-                        const glm::quat qYaw = glm::angleAxis(clampedYaw * frac * w, glm::vec3(0.0f, 1.0f, 0.0f));
-                        const glm::quat qPitch = glm::angleAxis(clampedPitch * frac * w, glm::vec3(1.0f, 0.0f, 0.0f));
-                        R[i] = glm::normalize(R[i] * qYaw * qPitch);
-                        animatedFlag[i] = true;
+                        // Transform entity-space yaw/pitch into this bone's exact rest-pose local space!
+                        const glm::quat qEntity =
+                            glm::angleAxis(clampedYaw * frac * w, glm::vec3(0.0f, 1.0f, 0.0f)) *
+                            glm::angleAxis(clampedPitch * frac * w, glm::vec3(1.0f, 0.0f, 0.0f));
+                        const glm::quat& restW = model.nodes[i].restWorldRot;
+                        const glm::quat qLocal = glm::normalize(glm::conjugate(restW) * qEntity * restW);
+                        sc.R[i] = glm::normalize(sc.R[i] * qLocal);
+                        sc.flag[i] = 1;
                     }
                 }
             }
         }
     }
 
-    // Euphoria-Style Active-Physics Ragdoll Bone Layer (v1.5.0)!
+    // Euphoria-Style Active-Physics Ragdoll Bone Layer!
     if (entity.ragdollBlend > 0.004f) {
         const float b = std::clamp(entity.ragdollBlend, 0.0f, 1.0f);
         const float rb = b * b * (3.0f - 2.0f * b);
@@ -1668,9 +1829,8 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std:
                         glm::angleAxis(entity.ragdollAngle.x, glm::vec3(1.0f, 0.0f, 0.0f)) *
                         glm::angleAxis(entity.ragdollAngle.z, glm::vec3(0.0f, 0.0f, 1.0f));
                     deltaQ = qTumble;
-                    // Lower hips toward floor when lying/tumbling near ground so character settles naturally!
                     const float groundFactor = 1.0f - airborneFactor;
-                    T[i].y = glm::mix(T[i].y, T[i].y - 0.62f * groundFactor, rb);
+                    sc.T[i].y = glm::mix(sc.T[i].y, sc.T[i].y - 0.62f * groundFactor, rb);
                     break;
                 }
                 case BoneRole::Spine:
@@ -1715,24 +1875,24 @@ void evaluateModelNodeMatrices(const GpuModel& model, const Entity& entity, std:
                 default:
                     break;
             }
-            R[i] = glm::slerp(R[i], glm::normalize(R[i] * deltaQ), rb);
-            animatedFlag[i] = true;
+            sc.R[i] = glm::slerp(sc.R[i], glm::normalize(sc.R[i] * deltaQ), rb);
+            sc.flag[i] = 1;
         }
     }
 
-    std::vector<glm::mat4> local(n);
+    sc.local.resize(n);
     for (std::size_t i = 0; i < n; ++i) {
-        if (model.nodes[i].hasMatrix && !animatedFlag[i]) local[i] = model.nodes[i].staticMatrix;
-        else local[i] = glm::translate(glm::mat4(1.0f), T[i]) * glm::mat4_cast(R[i]) * glm::scale(glm::mat4(1.0f), S[i]);
+        if (model.nodes[i].hasMatrix && !sc.flag[i]) sc.local[i] = model.nodes[i].staticMatrix;
+        else sc.local[i] = glm::translate(glm::mat4(1.0f), sc.T[i]) * glm::mat4_cast(sc.R[i]) * glm::scale(glm::mat4(1.0f), sc.S[i]);
     }
-    std::vector<bool> computed(n, false);
+    sc.computed.assign(n, 0);
     auto computeWorld = [&](auto&& self, std::size_t idx) -> const glm::mat4& {
-        if (computed[idx]) return outWorld[idx];
+        if (sc.computed[idx]) return outWorld[idx];
         const int parent = model.nodes[idx].parentIdx;
         outWorld[idx] = (parent >= 0 && static_cast<std::size_t>(parent) < n)
-            ? self(self, static_cast<std::size_t>(parent)) * local[idx]
-            : local[idx];
-        computed[idx] = true;
+            ? self(self, static_cast<std::size_t>(parent)) * sc.local[idx]
+            : sc.local[idx];
+        sc.computed[idx] = 1;
         return outWorld[idx];
     };
     for (std::size_t i = 0; i < n; ++i) computeWorld(computeWorld, i);
@@ -1745,7 +1905,7 @@ public:
     bool initialize(int viewportWidth, int viewportHeight) override {
         if (!gl::loadFunctions()) return false;
 
-        m_info.backendName = "OpenGL 3.3 Core (v1.5.0: GPU Prop Instancing + 3-CSM + Euphoria Ragdoll + Look-At IK + Grass + SSR + FXAA + GGX PBR)";
+        m_info.backendName = "OpenGL 3.3 Core (v1.6.0: Material-Merged Instancing + Pose Cache + Time-Sliced 3-CSM + Soft-Shore Water + Shadowed Grass + 8x AF + GGX PBR)";
         m_info.gpuVendor = safeGLString(GL_VENDOR);
         m_info.gpuRenderer = safeGLString(GL_RENDERER);
         m_info.apiVersion = safeGLString(GL_VERSION);
@@ -1840,6 +2000,7 @@ public:
         m_uPulse = gl::getUniformLocation(m_litProgram, "uPulse");
         m_uTime = gl::getUniformLocation(m_litProgram, "uTime");
         m_uIsGround = gl::getUniformLocation(m_litProgram, "uIsGround");
+        m_uTerrainMode = gl::getUniformLocation(m_litProgram, "uTerrainMode");
         m_uWetness = gl::getUniformLocation(m_litProgram, "uWetness");
         m_uCloudShadowsEnabled = gl::getUniformLocation(m_litProgram, "uCloudShadowsEnabled");
         m_uShadowsEnabled = gl::getUniformLocation(m_litProgram, "uShadowsEnabled");
@@ -1877,6 +2038,9 @@ public:
         m_waterPointLightCount = gl::getUniformLocation(m_waterProgram, "uWaterPointLightCount");
         m_waterPointLightPosRadius = gl::getUniformLocation(m_waterProgram, "uWaterPointLightPosRadius");
         m_waterPointLightColorInt = gl::getUniformLocation(m_waterProgram, "uWaterPointLightColorInt");
+        m_waterSceneDepthTex = gl::getUniformLocation(m_waterProgram, "uWaterSceneDepthTex");
+        m_waterNearPlane = gl::getUniformLocation(m_waterProgram, "uWaterNearPlane");
+        m_waterFarPlane = gl::getUniformLocation(m_waterProgram, "uWaterFarPlane");
 
         m_bloomExtractTex = gl::getUniformLocation(m_bloomExtractProgram, "uHdrTex");
         m_bloomBlurImage = gl::getUniformLocation(m_bloomBlurProgram, "uImage");
@@ -1912,6 +2076,11 @@ public:
         m_grassFogStart = gl::getUniformLocation(m_grassProgram, "uFogStart");
         m_grassFogEnd = gl::getUniformLocation(m_grassProgram, "uFogEnd");
         m_grassCloudShadows = gl::getUniformLocation(m_grassProgram, "uCloudShadowsEnabled");
+        m_grassShadowsEnabled = gl::getUniformLocation(m_grassProgram, "uShadowsEnabled");
+        m_grassLightVP = gl::getUniformLocation(m_grassProgram, "uLightViewProj");
+        m_grassLightVPMid = gl::getUniformLocation(m_grassProgram, "uLightViewProjMid");
+        m_grassShadowMap = gl::getUniformLocation(m_grassProgram, "uShadowMap");
+        m_grassShadowMapMid = gl::getUniformLocation(m_grassProgram, "uShadowMapMid");
         m_compTexelSize = gl::getUniformLocation(m_compositeProgram, "uTexelSize");
         m_compNearPlane = gl::getUniformLocation(m_compositeProgram, "uNearPlane");
         m_compFarPlane = gl::getUniformLocation(m_compositeProgram, "uFarPlane");
@@ -1919,7 +2088,7 @@ public:
         m_boxMesh = buildUnitCubeMesh();
         m_boxMesh.attachInstanceBuffer(m_propInstVbo);
         m_planeMesh = buildUnitPlaneMesh();
-        m_waterMesh = buildWaterGridMesh(56);
+        m_waterMesh = buildWaterGridMesh(160);
         m_sphereMesh = buildUnitSphereMesh();
         m_arrowMesh = buildUnitArrowMesh();
         m_ringMesh = buildUnitRingMesh();
@@ -1933,6 +2102,7 @@ public:
     }
 
     void destroyPostBuffers() {
+        if (m_waterDepthCopyTex) { glDeleteTextures(1, &m_waterDepthCopyTex); m_waterDepthCopyTex = 0; }
         if (m_hdrDepthTex) { glDeleteTextures(1, &m_hdrDepthTex); m_hdrDepthTex = 0; }
         if (m_hdrColorTex) { glDeleteTextures(1, &m_hdrColorTex); m_hdrColorTex = 0; }
         if (m_hdrFbo) { gl::deleteFramebuffers(1, &m_hdrFbo); m_hdrFbo = 0; }
@@ -1945,7 +2115,7 @@ public:
     void recreatePostBuffers(int w, int h) {
         destroyPostBuffers();
 
-        // Main HDR RGBA16F framebuffer + sampleable Depth24 texture (for real-time Screen-Space AO!)
+        // Main HDR RGBA16F framebuffer + sampleable Depth24 texture (for real-time Screen-Space AO & Depth Water!)
         gl::genFramebuffers(1, &m_hdrFbo);
         gl::bindFramebuffer(GL_FRAMEBUFFER, m_hdrFbo);
 
@@ -1966,6 +2136,15 @@ public:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         gl::framebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_hdrDepthTex, 0);
+
+        // GPU copy of opaque scene depth for soft shoreline water fade & foam without FBO feedback loop!
+        glGenTextures(1, &m_waterDepthCopyTex);
+        glBindTexture(GL_TEXTURE_2D, m_waterDepthCopyTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
         const bool hdrOk = (gl::checkFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
@@ -2092,12 +2271,16 @@ public:
             if (m_grassVao != 0) {
                 gl::useProgram(m_grassProgram);
                 gl::uniformMatrix4fv(m_grassViewProj, 1, GL_FALSE, glm::value_ptr(idMat));
+                gl::uniform1i(m_grassShadowsEnabled, 0);
                 gl::bindVertexArray(m_grassVao);
                 gl::drawArraysInstanced(GL_TRIANGLES, 0, 3, 1);
             }
             gl::useProgram(m_waterProgram);
             gl::uniformMatrix4fv(m_waterViewProj, 1, GL_FALSE, glm::value_ptr(idMat));
             gl::uniformMatrix4fv(m_waterModel, 1, GL_FALSE, glm::value_ptr(idMat));
+            gl::uniform1i(m_waterSceneDepthTex, 7);
+            gl::uniform1f(m_waterNearPlane, 0.1f);
+            gl::uniform1f(m_waterFarPlane, 1000.0f);
             gl::bindVertexArray(m_waterMesh.vao);
             glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, nullptr);
 
@@ -2213,15 +2396,19 @@ public:
         m_lastInstancedBatches = 0;
         m_lastInstancedProps = 0;
         m_lastSavedDrawCalls = 0;
+        ++m_frameCounter;
+        if (m_framePoseCache.size() > 256) {
+            m_framePoseCache.clear();
+        }
 
-        // --- Pass 0: Texel-Snapped 3-Split 2048x2048 Cascaded Shadow Maps (24m Near / 92m Mid / 255m Far!) ---
+        // --- Pass 0: Texel-Snapped Time-Sliced 3-Split 2048x2048 Cascaded Shadow Maps (24m / 92m / 255m!) ---
         const bool useShadows = sky.shadowsEnabled && (m_shadowFbo != 0) && (m_shadowFboMid != 0) && (m_shadowFboFar != 0);
         glm::mat4 lightViewProj(1.0f);
         glm::mat4 lightViewProjMid(1.0f);
         glm::mat4 lightViewProjFar(1.0f);
         if (useShadows) {
             const glm::vec3 sunDir = glm::normalize(glm::vec3(sky.sunDirection.x, sky.sunDirection.y, sky.sunDirection.z));
-            const glm::vec3 focusPoint(camTarget.x, 0.0f, camTarget.z);
+            const glm::vec3 focusPoint(camTarget.x, camTarget.y, camTarget.z);
             const glm::vec3 upAxis = std::abs(sunDir.y) > 0.98f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
 
             auto renderShadowCascade = [&](GLuint fbo, int mapSize, int cascadeIdx, float radius, float backDist, float farDist) -> glm::mat4 {
@@ -2280,21 +2467,21 @@ public:
                         }
                         const glm::mat4 entityMat = buildEntityMatrix(e);
                         if (gpuModel->hasAnimations || gpuModel->hasSkins) {
-                            evaluateModelNodeMatrices(*gpuModel, e, m_nodeWorldScratch);
+                            const auto& nodeWorld = getOrEvaluatePose(*gpuModel, e);
                             int uploadedSkin = -1;
                             for (std::size_t ni = 0; ni < gpuModel->nodes.size(); ++ni) {
                                 const ModelNode& node = gpuModel->nodes[ni];
                                 if (node.subMeshIndices.empty()) continue;
                                 if (node.skinIdx >= 0 && static_cast<std::size_t>(node.skinIdx) < gpuModel->skins.size()) {
                                     if (uploadedSkin != node.skinIdx) {
-                                        uploadSkinPalette(gpuModel->skins[static_cast<std::size_t>(node.skinIdx)], m_shadowBoneMatrices);
+                                        uploadSkinPalette(gpuModel->skins[static_cast<std::size_t>(node.skinIdx)], nodeWorld, m_shadowBoneMatrices);
                                         uploadedSkin = node.skinIdx;
                                     }
                                     gl::uniform1i(m_shadowHasSkin, 1);
                                     gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(entityMat));
                                 } else {
                                     gl::uniform1i(m_shadowHasSkin, 0);
-                                    const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
+                                    const glm::mat4 fullMat = entityMat * nodeWorld[ni];
                                     gl::uniformMatrix4fv(m_shadowModel, 1, GL_FALSE, glm::value_ptr(fullMat));
                                 }
                                 for (const std::size_t smIdx : node.subMeshIndices) {
@@ -2367,7 +2554,18 @@ public:
 
             lightViewProj = renderShadowCascade(m_shadowFbo, kShadowMapSize, 0, 24.0f, 80.0f, 190.0f);
             lightViewProjMid = renderShadowCascade(m_shadowFboMid, kShadowMapSizeFar, 1, 92.0f, 145.0f, 340.0f);
-            lightViewProjFar = renderShadowCascade(m_shadowFboFar, kShadowMapSizeFar, 2, 255.0f, 260.0f, 620.0f);
+            const bool needFarUpdate =
+                !m_farShadowValid ||
+                ((m_frameCounter & 1u) == 0u) ||
+                glm::dot(sunDir, m_lastFarSunDir) < 0.99995f ||
+                glm::length(focusPoint - m_lastFarFocus) > 6.0f;
+            if (needFarUpdate) {
+                m_cachedFarLvp = renderShadowCascade(m_shadowFboFar, kShadowMapSizeFar, 2, 255.0f, 260.0f, 620.0f);
+                m_lastFarSunDir = sunDir;
+                m_lastFarFocus = focusPoint;
+                m_farShadowValid = true;
+            }
+            lightViewProjFar = m_cachedFarLvp;
             gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, m_viewportWidth, m_viewportHeight);
         }
@@ -2414,6 +2612,7 @@ public:
         gl::uniform1f(m_uFogStart, sky.fogStart);
         gl::uniform1f(m_uFogEnd, sky.fogEnd);
         gl::uniform1f(m_uTime, timeSeconds);
+        gl::uniform1i(m_uTerrainMode, world.terrain().mode);
         gl::uniform1f(m_uWetness, std::clamp(sky.wetness, 0.0f, 1.0f));
         gl::uniform1i(m_uCloudShadowsEnabled, sky.cloudShadowsEnabled ? 1 : 0);
         gl::uniform1i(m_uAlbedoTex, 0);
@@ -2505,21 +2704,21 @@ public:
                 if (!gpuModel) continue;
                 gl::uniform1i(m_uIsGround, 0);
                 if (gpuModel->hasAnimations || gpuModel->hasSkins) {
-                    evaluateModelNodeMatrices(*gpuModel, e, m_nodeWorldScratch);
+                    const auto& nodeWorld = getOrEvaluatePose(*gpuModel, e);
                     int uploadedSkin = -1;
                     for (std::size_t ni = 0; ni < gpuModel->nodes.size(); ++ni) {
                         const ModelNode& node = gpuModel->nodes[ni];
                         if (node.subMeshIndices.empty()) continue;
                         if (node.skinIdx >= 0 && static_cast<std::size_t>(node.skinIdx) < gpuModel->skins.size()) {
                             if (uploadedSkin != node.skinIdx) {
-                                uploadSkinPalette(gpuModel->skins[static_cast<std::size_t>(node.skinIdx)], m_uBoneMatrices);
+                                uploadSkinPalette(gpuModel->skins[static_cast<std::size_t>(node.skinIdx)], nodeWorld, m_uBoneMatrices);
                                 uploadedSkin = node.skinIdx;
                             }
                             gl::uniform1i(m_uHasSkin, 1);
                             gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(entityMat));
                         } else {
                             gl::uniform1i(m_uHasSkin, 0);
-                            const glm::mat4 fullMat = entityMat * m_nodeWorldScratch[ni];
+                            const glm::mat4 fullMat = entityMat * nodeWorld[ni];
                             gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(fullMat));
                         }
                         for (const std::size_t smIdx : node.subMeshIndices) {
@@ -2560,7 +2759,9 @@ public:
             float roughness = (e.shape == EntityShape::Plane) ? 0.85f : 0.55f;
 
             const glm::vec3 baseCol(e.color.r, e.color.g, e.color.b);
-            const glm::vec3 emissiveCol = (e.emissive || e.shape == EntityShape::Ring) ? baseCol * 1.15f : glm::vec3(0.0f);
+            const glm::vec3 emissiveCol = (e.shape == EntityShape::Ring)
+                ? baseCol * 0.52f
+                : (e.emissive ? baseCol * 0.85f : glm::vec3(0.0f));
             drawSubMesh(*prim, baseCol, emissiveCol, 0.10f, roughness, pulse);
             ++m_lastDrawCalls;
         }
@@ -2602,7 +2803,7 @@ public:
             gl::uniform1i(m_uUseInstancing, 0);
         }
 
-        // --- Pass 2B: GPU-Instanced Wind-Swaying 3D Grass & Wildflowers (Single Instanced Draw Call!) ---
+        // --- Pass 2B: GPU-Instanced Shadowed Wind-Swaying 4-Blade 3D Grass & Wildflowers (1 Draw Call!) ---
         if (sky.grassEnabled && m_grassVao != 0 && m_grassCount > 0) {
             gl::useProgram(m_grassProgram);
             gl::uniformMatrix4fv(m_grassViewProj, 1, GL_FALSE, glm::value_ptr(viewProj));
@@ -2618,14 +2819,31 @@ public:
             gl::uniform1f(m_grassFogStart, sky.fogStart);
             gl::uniform1f(m_grassFogEnd, sky.fogEnd);
             gl::uniform1i(m_grassCloudShadows, sky.cloudShadowsEnabled ? 1 : 0);
+            gl::uniform1i(m_grassShadowsEnabled, useShadows ? 1 : 0);
+            gl::uniformMatrix4fv(m_grassLightVP, 1, GL_FALSE, glm::value_ptr(lightViewProj));
+            gl::uniformMatrix4fv(m_grassLightVPMid, 1, GL_FALSE, glm::value_ptr(lightViewProjMid));
+            gl::uniform1i(m_grassShadowMap, 1);
+            gl::uniform1i(m_grassShadowMapMid, 3);
+            if (useShadows) {
+                gl::activeTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, m_shadowTex);
+                gl::activeTexture(GL_TEXTURE3);
+                glBindTexture(GL_TEXTURE_2D, m_shadowTexMid);
+            }
 
             gl::bindVertexArray(m_grassVao);
-            gl::drawArraysInstanced(GL_TRIANGLES, 0, 12, static_cast<GLsizei>(m_grassCount));
+            gl::drawArraysInstanced(GL_TRIANGLES, 0, 24, static_cast<GLsizei>(m_grassCount));
+            ++m_lastDrawCalls;
             gl::bindVertexArray(0);
         }
 
-        // --- Pass 3: Animated 3D Ocean Water (Alpha-Blended Waves + Fresnel + Foam) ---
+        // --- Pass 3: Depth-Buffered 3D Ocean & Lake Water (Soft Shore Fade + Foam + Fresnel!) ---
         if (!m_waterEntitiesScratch.empty()) {
+            if (useHdr && m_waterDepthCopyTex != 0) {
+                gl::activeTexture(GL_TEXTURE7);
+                glBindTexture(GL_TEXTURE_2D, m_waterDepthCopyTex);
+                glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, m_viewportWidth, m_viewportHeight);
+            }
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             gl::useProgram(m_waterProgram);
@@ -2638,6 +2856,9 @@ public:
             gl::uniform3f(m_waterSkyHorizon, sky.skyHorizonColor.r, sky.skyHorizonColor.g, sky.skyHorizonColor.b);
             gl::uniform1f(m_waterFogStart, sky.fogStart);
             gl::uniform1f(m_waterFogEnd, sky.fogEnd);
+            gl::uniform1i(m_waterSceneDepthTex, 7);
+            gl::uniform1f(m_waterNearPlane, cam.nearPlane);
+            gl::uniform1f(m_waterFarPlane, cam.farPlane);
             gl::uniform1i(m_waterPointLightCount, lightCount);
             if (lightCount > 0) {
                 gl::uniform4fv(m_waterPointLightPosRadius, lightCount, &lightPosRad[0].x);
@@ -2650,6 +2871,7 @@ public:
                 gl::uniformMatrix4fv(m_waterModel, 1, GL_FALSE, glm::value_ptr(modelMat));
                 gl::uniform3f(m_waterShallow, w->color.r, w->color.g, w->color.b);
                 glDrawElements(GL_TRIANGLES, m_waterMesh.indexCount, GL_UNSIGNED_INT, nullptr);
+                ++m_lastDrawCalls;
             }
             glDisable(GL_BLEND);
         }
@@ -2682,43 +2904,58 @@ public:
             }
         }
 
-        // --- Pass 3C: Real-Time 3D Falling Rain Streaks (when Weather rainIntensity > 0.05!) ---
-        if (sky.rainIntensity > 0.05f) {
-            gl::useProgram(m_litProgram);
-            gl::uniform1i(m_uHasSkin, 0);
-            gl::uniform1i(m_uUseInstancing, 0);
-            gl::uniform1i(m_uIsGround, 0);
-            gl::uniform1i(m_uHasTexture, 0);
-            gl::uniform1i(m_uHasNormalTex, 0);
-            gl::uniform1i(m_uHasMetRoughTex, 0);
-            gl::uniform3f(m_uBaseColor, 0.72f, 0.84f, 0.96f);
-            gl::uniform3f(m_uEmissive, 0.45f, 0.58f, 0.78f);
-            gl::uniform1f(m_uMetallic, 0.0f);
-            gl::uniform1f(m_uRoughness, 0.3f);
-            gl::uniform1f(m_uPulse, 0.0f);
-            gl::bindVertexArray(m_boxMesh.vao);
+        // --- Pass 3C: GPU-Instanced 3D Falling Rain Streaks (1 Draw Call instead of 140!) ---
+        if (sky.rainIntensity > 0.05f && m_propInstVbo != 0) {
+            const int dropCount = static_cast<int>(std::clamp(sky.rainIntensity, 0.0f, 1.0f) * 160.0f);
+            if (dropCount > 0) {
+                m_rainInstScratch.clear();
+                m_rainInstScratch.reserve(static_cast<std::size_t>(dropCount));
+                constexpr float kBoxSpan = 38.0f;
+                constexpr float kHeightSpan = 22.0f;
+                const float fallOffset = timeSeconds * 28.0f;
+                for (int i = 0; i < dropCount; ++i) {
+                    const float fi = static_cast<float>(i);
+                    const float hx = std::fmod(std::sin(fi * 12.9898f) * 43758.5453f, 1.0f);
+                    const float hy = std::fmod(std::sin(fi * 78.2330f) * 24634.6345f, 1.0f);
+                    const float hz = std::fmod(std::sin(fi * 39.4250f) * 19583.2317f, 1.0f);
 
-            const int dropCount = static_cast<int>(std::clamp(sky.rainIntensity, 0.0f, 1.0f) * 140.0f);
-            constexpr float kBoxSpan = 38.0f;
-            constexpr float kHeightSpan = 22.0f;
-            const float fallOffset = timeSeconds * 28.0f;
-            for (int i = 0; i < dropCount; ++i) {
-                const float fi = static_cast<float>(i);
-                const float hx = std::fmod(std::sin(fi * 12.9898f) * 43758.5453f, 1.0f);
-                const float hy = std::fmod(std::sin(fi * 78.2330f) * 24634.6345f, 1.0f);
-                const float hz = std::fmod(std::sin(fi * 39.4250f) * 19583.2317f, 1.0f);
+                    const float rx = camTarget.x + (hx - 0.5f) * kBoxSpan;
+                    const float rz = camTarget.z + (hz - 0.5f) * kBoxSpan;
+                    float ry = std::fmod(std::abs(hy) * kHeightSpan - fallOffset, kHeightSpan);
+                    if (ry < 0.0f) ry += kHeightSpan;
+                    ry += std::max(camTarget.y - 3.0f, 0.0f);
 
-                const float rx = camTarget.x + (hx - 0.5f) * kBoxSpan;
-                const float rz = camTarget.z + (hz - 0.5f) * kBoxSpan;
-                float ry = std::fmod(std::abs(hy) * kHeightSpan - fallOffset, kHeightSpan);
-                if (ry < 0.0f) ry += kHeightSpan;
-                ry += std::max(camTarget.y - 3.0f, 0.0f);
+                    glm::mat4 rMat(1.0f);
+                    rMat = glm::translate(rMat, glm::vec3(rx, ry, rz));
+                    rMat = glm::scale(rMat, glm::vec3(0.022f, 0.80f, 0.022f));
+                    m_rainInstScratch.push_back({rMat, glm::vec4(0.76f, 0.86f, 0.96f, 1.0f)});
+                }
+                gl::bindBuffer(GL_ARRAY_BUFFER, m_propInstVbo);
+                gl::bufferData(
+                    GL_ARRAY_BUFFER,
+                    static_cast<GLsizeiptr>(m_rainInstScratch.size() * sizeof(PropInstanceData)),
+                    m_rainInstScratch.data(),
+                    GL_DYNAMIC_DRAW);
 
-                glm::mat4 rMat(1.0f);
-                rMat = glm::translate(rMat, glm::vec3(rx, ry, rz));
-                rMat = glm::scale(rMat, glm::vec3(0.025f, 0.78f, 0.025f));
-                gl::uniformMatrix4fv(m_uModel, 1, GL_FALSE, glm::value_ptr(rMat));
-                glDrawElements(GL_TRIANGLES, m_boxMesh.indexCount, GL_UNSIGNED_INT, nullptr);
+                gl::useProgram(m_litProgram);
+                gl::uniform1i(m_uHasSkin, 0);
+                gl::uniform1i(m_uUseInstancing, 1);
+                gl::uniform1i(m_uIsGround, 0);
+                gl::uniform1i(m_uHasTexture, 0);
+                gl::uniform1i(m_uHasNormalTex, 0);
+                gl::uniform1i(m_uHasMetRoughTex, 0);
+                gl::uniform3f(m_uBaseColor, 1.0f, 1.0f, 1.0f);
+                gl::uniform3f(m_uEmissive, 0.42f, 0.55f, 0.72f);
+                gl::uniform1f(m_uMetallic, 0.0f);
+                gl::uniform1f(m_uRoughness, 0.3f);
+                gl::uniform1f(m_uPulse, 0.0f);
+                gl::bindVertexArray(m_boxMesh.vao);
+                gl::drawElementsInstanced(
+                    GL_TRIANGLES, m_boxMesh.indexCount, GL_UNSIGNED_INT, nullptr,
+                    static_cast<GLsizei>(m_rainInstScratch.size()));
+                gl::uniform1i(m_uUseInstancing, 0);
+                ++m_lastDrawCalls;
+                m_lastSavedDrawCalls += static_cast<std::size_t>(std::max(dropCount - 1, 0));
             }
         }
 
@@ -2806,6 +3043,31 @@ public:
     }
 
     void endFrame() override {}
+
+    bool captureScreenshot(const std::filesystem::path& outputPath) const override {
+        if (!m_initialized || m_viewportWidth <= 0 || m_viewportHeight <= 0) return false;
+        const int w = m_viewportWidth;
+        const int h = m_viewportHeight;
+        std::vector<unsigned char> raw(static_cast<std::size_t>(w * h * 3));
+        std::vector<unsigned char> flipped(static_cast<std::size_t>(w * h * 3));
+        gl::bindFramebuffer(GL_FRAMEBUFFER, 0);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, raw.data());
+        const std::size_t rowBytes = static_cast<std::size_t>(w) * 3;
+        for (int y = 0; y < h; ++y) {
+            std::copy_n(raw.data() + static_cast<std::size_t>(h - 1 - y) * rowBytes, rowBytes,
+                        flipped.data() + static_cast<std::size_t>(y) * rowBytes);
+        }
+        std::error_code ec;
+        if (outputPath.has_parent_path()) {
+            std::filesystem::create_directories(outputPath.parent_path(), ec);
+        }
+        const int ok = stbi_write_png(outputPath.string().c_str(), w, h, 3, flipped.data(), w * 3);
+        if (ok) {
+            std::cout << "[SAGE][Capture] Saved GPU screenshot -> " << outputPath.string() << " (" << w << "x" << h << ")\n";
+        }
+        return ok != 0;
+    }
     RendererInfo info() const override { return m_info; }
     std::size_t loadedModelCount() const override { return m_modelCache.size(); }
     std::size_t grassInstanceCount() const override { return m_grassCount; }
@@ -2827,18 +3089,37 @@ private:
     }
 
     void ensureGrassField(const World& world) {
-        if (m_grassBuilt) return;
+        if (m_grassBuilt && m_grassModeCached == world.terrain().mode) return;
         destroyGrassBuffers();
+        m_grassModeCached = world.terrain().mode;
 
-        // Crossed 2-blade tapered 3D grass clump (4 triangles = 12 vertices per instance!)
-        constexpr float kW = 0.085f;
-        constexpr float kBladeVerts[12 * 3] = {
-            // Blade A (along X)
-            -kW,       0.0f, 0.0f,    kW,       0.0f, 0.0f,    kW * 0.45f, 0.55f, 0.03f,
-            -kW,       0.0f, 0.0f,    kW * 0.45f, 0.55f, 0.03f, 0.0f,      1.00f, 0.08f,
-            // Blade B (crossed along Z)
-            0.0f,      0.0f, -kW,     0.0f,      0.0f, kW,     -0.03f,     0.55f, kW * 0.45f,
-            0.0f,      0.0f, -kW,     -0.03f,    0.55f, kW * 0.45f, -0.08f, 1.00f, 0.0f,
+        // Lush 4-blade curved slender meadow grass tuft (8 triangles = 24 vertices per instance!)
+        constexpr float kW = 0.044f;
+        constexpr float kBladeVerts[24 * 3] = {
+            // Blade 1 (0 deg, gentle forward arch)
+            -kW,        0.0f,  0.00f,    kW,        0.0f,  0.00f,    kW * 0.48f, 0.56f,  0.04f,
+            -kW,        0.0f,  0.00f,    kW * 0.48f, 0.56f,  0.04f,   0.00f,      1.00f,  0.11f,
+            // Blade 2 (~55 deg, arching out-right)
+             0.03f - kW * 0.55f, 0.0f, -0.02f - kW * 0.80f,
+             0.03f + kW * 0.55f, 0.0f, -0.02f + kW * 0.80f,
+             0.07f + kW * 0.25f, 0.52f, -0.04f + kW * 0.35f,
+             0.03f - kW * 0.55f, 0.0f, -0.02f - kW * 0.80f,
+             0.07f + kW * 0.25f, 0.52f, -0.04f + kW * 0.35f,
+             0.13f,              0.92f, -0.07f,
+            // Blade 3 (~115 deg, arching out-left)
+            -0.04f - kW * 0.82f, 0.0f,  0.02f + kW * 0.52f,
+            -0.04f + kW * 0.82f, 0.0f,  0.02f - kW * 0.52f,
+            -0.08f + kW * 0.36f, 0.54f,  0.05f - kW * 0.22f,
+            -0.04f - kW * 0.82f, 0.0f,  0.02f + kW * 0.52f,
+            -0.08f + kW * 0.36f, 0.54f,  0.05f - kW * 0.22f,
+            -0.14f,              0.88f,  0.08f,
+            // Blade 4 (~162 deg, low filler tuft arching back)
+            -0.01f - kW * 0.90f, 0.0f, -0.04f - kW * 0.28f,
+            -0.01f + kW * 0.90f, 0.0f, -0.04f + kW * 0.28f,
+            -0.02f + kW * 0.40f, 0.48f, -0.08f + kW * 0.14f,
+            -0.01f - kW * 0.90f, 0.0f, -0.04f - kW * 0.28f,
+            -0.02f + kW * 0.40f, 0.48f, -0.08f + kW * 0.14f,
+            -0.03f,              0.78f, -0.14f,
         };
 
         struct GrassInst {
@@ -2846,19 +3127,36 @@ private:
             float yaw, colorShift, windPhase, flower;
         };
         std::vector<GrassInst> instances;
-        instances.reserve(42000);
+        instances.reserve(56000);
 
-        std::uint32_t rng = 0x5A6E1400u;
+        std::uint32_t rng = 0x5A6E1600u;
         auto rand01 = [&]() -> float {
             rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5;
             return static_cast<float>(rng & 0x00FFFFFFu) / static_cast<float>(0x01000000u);
         };
 
-        // Scatter lush swaying grass clumps across Alpine Highlands (NE) & outer Parkland (NW) away from roads/plaza/water!
-        constexpr int kCandidates = 75000;
+        // Scatter lush shadowed meadow grass tufts across natural biomes!
+        const bool islandMode = (world.terrain().mode == 1);
+        const int kCandidates = islandMode ? 135000 : 85000;
         for (int i = 0; i < kCandidates; ++i) {
-            const float x = -255.0f + rand01() * 510.0f;
-            const float z = -40.0f + rand01() * 295.0f; // Northern lush biomes (NE Highlands + NW Parkland)
+            float x = 0.0f;
+            float z = 0.0f;
+            if (islandMode) {
+                x = -255.0f + rand01() * 510.0f;
+                z = -255.0f + rand01() * 510.0f;
+                const TerrainSample ts = world.sampleTerrain(x, z);
+                if (ts.height < 2.85f || ts.height > 23.8f || ts.normal.y < 0.78f) continue;
+                const float h = 0.22f + rand01() * 0.26f;
+                const float yaw = rand01() * 2.0f * kPi;
+                const float colShift = rand01();
+                const float phase = rand01() * 6.2831f;
+                const float flower = (rand01() > 0.94f) ? 1.0f : 0.0f;
+                instances.push_back({x, ts.height - 0.03f, z, h, yaw, colShift, phase, flower});
+                if (instances.size() >= 54000) break;
+                continue;
+            }
+            x = -255.0f + rand01() * 510.0f;
+            z = -40.0f + rand01() * 295.0f; // Northern lush biomes (NE Highlands + NW Parkland)
             const float ax = std::abs(x);
             const float az = std::abs(z);
             const float cheb = std::max(ax, az);
@@ -2873,12 +3171,12 @@ private:
             const TerrainSample ts = world.sampleTerrain(x, z);
             if (ts.height > 16.0f || ts.normal.y < 0.72f) continue; // Keep off sheer cliffs & snow peaks
 
-            const float h = 0.42f + rand01() * 0.48f;
+            const float h = 0.26f + rand01() * 0.28f;
             const float yaw = rand01() * 2.0f * kPi;
             const float colShift = rand01();
             const float phase = rand01() * 6.2831f;
-            const float flower = (rand01() > 0.93f) ? 1.0f : 0.0f;
-            instances.push_back({x, ts.height, z, h, yaw, colShift, phase, flower});
+            const float flower = (rand01() > 0.94f) ? 1.0f : 0.0f;
+            instances.push_back({x, ts.height - 0.02f, z, h, yaw, colShift, phase, flower});
             if (instances.size() >= 38000) break;
         }
 
@@ -2909,13 +3207,14 @@ private:
 
         gl::bindVertexArray(0);
         m_grassBuilt = true;
-        std::cout << "[SAGE][Foliage] Built GPU-instanced grass field (" << m_grassCount
-                  << " clumps = " << (m_grassCount * 2) << " wind-swaying 3D blades, 1 draw call)\n";
+        std::cout << "[SAGE][Foliage] Built GPU-instanced shadowed grass field (" << m_grassCount
+                  << " 4-blade tufts = " << (m_grassCount * 4) << " wind-swaying 3D blades, 1 draw call)\n";
     }
 
     void ensureTerrainMesh(const World& world) {
         const TerrainSettings& cfg = world.terrain();
         if (m_terrainMeshBuilt &&
+            m_terrainModeCached == cfg.mode &&
             std::abs(m_terrainHalfSizeCached - cfg.halfSize) < 0.01f &&
             std::abs(m_terrainMaxHeightCached - cfg.maxHeight) < 0.01f &&
             m_terrainGridCached == cfg.gridResolution) {
@@ -2923,10 +3222,11 @@ private:
         }
         m_terrainMesh.destroy();
 
-        const int divs = std::clamp(cfg.gridResolution, 32, 220);
+        const int divs = std::clamp(cfg.gridResolution, 32, 240);
         const int stride = divs + 1;
         const float half = cfg.halfSize;
         const float step = (half * 2.0f) / static_cast<float>(divs);
+        const bool islandMode = (cfg.mode == 1);
 
         std::vector<Vertex3D> verts;
         std::vector<float> rawH(static_cast<std::size_t>(stride * stride), 0.0f);
@@ -2940,10 +3240,13 @@ private:
                 const float u = static_cast<float>(ix) / static_cast<float>(divs);
                 const TerrainSample s = world.sampleTerrain(x, z);
                 rawH[static_cast<std::size_t>(iz * stride + ix)] = s.height;
-                // Sink flat zones 0.22m below roads so zero Z-fighting ever occurs with flat ground/roads!
-                const float riseT = std::clamp(s.height / 0.45f, 0.0f, 1.0f);
-                const float smoothRise = riseT * riseT * (3.0f - 2.0f * riseT);
-                const float y = s.height - 0.22f * (1.0f - smoothRise);
+                float y = s.height;
+                if (!islandMode) {
+                    // Sink flat zones 0.22m below city roads so zero Z-fighting ever occurs with flat ground/roads!
+                    const float riseT = std::clamp(s.height / 0.45f, 0.0f, 1.0f);
+                    const float smoothRise = riseT * riseT * (3.0f - 2.0f * riseT);
+                    y = s.height - 0.22f * (1.0f - smoothRise);
+                }
                 verts.push_back({x, y, z, s.normal.x, s.normal.y, s.normal.z, u * 32.0f, v * 32.0f});
             }
         }
@@ -2956,8 +3259,10 @@ private:
                 const std::size_t i1 = i0 + 1;
                 const std::size_t i2 = static_cast<std::size_t>((iz + 1) * stride + ix);
                 const std::size_t i3 = i2 + 1;
-                // Skip completely flat cells under highways, Downtown Plaza & Marina Lagoon!
-                if (rawH[i0] < 0.02f && rawH[i1] < 0.02f && rawH[i2] < 0.02f && rawH[i3] < 0.02f) {
+                if (!islandMode && rawH[i0] < 0.02f && rawH[i1] < 0.02f && rawH[i2] < 0.02f && rawH[i3] < 0.02f) {
+                    continue;
+                }
+                if (islandMode && rawH[i0] < -5.8f && rawH[i1] < -5.8f && rawH[i2] < -5.8f && rawH[i3] < -5.8f) {
                     continue;
                 }
                 idx.insert(idx.end(), {
@@ -2971,20 +3276,31 @@ private:
             m_terrainMesh.upload(verts, idx);
         }
         m_terrainMeshBuilt = true;
+        m_terrainModeCached = cfg.mode;
         m_terrainHalfSizeCached = cfg.halfSize;
         m_terrainMaxHeightCached = cfg.maxHeight;
         m_terrainGridCached = cfg.gridResolution;
         std::cout << "[SAGE][Terrain] Built GPU 3D heightmap mesh (" << (idx.size() / 3)
-                  << " triangles, +/-" << half << "m, maxH=" << cfg.maxHeight << "m)\n";
+                  << " triangles, mode=" << (islandMode ? "island" : "city")
+                  << ", +/-" << half << "m, maxH=" << cfg.maxHeight << "m)\n";
     }
 
-    void uploadSkinPalette(const GpuSkin& skin, GLint uniformLoc) {
+    const std::vector<glm::mat4>& getOrEvaluatePose(const GpuModel& model, const Entity& e) {
+        CachedPose& entry = m_framePoseCache[&e];
+        if (entry.frameId != m_frameCounter || entry.worldMats.size() != model.nodes.size()) {
+            evaluateModelNodeMatrices(model, e, m_animScratch, entry.worldMats);
+            entry.frameId = m_frameCounter;
+        }
+        return entry.worldMats;
+    }
+
+    void uploadSkinPalette(const GpuSkin& skin, const std::vector<glm::mat4>& nodeWorld, GLint uniformLoc) {
         const std::size_t count = std::min<std::size_t>(skin.jointNodeIndices.size(), static_cast<std::size_t>(kMaxSkinBones));
         m_bonePaletteScratch.resize(count);
         for (std::size_t j = 0; j < count; ++j) {
             const int nodeIdx = skin.jointNodeIndices[j];
-            if (nodeIdx >= 0 && static_cast<std::size_t>(nodeIdx) < m_nodeWorldScratch.size()) {
-                m_bonePaletteScratch[j] = m_nodeWorldScratch[static_cast<std::size_t>(nodeIdx)] * skin.inverseBindMatrices[j];
+            if (nodeIdx >= 0 && static_cast<std::size_t>(nodeIdx) < nodeWorld.size()) {
+                m_bonePaletteScratch[j] = nodeWorld[static_cast<std::size_t>(nodeIdx)] * skin.inverseBindMatrices[j];
             } else {
                 m_bonePaletteScratch[j] = glm::mat4(1.0f);
             }
@@ -3265,11 +3581,41 @@ private:
                 dst.parentIdx = src->parent ? static_cast<int>(src->parent - data->nodes) : -1;
                 dst.skinIdx = src->skin ? static_cast<int>(src->skin - data->skins) : -1;
                 dst.boneRole = classifyBoneRole(src->name);
+                if (dst.boneRole == BoneRole::Head) ++gpuModel.headBoneCount;
+                else if (dst.boneRole == BoneRole::Neck) ++gpuModel.neckBoneCount;
+                else if (dst.boneRole == BoneRole::Chest) ++gpuModel.chestBoneCount;
                 if (src->has_matrix) { dst.hasMatrix = true; dst.staticMatrix = glm::make_mat4(src->matrix); }
                 if (src->has_translation) dst.translation = {src->translation[0], src->translation[1], src->translation[2]};
                 if (src->has_rotation) dst.rotation = glm::quat(src->rotation[3], src->rotation[0], src->rotation[1], src->rotation[2]);
                 if (src->has_scale) dst.scale = {src->scale[0], src->scale[1], src->scale[2]};
                 if (src->mesh) uploadMeshPrimitives(src->mesh, glm::mat4(1.0f), &dst.subMeshIndices);
+            }
+            // Precompute rest-pose world rotation per bone for exact entity-space Look-At IK on bipeds & quadrupeds!
+            {
+                const std::size_t nc = gpuModel.nodes.size();
+                std::vector<glm::mat4> restW(nc, glm::mat4(1.0f));
+                std::vector<std::uint8_t> done(nc, 0);
+                auto evalRest = [&](auto&& self, std::size_t idx) -> const glm::mat4& {
+                    if (done[idx]) return restW[idx];
+                    const ModelNode& nd = gpuModel.nodes[idx];
+                    const glm::mat4 loc = nd.hasMatrix
+                        ? nd.staticMatrix
+                        : (glm::translate(glm::mat4(1.0f), nd.translation) * glm::mat4_cast(nd.rotation) * glm::scale(glm::mat4(1.0f), nd.scale));
+                    restW[idx] = (nd.parentIdx >= 0 && static_cast<std::size_t>(nd.parentIdx) < nc)
+                        ? self(self, static_cast<std::size_t>(nd.parentIdx)) * loc
+                        : loc;
+                    done[idx] = 1;
+                    return restW[idx];
+                };
+                for (std::size_t i = 0; i < nc; ++i) {
+                    const glm::mat4& m = evalRest(evalRest, i);
+                    glm::vec3 c0(m[0]), c1(m[1]), c2(m[2]);
+                    if (glm::length(c0) > 1e-5f) c0 = glm::normalize(c0); else c0 = glm::vec3(1, 0, 0);
+                    if (glm::length(c1) > 1e-5f) c1 = glm::normalize(c1); else c1 = glm::vec3(0, 1, 0);
+                    if (glm::length(c2) > 1e-5f) c2 = glm::normalize(c2); else c2 = glm::vec3(0, 0, 1);
+                    if (glm::dot(glm::cross(c0, c1), c2) < 0.0f) c2 = -c2;
+                    gpuModel.nodes[i].restWorldRot = glm::normalize(glm::quat_cast(glm::mat3(c0, c1, c2)));
+                }
             }
             for (cgltf_size a = 0; a < data->animations_count; ++a) {
                 const cgltf_animation& srcAnim = data->animations[a];
@@ -3303,18 +3649,128 @@ private:
                 if (!clip.channels.empty()) gpuModel.animations.push_back(std::move(clip));
             }
         } else {
+            // Static glTF/.glb Material Submesh Merging (v1.6.0: merges identical-material primitives into 1 draw call!)
+            struct StaticMatBucket {
+                const cgltf_material* mat = nullptr;
+                std::vector<Vertex3D> verts;
+                std::vector<std::uint32_t> indices;
+            };
+            std::vector<StaticMatBucket> buckets;
+            std::unordered_map<const cgltf_material*, std::size_t> matToBucket;
+
+            auto collectStaticMesh = [&](const cgltf_mesh* mesh, const glm::mat4& bakeTransform) {
+                const glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(bakeTransform)));
+                for (cgltf_size pIdx = 0; pIdx < mesh->primitives_count; ++pIdx) {
+                    const cgltf_primitive& prim = mesh->primitives[pIdx];
+                    if (prim.type != cgltf_primitive_type_triangles) continue;
+                    const cgltf_accessor* posAcc = nullptr;
+                    const cgltf_accessor* normAcc = nullptr;
+                    const cgltf_accessor* uvAcc = nullptr;
+                    for (cgltf_size a = 0; a < prim.attributes_count; ++a) {
+                        const cgltf_attribute& attr = prim.attributes[a];
+                        if (attr.type == cgltf_attribute_type_position) posAcc = attr.data;
+                        else if (attr.type == cgltf_attribute_type_normal) normAcc = attr.data;
+                        else if (attr.type == cgltf_attribute_type_texcoord && attr.index == 0) uvAcc = attr.data;
+                    }
+                    if (!posAcc || posAcc->count == 0) continue;
+
+                    std::size_t bIdx = 0;
+                    if (const auto it = matToBucket.find(prim.material); it != matToBucket.end()) {
+                        bIdx = it->second;
+                    } else {
+                        bIdx = buckets.size();
+                        matToBucket[prim.material] = bIdx;
+                        buckets.push_back({prim.material, {}, {}});
+                    }
+                    StaticMatBucket& bucket = buckets[bIdx];
+                    const auto baseVertex = static_cast<std::uint32_t>(bucket.verts.size());
+                    bucket.verts.resize(baseVertex + posAcc->count);
+
+                    for (cgltf_size v = 0; v < posAcc->count; ++v) {
+                        float pos[3] = {0, 0, 0}, norm[3] = {0, 1, 0}, uv[2] = {0, 0};
+                        cgltf_accessor_read_float(posAcc, v, pos, 3);
+                        if (normAcc) cgltf_accessor_read_float(normAcc, v, norm, 3);
+                        if (uvAcc) cgltf_accessor_read_float(uvAcc, v, uv, 2);
+                        const glm::vec4 wp = bakeTransform * glm::vec4(pos[0], pos[1], pos[2], 1.0f);
+                        bbMin = glm::min(bbMin, glm::vec3(wp));
+                        bbMax = glm::max(bbMax, glm::vec3(wp));
+                        hasBounds = true;
+                        glm::vec3 wn = normalMat * glm::vec3(norm[0], norm[1], norm[2]);
+                        wn = glm::length(wn) > 0.0001f ? glm::normalize(wn) : glm::vec3(0, 1, 0);
+                        bucket.verts[baseVertex + v] = {wp.x, wp.y, wp.z, wn.x, wn.y, wn.z, uv[0], uv[1]};
+                    }
+
+                    const std::size_t idxStart = bucket.indices.size();
+                    if (prim.indices) {
+                        bucket.indices.resize(idxStart + prim.indices->count);
+                        for (cgltf_size i = 0; i < prim.indices->count; ++i) {
+                            bucket.indices[idxStart + i] = baseVertex + static_cast<std::uint32_t>(cgltf_accessor_read_index(prim.indices, i));
+                        }
+                    } else {
+                        bucket.indices.resize(idxStart + posAcc->count);
+                        for (cgltf_size i = 0; i < posAcc->count; ++i) {
+                            bucket.indices[idxStart + i] = baseVertex + static_cast<std::uint32_t>(i);
+                        }
+                    }
+
+                    if (!normAcc && bucket.indices.size() >= idxStart + 3) {
+                        for (std::size_t i = idxStart; i + 2 < bucket.indices.size(); i += 3) {
+                            auto& v0 = bucket.verts[bucket.indices[i]];
+                            auto& v1 = bucket.verts[bucket.indices[i + 1]];
+                            auto& v2 = bucket.verts[bucket.indices[i + 2]];
+                            glm::vec3 n = glm::cross(
+                                glm::vec3(v1.px - v0.px, v1.py - v0.py, v1.pz - v0.pz),
+                                glm::vec3(v2.px - v0.px, v2.py - v0.py, v2.pz - v0.pz));
+                            if (glm::length(n) > 0.0001f) {
+                                n = glm::normalize(n);
+                                v0.nx = v1.nx = v2.nx = n.x;
+                                v0.ny = v1.ny = v2.ny = n.y;
+                                v0.nz = v1.nz = v2.nz = n.z;
+                            }
+                        }
+                    }
+                }
+            };
+
             bool processedAny = false;
             for (cgltf_size n = 0; n < data->nodes_count; ++n) {
                 const cgltf_node* node = &data->nodes[n];
                 if (!node->mesh) continue;
                 float rawMat[16];
                 cgltf_node_transform_world(node, rawMat);
-                uploadMeshPrimitives(node->mesh, glm::make_mat4(rawMat), nullptr);
+                collectStaticMesh(node->mesh, glm::make_mat4(rawMat));
                 processedAny = true;
             }
             if (!processedAny) {
                 for (cgltf_size m = 0; m < data->meshes_count; ++m)
-                    uploadMeshPrimitives(&data->meshes[m], glm::mat4(1.0f), nullptr);
+                    collectStaticMesh(&data->meshes[m], glm::mat4(1.0f));
+            }
+
+            for (auto& bucket : buckets) {
+                if (bucket.verts.empty() || bucket.indices.empty()) continue;
+                GpuSubMesh sm;
+                sm.upload(bucket.verts, bucket.indices);
+                sm.attachInstanceBuffer(m_propInstVbo);
+                if (bucket.mat) {
+                    const cgltf_material* mat = bucket.mat;
+                    if (mat->has_pbr_metallic_roughness) {
+                        const auto& pbr = mat->pbr_metallic_roughness;
+                        sm.baseColor = {pbr.base_color_factor[0], pbr.base_color_factor[1], pbr.base_color_factor[2]};
+                        sm.metallic = pbr.metallic_factor;
+                        sm.roughness = pbr.roughness_factor;
+                        if (pbr.base_color_texture.texture && pbr.base_color_texture.texture->image) {
+                            sm.albedoTex = loadGltfImageTexture(pbr.base_color_texture.texture->image, modelDir);
+                        }
+                        if (pbr.metallic_roughness_texture.texture && pbr.metallic_roughness_texture.texture->image) {
+                            sm.metRoughTex = loadGltfImageTexture(pbr.metallic_roughness_texture.texture->image, modelDir);
+                        }
+                    }
+                    if (mat->normal_texture.texture && mat->normal_texture.texture->image) {
+                        sm.normalTex = loadGltfImageTexture(mat->normal_texture.texture->image, modelDir);
+                    }
+                    sm.emissive = {mat->emissive_factor[0], mat->emissive_factor[1], mat->emissive_factor[2]};
+                }
+                gpuModel.subMeshes.push_back(sm);
             }
         }
 
@@ -3344,7 +3800,7 @@ private:
     GLuint m_shadowProgram = 0, m_shadowFbo = 0, m_shadowTex = 0, m_shadowFboMid = 0, m_shadowTexMid = 0, m_shadowFboFar = 0, m_shadowTexFar = 0;
     GLint m_shadowModel = -1, m_shadowLightVP = -1, m_shadowHasSkin = -1, m_shadowUseInstancing = -1, m_shadowBoneMatrices = -1;
 
-    GLuint m_hdrFbo = 0, m_hdrColorTex = 0, m_hdrDepthTex = 0;
+    GLuint m_hdrFbo = 0, m_hdrColorTex = 0, m_hdrDepthTex = 0, m_waterDepthCopyTex = 0;
     GLuint m_bloomFbo[2]{0, 0}, m_bloomTex[2]{0, 0};
     int m_bloomWidth = 640, m_bloomHeight = 360;
 
@@ -3356,7 +3812,7 @@ private:
     GLint m_uModel = -1, m_uViewProj = -1, m_uHasSkin = -1, m_uUseInstancing = -1, m_uBoneMatrices = -1, m_uBaseColor = -1, m_uEmissive = -1;
     GLint m_uMetallic = -1, m_uRoughness = -1, m_uHasTexture = -1, m_uAlbedoTex = -1;
     GLint m_uHasNormalTex = -1, m_uNormalTex = -1, m_uHasMetRoughTex = -1, m_uMetRoughTex = -1;
-    GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1, m_uWetness = -1, m_uCloudShadowsEnabled = -1;
+    GLint m_uPulse = -1, m_uTime = -1, m_uIsGround = -1, m_uTerrainMode = -1, m_uWetness = -1, m_uCloudShadowsEnabled = -1;
     GLint m_uShadowsEnabled = -1, m_uLightViewProj = -1, m_uLightViewProjMid = -1, m_uLightViewProjFar = -1;
     GLint m_uShadowMap = -1, m_uShadowMapMid = -1, m_uShadowMapFar = -1, m_uShadowTexelSize = -1;
     GLint m_uCameraPos = -1, m_uSunDir = -1, m_uSunColor = -1;
@@ -3368,15 +3824,18 @@ private:
     GLint m_grassViewProj = -1, m_grassCamPos = -1, m_grassInteractPos = -1, m_grassTime = -1;
     GLint m_grassSunDir = -1, m_grassSunColor = -1, m_grassSkyZenith = -1, m_grassSkyHorizon = -1;
     GLint m_grassGroundAmbient = -1, m_grassAmbientInt = -1, m_grassFogStart = -1, m_grassFogEnd = -1, m_grassCloudShadows = -1;
+    GLint m_grassShadowsEnabled = -1, m_grassLightVP = -1, m_grassLightVPMid = -1, m_grassShadowMap = -1, m_grassShadowMapMid = -1;
     GLuint m_grassVao = 0, m_grassBladeVbo = 0, m_grassInstVbo = 0;
     std::size_t m_grassCount = 0;
     bool m_grassBuilt = false;
+    int m_grassModeCached = -1;
 
     GLuint m_waterProgram = 0;
     GLint m_waterModel = -1, m_waterViewProj = -1, m_waterTime = -1, m_waterShallow = -1;
     GLint m_waterCamPos = -1, m_waterSunDir = -1, m_waterSunColor = -1;
     GLint m_waterSkyZenith = -1, m_waterSkyHorizon = -1, m_waterFogStart = -1, m_waterFogEnd = -1;
     GLint m_waterPointLightCount = -1, m_waterPointLightPosRadius = -1, m_waterPointLightColorInt = -1;
+    GLint m_waterSceneDepthTex = -1, m_waterNearPlane = -1, m_waterFarPlane = -1;
 
     GLuint m_bloomExtractProgram = 0, m_bloomBlurProgram = 0, m_compositeProgram = 0;
     GLint m_bloomExtractTex = -1, m_bloomBlurImage = -1, m_bloomBlurDir = -1;
@@ -3392,15 +3851,29 @@ private:
     std::size_t m_lastSavedDrawCalls = 0;
     bool m_pipelineWarmed = false;
 
+    std::uint64_t m_frameCounter = 0;
+    bool m_farShadowValid = false;
+    glm::mat4 m_cachedFarLvp{1.0f};
+    glm::vec3 m_lastFarSunDir{0.0f, 1.0f, 0.0f};
+    glm::vec3 m_lastFarFocus{0.0f};
+
+    struct CachedPose {
+        std::uint64_t frameId = 0;
+        std::vector<glm::mat4> worldMats;
+    };
+    AnimEvalScratch m_animScratch;
+    std::unordered_map<const Entity*, CachedPose> m_framePoseCache;
+
     GpuSubMesh m_boxMesh, m_planeMesh, m_waterMesh, m_sphereMesh, m_arrowMesh, m_ringMesh, m_terrainMesh;
     bool m_terrainMeshBuilt = false;
+    int m_terrainModeCached = -1;
     float m_terrainHalfSizeCached = 0.0f;
     float m_terrainMaxHeightCached = 0.0f;
     int m_terrainGridCached = 0;
     std::unordered_map<std::string, GpuModel> m_modelCache;
     std::unordered_set<std::string> m_failedModels;
     std::unordered_map<const GpuModel*, std::vector<PropInstanceData>> m_instBatchesScratch;
-    std::vector<glm::mat4> m_nodeWorldScratch;
+    std::vector<PropInstanceData> m_rainInstScratch;
     std::vector<glm::mat4> m_bonePaletteScratch;
     std::vector<const Entity*> m_waterEntitiesScratch;
 

@@ -38,6 +38,7 @@ public:
         const InputState& input,
         LuaHostCallbacks callbacks);
 
+    void setResourceFilter(const std::string& onlyResourceName);
     bool reloadAll();
     void tick(double dt);
     void renderUI();

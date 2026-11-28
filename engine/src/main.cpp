@@ -4,7 +4,7 @@
 
 int main(int argc, char* argv[]) {
     sage::EngineConfig config;
-    config.appName = "SAGE Engine v1.5.0 — GPU Prop Instancing, 3-CSM, Euphoria Ragdoll & Spline AI";
+    config.appName = "SAGE Engine v1.6.0 — Release PBR, Material-Merged Instancing, Soft Water & Entity-Space IK";
     config.windowWidth = 1280;
     config.windowHeight = 720;
 
@@ -15,8 +15,21 @@ int main(int argc, char* argv[]) {
             config.silentAudio = true;
         } else if (arg == "--scene" && i + 1 < argc) {
             config.scenePath = argv[++i];
+        } else if (arg == "--resource" && i + 1 < argc) {
+            config.onlyResource = argv[++i];
+        } else if (arg == "--survival") {
+            config.scenePath = "scenes/survival_island.json";
+            config.onlyResource = "survival_game";
+            config.appName = "Wild Frontier: Echo Island — Open-World Survival (SAGE Engine v1.6.0)";
         } else if (arg == "--mute") {
             config.silentAudio = true;
+        } else if (arg == "--screenshot" && i + 1 < argc) {
+            config.screenshotPath = argv[++i];
+        } else if (arg == "--cam" && i + 6 < argc) {
+            config.overrideCamera = true;
+            config.overrideCamPos = {std::stof(argv[i + 1]), std::stof(argv[i + 2]), std::stof(argv[i + 3])};
+            config.overrideCamTarget = {std::stof(argv[i + 4]), std::stof(argv[i + 5]), std::stof(argv[i + 6])};
+            i += 6;
         }
     }
 

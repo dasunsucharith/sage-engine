@@ -111,9 +111,10 @@ struct WaterSampleResult {
     float shoreDist = 0.0f;  // Horizontal distance inside the water boundary (meters)
 };
 
-// Synchronized CPU/GPU 3D Heightmap Terrain configuration & query result (v1.3.0)
+// Synchronized CPU/GPU 3D Heightmap Terrain configuration & query result (v1.3.0 / v1.5+ organic island mode)
 struct TerrainSettings {
     bool enabled = true;
+    int mode = 0; // 0 = StuntCity (4-biome road-flattened), 1 = WildernessIsland (organic domain-warped island!)
     float halfSize = 440.0f;
     float maxHeight = 46.0f;
     int gridResolution = 160;

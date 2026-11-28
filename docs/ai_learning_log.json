@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "project": "SAGE Engine (Scriptable AI Game Engine)",
   "vision": "Build an open-source, AI-native C++20 + Lua AAA open-world game engine that rivals and surpasses modern AAA engines (like RAGE / GTA VI) while continuously learning from every release, render inspection, and hardware telemetry run.",
-  "currentVersion": "1.5.0",
+  "currentVersion": "1.6.0",
   "verifiedEngineeringLessons": [
     {
       "id": "L001",
@@ -51,12 +51,24 @@
       "version": "1.5.0",
       "domain": "GPU Prop Instancing, 3-CSM Shadow LOD & Active Ragdolls",
       "lesson": "When expanding to 3-Split Cascaded Shadow Maps (255m mountain range), always tier Mid/Far cascades to 1024px, compute exact per-model bounding spheres on .glb load, and apply world-radius shadow LOD culling (skipping small props & distant skinned characters in the far cascade). Telemetry caught a 45.0ms draft regression and this fix immediately cut avgFrameMs by 33.8% (to 29.8ms), hit a record-low 179.4ms peak via 1x1 shader warmup, culled 52.8% of entities, and saved 3,315 draw calls/frame via glDrawElementsInstanced prop batching."
+    },
+    {
+      "id": "L009",
+      "version": "1.5.1",
+      "domain": "Meshy AI 3D Asset Rigging & Quadruped Animation (Blender 5.3)",
+      "lesson": "Raw Meshy .glb exports often fail Blender Bone Heat Weighting due to overlapping accessories (backpacks/belt pouches) and micro-doubles, or include stray wrapper meshes (Icosphere) and huge 4K textures (50MB+). For humanoids, weld micro-doubles and use anatomical region-masked capsule skinning + 3x Laplacian joint smoothing + 4-weight clamping so backpacks and pouches stay rock-solid while limbs bend cleanly. For pre-rigged quadrupeds (like Meshy's 56-bone Wolf), preserve existing skin weights, downscale 4K textures to 1024px (~9x smaller GLB), remove stray meshes, and animate bones via world-space-to-bone-local quaternion transforms (R_local = R_rest_inv @ R_world @ R_rest) so animations work cleanly regardless of arbitrary bone roll orientations."
+    },
+    {
+      "id": "L010",
+      "version": "1.6.0",
+      "domain": "Double-Sided PBR Normals, Depth Water, Entity-Space Look-At IK & Release Optimization",
+      "lesson": "Never run bmesh.ops.recalc_face_normals on open-card Meshy cloth/fur meshes — it flips single-sided cards inward, and without 'if (!gl_FrontFacing) N = -N;' in kLitFragmentShader back-faces evaluate dot(N,V)<=0 causing 100% white Fresnel mirror speckles. For multi-bone quadruped Look-At IK (e.g. 5-neck-bone Wolf), divide role share by exact head/neck/chest counts and transform entity-space yaw/pitch into bone-local space via conjugate(restWorldRot) * qEntity * restWorldRot. Copy opaque HDR depth via glCopyTexSubImage2D before Pass 3 so water computes exact per-pixel depth for soft beach fade & surf foam with zero harsh seams. Merging identical-material static .glb submeshes on load + zero-allocation per-frame skeletal pose caching + time-sliced Far 3-CSM + Release (/O2) build cut Stunt City draw calls by 40.7% (1,932 -> 1,145) and session time by 34.6% (0.945s -> 0.618s) while Echo Island Survival runs at 147 draw calls with 216,000 shadowed grass blades."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [
     {
-      "targetVersion": "1.6.0",
-      "focus": "Streaming Open-World Tile Chunks (Multi-Kilometer Seamless Worlds), Submesh Material Batching (<600 draw calls), Time-Sliced Far Shadows, Real-Time Volumetric Clouds & Dynamic Global Illumination"
+      "targetVersion": "1.7.0",
+      "focus": "Streaming Open-World Tile Chunks (Multi-Kilometer Seamless Worlds), Real-Time Volumetric Clouds, Distance-Field Ambient Occlusion & Dynamic Global Illumination"
     },
     {
       "targetVersion": "2.0.0",
@@ -127,6 +139,42 @@
       "coldStartPeakMs": 179.43,
       "speedupVsPrevVersion": "Record-low 179.4ms peak (-6.0% vs v1.4, -20.9% vs v1.3), record-fast 0.945s session (-12.6% vs v1.4), 52.8% frustum culled, 3,315 draw calls saved/frame while adding 3-CSM (255m), 10 spline AI cruisers, 10 Look-At/Euphoria citizens",
       "nextOptimizationHint": "Merge static .glb submeshes sharing identical material/textures on load (e.g., aventador_svj 128 submeshes -> ~12) and time-slice the 255m Far Shadow Cascade (30 Hz) to cut lastDrawCalls from 1,932 down below 600.",
+      "smokeTestPassed": true
+    },
+    {
+      "version": "1.6.0",
+      "gpu": "NVIDIA GeForce RTX 5050 Laptop GPU",
+      "buildConfig": "Release (/O2 /Ob2 /DNDEBUG)",
+      "stuntCity": {
+        "entities": 386,
+        "glbModels": 31,
+        "grassClumps": 32525,
+        "grassBlades": 130100,
+        "frustumCulledEntities": 206,
+        "lastDrawCalls": 1145,
+        "instancedBatches": 9,
+        "savedDrawCalls": 793,
+        "sessionSeconds": 0.618,
+        "coldStart12FrameAvgMs": 26.79,
+        "speedupVsPrevVersion": "-40.7% draw calls (1,932 -> 1,145), -34.6% session time (0.945s -> 0.618s), -10.1% avgFrameMs while more than doubling grass blades (57.3k -> 130.1k shadowed 4-blade tufts)"
+      },
+      "echoIslandSurvival": {
+        "entities": 254,
+        "glbModels": 19,
+        "terrainTriangles": 25718,
+        "grassClumps": 54000,
+        "grassBlades": 216000,
+        "lastDrawCalls": 147,
+        "instancedBatches": 5,
+        "savedDrawCalls": 349,
+        "coldStart12FrameAvgMs": 20.47,
+        "steadyStateFrameMs": 5.1,
+        "depthBufferedSoftWater": true,
+        "shadowedGrass": true,
+        "entitySpaceLookAtIK": true,
+        "anisotropicFiltering": "8x"
+      },
+      "nextOptimizationHint": "Merge animated static-node props (e.g., ferris_wheel 32 submeshes) via single-VBO draw ranges and add streaming open-world terrain chunks for multi-kilometer maps in v1.7.0.",
       "smokeTestPassed": true
     }
   ]

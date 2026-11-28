@@ -41,3 +41,12 @@ logs/
 *.log
 saves/
 scenes/exported_scene.json
+
+# Blender auto-backups & raw un-optimized Meshy source downloads (optimized/rigged exports live in assets/models/survival/)
+*.blend1
+assets/models/weathered_plane_wreck.glb
+assets/models/Wolf Quadruped Rig.glb
+assets/models/Campfire_Tripod_GameR.glb
+assets/models/GameReady_Deer.glb
+assets/models/GameReady_Scavenger_W.glb
+assets/models/Survivalist_Character.glb

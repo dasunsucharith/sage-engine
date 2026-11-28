@@ -1,12 +1,14 @@
 #pragma once
 
+#include <filesystem>
 #include <memory>
+#include <string>
 
 namespace sage {
 
-// Real-time vehicle & game audio engine powered by miniaudio 0.11.
-// Synthesizes dynamic V12 engine harmonics, nitro afterburner, tire drift screech,
-// crate smash impacts, shockwave booms, and delivery chimes out of the box.
+// Hybrid real-time game audio engine powered by miniaudio 0.11:
+// - Real file-backed 2D & 3D spatial .wav/.mp3/.flac SFX and streaming ambient loops
+// - Plus procedural 4-profile vehicle combustion & exhaust synth for driving sandboxes
 class AudioEngine {
 public:
     AudioEngine();
@@ -18,6 +20,26 @@ public:
     // silentMode = true skips opening the OS audio device (used for --smoke-test)
     bool initialize(bool silentMode = false);
     void shutdown();
+    void setAssetRoot(const std::filesystem::path& assetRoot);
+
+    // Real file-backed 2D/3D royalty-free SFX & streaming ambient loops (v1.5+)
+    bool playSfx(const std::string& relPath, float volume = 0.85f, float pitch = 1.0f);
+    bool playSfx3D(
+        const std::string& relPath,
+        float x, float y, float z,
+        float volume = 0.90f,
+        float minDist = 6.0f,
+        float maxDist = 85.0f,
+        float pitch = 1.0f);
+    bool setAmbientLoop(
+        int slot,
+        const std::string& relPath,
+        float volume = 0.55f,
+        bool spatial = false,
+        float x = 0.0f, float y = 0.0f, float z = 0.0f,
+        float maxDist = 80.0f);
+    void stopAmbientLoop(int slot);
+    void stopAllAmbientLoops();
 
     // profile: 0 = Supercar V12, 1 = Superbike I4, 2 = Marine Speedboat V8, 3 = Sports Coupe V8
     void setVehicleProfile(int profile);

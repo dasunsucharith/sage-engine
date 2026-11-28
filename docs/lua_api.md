@@ -50,6 +50,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 | `sage.quit()` | Requests a clean engine shutdown (ideal for Quit buttons in Lua Main/Pause Menus). |
 | `sage.saveData(key, content)` | Persists a string/JSON save file safely under `saves/<key>.dat` (ideal for high scores, unlocks & game saves). |
 | `sage.loadData(key)` | Reads previously saved string data from `saves/<key>.dat` (returns `""` if not found). |
+| `sage.fileExists(path)` | Returns `true` if a file exists relative to the SAGE project root (great for auto-detecting drop-in Meshy/Blender `.glb` upgrades!). |
 
 ### `input`
 | Function | Description |
@@ -95,6 +96,7 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setGodRays(enabled [, intensity])` | Toggles Screen-Space Volumetric Sun Shafts (Crepuscular God-Rays) and optionally sets intensity (`0.0`–`1.5`, default `0.42`). |
 | `world.setCloudShadows(enabled)` | Toggles drifting FBM cloud shadows cast across terrain, mountains, roads, and city blocks (`true` by default). |
 | `world.setTerrainEnabled(enabled)` | Enables or disables the synchronized 160×160 3D multi-biome heightmap terrain (`true` by default). |
+| `world.setTerrainMode(mode)` | Switches 3D terrain generator between `"city"` (4-biome road-flattened) and `"island"` (organic domain-warped wilderness island with coves, inland lake, cliffs & snow summit). |
 | `world.sampleTerrain(x, z)` | Samples the synchronized 3D heightmap terrain at `(x, z)` and returns `height, normalX, normalY, normalZ, biomeId` (exact match to GPU mesh & Jolt HeightField). |
 | `world.setWeather(rainIntensity [, wetness])` | Controls real-time 3D falling rain (`0.0`–`1.0`) and reflective wet-puddle road/terrain shading (`0.0`–`1.0`). |
 | `world.setPointLight(id, x, y, z, r, g, b [, radius, intensity])` | Creates or updates a real-time dynamic point light (up to 16 active) that illuminates 3D meshes, roads, and reflects off animated ocean waves. |
@@ -146,7 +148,12 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `audio.playExplosion()` | Plays a sub-bass shockwave boom SFX. |
 | `audio.setVolume(vol01)` | Sets master audio volume (`0.0`–`1.0`). |
 | `audio.setListener(x, y, z, fwdX, fwdZ)` | Updates the 3D spatial audio listener position & horizontal forward direction (typically your active camera) for equal-power stereo panning. |
-| `audio.setSpatialEmitter(slot, type, x, y, z [, radius, gain])` | Configures one of 8 live 3D spatial stereo-panned world emitters (`slot` `0`–`7`; `type`: `0` = Ocean Surf, `1` = Plaza Fountain, `2` = Helicopter Rotor, `3` = Alpine Wind/Breeze). |
+| `audio.setSpatialEmitter(slot, type, x, y, z [, radius, gain])` | Configures one of 8 live 3D spatial stereo-panned procedural world emitters (`slot` `0`–`7`; `type`: `0` = Ocean Surf, `1` = Plaza Fountain, `2` = Helicopter Rotor, `3` = Alpine Wind/Breeze). |
+| `audio.playSfx(path [, volume, pitch])` | Plays a real `.wav`/`.mp3`/`.flac` 2D sound effect file (up to 16 simultaneous voices, decoded natively by miniaudio). |
+| `audio.playSfx3D(path, x, y, z [, volume, minDist, maxDist, pitch])` | Plays a real `.wav`/`.mp3`/`.flac` sound effect positioned in 3D world space with stereo panning and distance attenuation. |
+| `audio.setAmbientLoop(slot, path [, volume, x, y, z, maxDist])` | Streams a seamless looping `.mp3`/`.wav` ambient track on `slot` (`0`–`7`). Omit `x, y, z` for global 2D ambience (wind, birds, rain) or pass `x, y, z, maxDist` for a 3D positional ambient source (ocean waves, crackling campfire, river). |
+| `audio.stopAmbientLoop(slot)` | Stops and releases ambient loop `slot` (`0`–`7`). |
+| `audio.stopAllAmbientLoops()` | Stops all active streaming ambient loops. |
 
 ### `ui` *(Lua-Driven Game Menus & HUDs — call inside `onRenderUI()`)*
 | Function | Description |
