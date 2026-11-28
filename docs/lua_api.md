@@ -45,12 +45,19 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 | Function | Description |
 | :--- | :--- |
 | `sage.log(message)` | Prints a prefixed `[Lua]` message to the SAGE console. |
-| `sage.getTime()` | Returns elapsed seconds since engine startup. |
+| `sage.getTime()` | Returns **simulation** seconds: advances by exactly the fixed timestep (1/60 s) on every tick, including catch-up ticks within one frame. Use it for all gameplay (orbits, timers, AI). Physics water buoyancy and `world.sampleWater()` use the same clock, so they always match the rendered waves. |
+| `sage.getRealTime()` | Returns wall-clock seconds since engine startup. Use it only for UI effects or profiling, never for gameplay (it is not deterministic). |
 | `sage.setTitle(title)` | Sets custom HUD text in the OS window title bar (FPS is appended automatically). |
 | `sage.quit()` | Requests a clean engine shutdown (ideal for Quit buttons in Lua Main/Pause Menus). |
 | `sage.saveData(key, content)` | Persists a string/JSON save file safely under `saves/<key>.dat` (ideal for high scores, unlocks & game saves). |
 | `sage.loadData(key)` | Reads previously saved string data from `saves/<key>.dat` (returns `""` if not found). |
-| `sage.fileExists(path)` | Returns `true` if a file exists relative to the SAGE project root (great for auto-detecting drop-in Meshy/Blender `.glb` upgrades!). |
+| `sage.fileExists(path)` | Returns `true` if a file exists relative to the SAGE project root (great for auto-detecting drop-in Meshy/Blender `.glb` upgrades!). Absolute paths and `..` segments are rejected and return `false`. |
+
+### Script Sandbox Rules
+Resources run in a sandbox so a downloaded mod cannot damage the player's machine or freeze the engine:
+* Available standard libraries: `base`, `math`, `string`, `table`, `utf8`. There is no `io`, `os`, `package`/`require` or `debug`.
+* `dofile` and `loadfile` are removed. `load(chunk)` still works, but only for **text** chunks (binary bytecode is rejected because Lua does not verify it).
+* **Time budget:** script loading plus `onStart()` may take up to 8 s. Each `onTick`, `onRenderUI` or `onShutdown` call may take up to 1 s. A script over budget (e.g. an infinite loop) gets a Lua error, and that resource is paused while the engine keeps running. Fix the script and save, or press `F5`, to reload it.
 
 ### `input`
 | Function | Description |

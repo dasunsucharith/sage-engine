@@ -14,7 +14,8 @@ class World;
 
 struct LuaHostCallbacks {
     std::function<void(const std::string&)> setWindowTitle;
-    std::function<double()> getTimeSeconds;
+    std::function<double()> getTimeSeconds;      // Simulation time (advances by the fixed timestep per tick)
+    std::function<double()> getRealTimeSeconds;  // Wall-clock time since engine start (for UI effects/profiling)
     std::function<void()> beforeResourcesStart;
     std::function<void()> requestQuit;
     std::function<bool()> isUiCapturingKeyboard;

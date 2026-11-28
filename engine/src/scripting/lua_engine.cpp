@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -22,6 +23,66 @@ namespace sage {
 namespace fs = std::filesystem;
 
 namespace {
+
+// ---------------------------------------------------------------------------
+// Runaway-script watchdog
+// ---------------------------------------------------------------------------
+// A `while true do end` in any resource used to freeze the whole engine forever.
+// A Lua count hook now checks a wall-clock deadline every N VM instructions and
+// raises a normal Lua error when a callback blows its budget. The error flows
+// through the usual protected-call path: the resource is paused, the message names
+// the callback, and fixing + saving the script hot-reloads it as usual.
+using WatchdogClock = std::chrono::steady_clock;
+
+constexpr int kWatchdogInstructionInterval = 100000;          // ~0.1-1 ms of Lua work between checks
+constexpr std::chrono::milliseconds kLoadBudget{8000};        // Script load + onStart (world generation is allowed to be slow)
+constexpr std::chrono::milliseconds kCallbackBudget{1000};    // onTick / onRenderUI / onShutdown per call
+
+struct WatchdogState {
+    bool armed = false;
+    WatchdogClock::time_point deadline{};
+    long long budgetMs = 0;
+};
+WatchdogState g_watchdog;
+
+void watchdogHook(lua_State* L, lua_Debug* /*ar*/) {
+    if (g_watchdog.armed && WatchdogClock::now() > g_watchdog.deadline) {
+        g_watchdog.armed = false; // Disarm so the error handler itself can run.
+        luaL_error(L,
+            "script exceeded its %d ms time budget (infinite loop?). "
+            "Resource paused: fix the script and save (or press F5) to reload.",
+            static_cast<int>(g_watchdog.budgetMs));
+    }
+}
+
+// RAII guard: arms the watchdog for the duration of one host -> Lua call.
+class WatchdogScope {
+public:
+    explicit WatchdogScope(std::chrono::milliseconds budget) {
+        g_watchdog.armed = true;
+        g_watchdog.budgetMs = budget.count();
+        g_watchdog.deadline = WatchdogClock::now() + budget;
+    }
+    ~WatchdogScope() { g_watchdog.armed = false; }
+    WatchdogScope(const WatchdogScope&) = delete;
+    WatchdogScope& operator=(const WatchdogScope&) = delete;
+};
+
+// Removes base-library functions that let a resource escape the sandbox:
+//  * dofile / loadfile read arbitrary files from disk;
+//  * load / loadstring with binary chunks accept precompiled bytecode, which Lua
+//    does NOT verify (malformed bytecode can corrupt memory). Text chunks still work.
+void applySandbox(sol::state& lua) {
+    lua.safe_script(R"LUA(
+        dofile = nil
+        loadfile = nil
+        local rawLoad = load
+        load = function(chunk, chunkName, _mode, env)
+            return rawLoad(chunk, chunkName, "t", env)
+        end
+    )LUA");
+    lua_sethook(lua.lua_state(), watchdogHook, LUA_MASKCOUNT, kWatchdogInstructionInterval);
+}
 
 MouseButton mouseButtonFromName(const std::string& name) {
     std::string lower = name;
@@ -71,6 +132,9 @@ struct LuaEngine::Impl {
         sageTbl.set_function("getTime", [this]() -> double {
             return callbacks.getTimeSeconds ? callbacks.getTimeSeconds() : 0.0;
         });
+        sageTbl.set_function("getRealTime", [this]() -> double {
+            return callbacks.getRealTimeSeconds ? callbacks.getRealTimeSeconds() : 0.0;
+        });
         sageTbl.set_function("setTitle", [this](const std::string& title) {
             if (callbacks.setWindowTitle) {
                 callbacks.setWindowTitle(title);
@@ -111,12 +175,16 @@ struct LuaEngine::Impl {
             return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         });
         sageTbl.set_function("fileExists", [this](const std::string& relPath) -> bool {
+            // Only project-relative paths: scripts must not probe the rest of the user's disk.
             if (relPath.empty()) return false;
+            const fs::path requested(relPath);
+            if (requested.is_absolute() || requested.has_root_name()) return false;
+            for (const auto& part : requested) {
+                if (part == "..") return false;
+            }
             std::error_code ec;
-            const fs::path direct(relPath);
-            if (fs::exists(direct, ec)) return true;
-            const fs::path fromRoot = resourcesRoot.parent_path() / direct;
-            return fs::exists(fromRoot, ec);
+            if (fs::exists(requested, ec)) return true;
+            return fs::exists(resourcesRoot.parent_path() / requested, ec);
         });
 
         // --- input.* namespace ---
@@ -768,6 +836,7 @@ struct LuaEngine::Impl {
     void callShutdownHooks() {
         for (auto& res : resources) {
             if (res.active && res.onShutdown.valid()) {
+                WatchdogScope watchdog(kCallbackBudget);
                 sol::protected_function_result result = res.onShutdown();
                 if (!result.valid()) {
                     const sol::error err = result;
@@ -831,6 +900,7 @@ struct LuaEngine::Impl {
                 return false;
             }
 
+            WatchdogScope watchdog(kLoadBudget);
             sol::protected_function_result execResult = lua->safe_script_file(
                 scriptPath.string(),
                 res.env,
@@ -854,6 +924,7 @@ struct LuaEngine::Impl {
                   << " by " << res.author << "\n";
 
         if (res.onStart.valid()) {
+            WatchdogScope watchdog(kLoadBudget);
             sol::protected_function_result startResult = res.onStart();
             if (!startResult.valid()) {
                 const sol::error err = startResult;
@@ -921,6 +992,7 @@ bool LuaEngine::reloadAll() {
         sol::lib::string,
         sol::lib::table,
         sol::lib::utf8);
+    applySandbox(*m_impl->lua);
 
     m_impl->bindSageApi(*m_impl->lua);
 
@@ -966,6 +1038,7 @@ void LuaEngine::tick(double dt) {
         if (!res.active || !res.onTick.valid()) {
             continue;
         }
+        WatchdogScope watchdog(kCallbackBudget);
         sol::protected_function_result result = res.onTick(dt);
         if (!result.valid()) {
             const sol::error err = result;
@@ -983,6 +1056,7 @@ void LuaEngine::renderUI() {
         if (!res.active || !res.onRenderUI.valid()) {
             continue;
         }
+        WatchdogScope watchdog(kCallbackBudget);
         sol::protected_function_result result = res.onRenderUI();
         if (!result.valid()) {
             const sol::error err = result;

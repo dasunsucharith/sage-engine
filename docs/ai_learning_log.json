@@ -63,6 +63,12 @@
       "version": "1.6.0",
       "domain": "Double-Sided PBR Normals, Depth Water, Entity-Space Look-At IK & Release Optimization",
       "lesson": "Never run bmesh.ops.recalc_face_normals on open-card Meshy cloth/fur meshes — it flips single-sided cards inward, and without 'if (!gl_FrontFacing) N = -N;' in kLitFragmentShader back-faces evaluate dot(N,V)<=0 causing 100% white Fresnel mirror speckles. For multi-bone quadruped Look-At IK (e.g. 5-neck-bone Wolf), divide role share by exact head/neck/chest counts and transform entity-space yaw/pitch into bone-local space via conjugate(restWorldRot) * qEntity * restWorldRot. Copy opaque HDR depth via glCopyTexSubImage2D before Pass 3 so water computes exact per-pixel depth for soft beach fade & surf foam with zero harsh seams. Merging identical-material static .glb submeshes on load + zero-allocation per-frame skeletal pose caching + time-sliced Far 3-CSM + Release (/O2) build cut Stunt City draw calls by 40.7% (1,932 -> 1,145) and session time by 34.6% (0.945s -> 0.618s) while Echo Island Survival runs at 147 draw calls with 216,000 shadowed grass blades."
+    },
+    {
+      "id": "L011",
+      "version": "1.6.0+",
+      "domain": "Benchmark Methodology, Simulation Clock & Lua Sandbox",
+      "lesson": "A 12-frame --smoke-test average is NOT a performance number: one 200-250 ms cold-start frame dominates it, and the old telemetry clamped frame times to the 250 ms simulation cap, so every hitch read as exactly 250 ms. On the same Release build and RTX 5050 Laptop GPU, the 12-frame average read 20-26 ms but steady state was p50 2.3-2.4 ms (Stunt City) and 1.9-2.6 ms (Echo Island) via --benchmark (120 warm-up + 600 measured frames, VSync off). Earlier logged 'speedups' were within that cold-start noise, so re-baseline from --benchmark p50/p95/p99, run twice, and treat differences inside the run-to-run spread (about 10-25% here) as noise. Separately, physics/water/sage.getTime() used wall-clock time, so catch-up fixed ticks in one frame all saw the same time (getTime-driven objects stalled, buoyancy drifted from the rendered waves). Advance a simulation clock by exactly dt per fixedTick and render shaders at simTime + accumulator. Finally, Lua base-lib dofile/loadfile and binary load() escape the sandbox, and an infinite loop froze the engine. Remove them and arm a LUA_MASKCOUNT watchdog hook per host->Lua call so runaway scripts error out and pause only their own resource."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [
@@ -176,6 +182,21 @@
       },
       "nextOptimizationHint": "Merge animated static-node props (e.g., ferris_wheel 32 submeshes) via single-VBO draw ranges and add streaming open-world terrain chunks for multi-kilometer maps in v1.7.0.",
       "smokeTestPassed": true
+    },
+    {
+      "version": "1.6.0+steady-state-baseline",
+      "gpu": "NVIDIA GeForce RTX 5050 Laptop GPU",
+      "buildConfig": "Release",
+      "method": "sage.exe --benchmark 600 (120 warm-up frames excluded, 600 measured, VSync off, audio muted, 1280x720), 2 runs per scene",
+      "stuntCity": {
+        "run1": {"meanFrameMs": 2.46, "p50FrameMs": 2.29, "p95FrameMs": 4.33, "p99FrameMs": 5.07, "maxFrameMs": 6.15},
+        "run2": {"meanFrameMs": 2.55, "p50FrameMs": 2.42, "p95FrameMs": 4.24, "p99FrameMs": 5.55, "maxFrameMs": 9.09}
+      },
+      "echoIslandSurvival": {
+        "run1": {"meanFrameMs": 2.11, "p50FrameMs": 1.93, "p95FrameMs": 3.38, "p99FrameMs": 4.51, "maxFrameMs": 6.21},
+        "run2": {"meanFrameMs": 3.13, "p50FrameMs": 2.59, "p95FrameMs": 6.25, "p99FrameMs": 10.82, "maxFrameMs": 25.65}
+      },
+      "note": "Use THIS as the baseline for future comparisons, not the coldStart12FrameAvgMs fields above. CPU wall-clock frame time only (no GPU timer queries yet)."
     }
   ]
 }

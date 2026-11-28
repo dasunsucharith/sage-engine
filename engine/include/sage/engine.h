@@ -12,16 +12,19 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace sage {
 
 struct EngineConfig {
-    std::string appName = "SAGE Engine v0.4 — 3D Stunt & Delivery Sandbox";
+    std::string appName = "SAGE Engine";
     int windowWidth = 1280;
     int windowHeight = 720;
     bool vsync = true;
     double fixedTimeStep = 1.0 / 60.0;
-    int maxFrames = 0;                 // 0 = run until window closes (non-zero for --smoke-test)
+    int maxFrames = 0;                 // 0 = run until window closes (non-zero for --smoke-test / --benchmark)
+    int warmupFrames = 0;              // Leading frames excluded from steady-state frame-time stats
+    bool benchmarkMode = false;        // true for --benchmark (VSync off, long measured window)
     bool silentAudio = false;          // true during --smoke-test
     std::filesystem::path resourcesPath = "resources";
     std::filesystem::path scenePath = "scenes/stunt_city.json";
@@ -77,6 +80,12 @@ private:
     float m_lastFrameMs = 16.6f;
     float m_peakFrameMs = 0.0f;
     double m_frameMsAccum = 0.0;
+    std::vector<float> m_frameTimesMs;  // Raw (unclamped) per-frame CPU wall times for percentile telemetry
+
+    // Simulation clock: advances by exactly fixedTimeStep per fixedTick, so physics,
+    // water waves and Lua gameplay all see the same deterministic time (never wall-clock).
+    double m_simTime = 0.0;
+    double m_renderTime = 0.0;         // m_simTime + leftover accumulator (smooth time for shaders)
 
     std::string m_scriptTitle;
     double m_startTime = 0.0;

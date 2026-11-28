@@ -1,5 +1,6 @@
 #include "sage/engine.h"
 
+#include "sage/version.h"
 #include "sage/world/scene_loader.h"
 
 #include <nlohmann/json.hpp>
@@ -135,7 +136,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v1.6.0 — Material-Merged Instancing + Pose Cache + Time-Sliced 3-CSM + Soft Water\n";
+    std::cout << "  SAGE Engine v" << kEngineVersion << " (" << buildConfigName() << " build)\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -200,7 +201,12 @@ bool Engine::initialize() {
     callbacks.setWindowTitle = [this](const std::string& title) {
         m_scriptTitle = title;
     };
+    // sage.getTime() / world.sampleWater() see SIMULATION time so every fixed tick
+    // (including catch-up ticks within one frame) advances gameplay consistently.
     callbacks.getTimeSeconds = [this]() -> double {
+        return m_simTime;
+    };
+    callbacks.getRealTimeSeconds = [this]() -> double {
         return Window::getTimeSeconds() - m_startTime;
     };
     callbacks.beforeResourcesStart = [this]() {
@@ -245,9 +251,11 @@ void Engine::fixedTick(double dt) {
     if (!m_freeFlyMode) {
         m_lua.tick(dt);
     }
-    const float elapsed = static_cast<float>(Window::getTimeSeconds() - m_startTime);
-    m_physics.step(static_cast<float>(dt), m_world, elapsed);
+    // Physics samples the animated water at simulation time (never wall-clock), so the
+    // same inputs always produce the same buoyancy result regardless of frame pacing.
+    m_physics.step(static_cast<float>(dt), m_world, static_cast<float>(m_simTime));
     m_world.updateAnimations(static_cast<float>(dt));
+    m_simTime += dt;
 }
 
 void Engine::render(double elapsedSeconds) {
@@ -294,15 +302,13 @@ void Engine::render(double elapsedSeconds) {
         }
     };
     actions.onTriggerShockwave = [this]() {
-        const Vec3 carPos = m_world.hasEntity("player_car")
-            ? m_world.getPosition("player_car")
-            : m_world.camera().target;
-        m_physics.applyExplosion(carPos, 24.0f, 360.0f);
+        // Engine code must not know game entity names: blast at whatever the camera looks at.
+        m_physics.applyExplosion(m_world.camera().target, 24.0f, 360.0f);
         m_audio.playExplosion();
     };
     actions.onSaveScene = [this]() -> bool {
         const fs::path exportPath = m_projectRoot / "scenes" / "exported_scene.json";
-        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.6.0 Exported World");
+        return SceneLoader::saveToFile(exportPath, m_world, std::string("SAGE v") + kEngineVersion + " Exported World");
     };
     actions.onRenderCustomUi = [this]() {
         m_lua.renderUI();
@@ -311,6 +317,49 @@ void Engine::render(double elapsedSeconds) {
     m_editor.render(m_world, m_physics, m_audio, stats, actions);
     m_window.swapBuffers();
 }
+
+namespace {
+
+// Steady-state statistics over frames AFTER the warm-up window. Percentiles matter
+// more than averages for games: p99 captures the hitches players actually feel.
+nlohmann::json computeFrameStats(const std::vector<float>& frameTimesMs, int warmupFrames, bool vsync) {
+    const std::size_t skip = static_cast<std::size_t>(std::max(0, warmupFrames));
+    if (frameTimesMs.size() <= skip) {
+        return {{"measuredFrames", 0}, {"warmupFrames", skip}};
+    }
+    std::vector<float> samples(frameTimesMs.begin() + static_cast<std::ptrdiff_t>(skip), frameTimesMs.end());
+    std::sort(samples.begin(), samples.end());
+
+    double sum = 0.0;
+    for (float s : samples) {
+        sum += s;
+    }
+    const auto percentile = [&samples](double p) -> double {
+        // Nearest-rank percentile on the sorted samples.
+        const double rank = p / 100.0 * static_cast<double>(samples.size() - 1);
+        return samples[static_cast<std::size_t>(std::lround(rank))];
+    };
+    const double mean = sum / static_cast<double>(samples.size());
+
+    nlohmann::json stats;
+    stats["warmupFrames"] = skip;
+    stats["measuredFrames"] = samples.size();
+    stats["meanFrameMs"] = mean;
+    stats["p50FrameMs"] = percentile(50.0);
+    stats["p95FrameMs"] = percentile(95.0);
+    stats["p99FrameMs"] = percentile(99.0);
+    stats["maxFrameMs"] = samples.back();
+    stats["meanFps"] = mean > 0.001 ? 1000.0 / mean : 0.0;
+    if (samples.size() < 300) {
+        stats["warning"] = "Fewer than 300 measured frames: too few for reliable comparisons. Use --benchmark.";
+    }
+    if (vsync) {
+        stats["vsyncWarning"] = "VSync was ON: frame times are capped by the display refresh rate.";
+    }
+    return stats;
+}
+
+} // namespace
 
 void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     if (m_projectRoot.empty() || totalFrames <= 0) {
@@ -327,8 +376,11 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     const SkySettings& sky = m_world.sky();
 
     nlohmann::json j;
-    j["engineVersion"] = "1.6.0";
-    j["smokeTest"] = (m_config.maxFrames > 0);
+    j["engineVersion"] = kEngineVersion;
+    j["buildConfig"] = buildConfigName();
+    j["runMode"] = m_config.benchmarkMode ? "benchmark" : (m_config.maxFrames > 0 ? "smoke-test" : "interactive");
+    j["smokeTest"] = (m_config.maxFrames > 0 && !m_config.benchmarkMode);
+    j["vsync"] = m_config.vsync;
     j["gpu"] = {
         {"renderer", gpu.gpuRenderer},
         {"vendor", gpu.gpuVendor},
@@ -345,6 +397,19 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
         {"instancedProps", m_renderer ? m_renderer->lastInstancedPropCount() : 0},
         {"savedDrawCalls", m_renderer ? m_renderer->lastSavedDrawCalls() : 0}
     };
+    j["performance"]["note"] =
+        "avgFrameMs/peakFrameMs include cold-start frames. Compare versions ONLY with steadyState from a "
+        "Release --benchmark run (VSync off); smoke-test numbers are dominated by the first-frame hitch.";
+    j["steadyState"] = computeFrameStats(m_frameTimesMs, m_config.warmupFrames, m_config.vsync);
+    if (m_config.benchmarkMode && j["steadyState"].value("measuredFrames", 0) > 0) {
+        const auto& s = j["steadyState"];
+        std::cout << std::fixed << std::setprecision(2)
+                  << "[SAGE][Benchmark] " << s["measuredFrames"].get<std::size_t>() << " frames after "
+                  << s["warmupFrames"].get<std::size_t>() << " warm-up | mean " << s["meanFrameMs"].get<double>()
+                  << " ms | p50 " << s["p50FrameMs"].get<double>() << " | p95 " << s["p95FrameMs"].get<double>()
+                  << " | p99 " << s["p99FrameMs"].get<double>() << " | max " << s["maxFrameMs"].get<double>()
+                  << " ms (" << buildConfigName() << ", VSync " << (m_config.vsync ? "ON" : "OFF") << ")\n";
+    }
     j["world"] = {
         {"entities", m_world.entityCount()},
         {"loadedModels", m_renderer ? m_renderer->loadedModelCount() : 0},
@@ -412,12 +477,19 @@ int Engine::run() {
 
     while (m_running && !m_window.shouldClose()) {
         const double currentTime = Window::getTimeSeconds();
-        const double frameDelta = std::min(currentTime - previousTime, kMaxFrameDelta);
+        const double rawFrameDelta = currentTime - previousTime;
+        // Simulation catch-up is clamped (avoids the "spiral of death" after a long hitch)...
+        const double frameDelta = std::min(rawFrameDelta, kMaxFrameDelta);
         previousTime = currentTime;
-        m_lastFrameMs = static_cast<float>(frameDelta * 1000.0);
+        // ...but telemetry records the REAL frame time, otherwise every hitch reads as exactly 250 ms.
+        m_lastFrameMs = static_cast<float>(rawFrameDelta * 1000.0);
         m_frameMsAccum += static_cast<double>(m_lastFrameMs);
         if (totalFrames > 1 && m_lastFrameMs > m_peakFrameMs) {
             m_peakFrameMs = m_lastFrameMs;
+        }
+        if (totalFrames > 0) {
+            // Frame 0's delta is the gap between initialize() and the first loop pass, not a frame.
+            m_frameTimesMs.push_back(m_lastFrameMs);
         }
 
         m_window.pollEvents(m_input);
@@ -474,13 +546,16 @@ int Engine::run() {
             accumulator -= m_config.fixedTimeStep;
         }
 
-        render(currentTime - m_startTime);
+        // Shader time = simulation time + the not-yet-simulated remainder, so GPU water waves
+        // stay in lock-step with the CPU buoyancy samples while still animating smoothly.
+        m_renderTime = m_simTime + accumulator;
+        render(m_renderTime);
 
         ++totalFrames;
         if (!m_config.screenshotPath.empty() && m_config.maxFrames > 0 && totalFrames == m_config.maxFrames) {
             // Re-render pure 3D world cleanly (no MENU overlay) & read back exact backbuffer PNG!
             m_renderer->beginFrame({0.05f, 0.07f, 0.11f, 1.0f});
-            m_renderer->renderWorld(m_world, static_cast<float>(currentTime - m_startTime));
+            m_renderer->renderWorld(m_world, static_cast<float>(m_renderTime));
             m_renderer->endFrame();
             m_renderer->captureScreenshot(m_config.screenshotPath);
         }
@@ -495,7 +570,9 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v1.6.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v" << kEngineVersion
+                      << (m_config.benchmarkMode ? " Benchmark" : " Smoke test")
+                      << " completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()

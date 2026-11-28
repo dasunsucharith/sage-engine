@@ -65,7 +65,13 @@ cmake --build build --target sage
 | :--- | :--- | :--- |
 | `--scene <path>` | `.\build\sage.exe --scene scenes/sandbox.json` | Loads a custom JSON scene file instead of the default `scenes/stunt_city.json`. |
 | `--mute` | `.\build\sage.exe --mute` | Launches with audio muted (no OS audio device opened). |
-| `--smoke-test` | `.\build\sage.exe --smoke-test` | Initializes GPU, Jolt Physics, Dear ImGui, JSON scene, `.glb` models, and Lua scripts, renders 12 real frames, prints diagnostics, and exits `0` (ideal for CI and AI agents!). |
+| `--smoke-test` | `.\build\sage.exe --smoke-test` | Initializes GPU, Jolt Physics, Dear ImGui, JSON scene, `.glb` models, and Lua scripts, renders 12 real frames, prints diagnostics, and exits `0` (ideal for CI and AI agents!). This is a **boot check, not a performance measurement**: 12 frames are dominated by the cold-start hitch. |
+| `--benchmark [frames]` | `.\build\sage.exe --benchmark 600` | Steady-state performance run: turns VSync off, mutes audio, skips 120 warm-up frames, then measures `frames` frames (default 600). Prints mean/p50/p95/p99/max frame time and writes them to `steadyState` in `logs/last_session_telemetry.json`. Always benchmark a **Release** build (`-DCMAKE_BUILD_TYPE=Release`) when comparing versions. |
+| `--survival` | `.\build\sage.exe --survival` | Loads `scenes/survival_island.json` with only the `survival_game` resource. |
+| `--resource <name>` | `.\build\sage.exe --resource stunt_sandbox` | Loads only this Lua resource (even if its manifest is disabled). |
+| `--no-vsync` | `.\build\sage.exe --no-vsync` | Disables VSync for interactive runs. |
+| `--screenshot <file.png>` | `.\build\sage.exe --smoke-test --screenshot shot.png` | With `--smoke-test`/`--benchmark`, saves a PNG of the final 3D frame (no UI overlay). |
+| `--cam px py pz tx ty tz` | `.\build\sage.exe --smoke-test --cam 0 40 -80 0 0 0` | Overrides the camera position and look-at target (useful for repeatable screenshots). |
 
 ---
 

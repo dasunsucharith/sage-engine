@@ -85,9 +85,11 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(cgltf)
 
 # 7. stb (stb_image.h for embedded/external .glb textures)
+# stb has no release tags, so pin an exact commit: a moving `master` tarball
+# makes builds non-reproducible (two contributors could compile different code).
 FetchContent_Declare(
     stb
-    URL https://github.com/nothings/stb/archive/refs/heads/master.tar.gz
+    URL https://github.com/nothings/stb/archive/6b5799bae8a1fe3792691ef4b72ae26434c3e799.tar.gz
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(stb)
@@ -188,6 +190,12 @@ target_compile_definitions(sage_core
     PRIVATE
         SOL_ALL_SAFETIES_ON=1
         GLM_FORCE_RADIANS
+    PUBLIC
+        # Single source of truth for the engine version & build type: bump
+        # project(VERSION ...) above and every log line, window title, scene
+        # export and telemetry file picks it up automatically.
+        SAGE_VERSION_STRING="${PROJECT_VERSION}"
+        SAGE_BUILD_CONFIG="$<CONFIG>"
 )
 
 target_link_libraries(sage_core

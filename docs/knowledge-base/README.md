@@ -25,6 +25,7 @@ This folder is the **engineering brain** of SAGE Engine. Every time we study a g
 | [017](017-v14-instanced-grass-ssr-frustum-culling-and-crowd-ai.md) | GPU-Instanced Interactive 3D Grass, Alpha-Packed Screen-Space Reflections (SSR), Frustum Culling, Preloading & Reactive Crowd AI | Milestone `v1.4.0` Implementation |
 | [018](018-v15-gpu-prop-instancing-3csm-euphoria-ragdoll-and-spline-ai.md) | GPU-Instanced Static Prop Batching, Tiered 3-CSM, Exact Bounding Spheres, Euphoria Active-Physics Ragdoll, Look-At IK & Spline AI | Milestone `v1.5.0` Implementation |
 | [019](019-v16-material-merging-soft-water-entity-ik-and-survival.md) | Material-Merged Instancing, Pose Cache, Time-Sliced 3-CSM, Depth-Buffered Soft Water, Double-Sided PBR, Entity-Space Look-At IK & Echo Island Survival | Milestone `v1.6.0` Implementation |
+| [020](020-honest-benchmarks-simulation-clock-and-lua-sandbox.md) | Steady-State `--benchmark` Percentiles, Deterministic Simulation Clock, Lua Sandbox Hardening & Runaway-Script Watchdog | Foundation Fix (post-`v1.6.0`) |
 
 ## How to Add a New Entry
 Create `NNN-short-topic-name.md` (e.g., `002-how-gpus-draw-triangles.md`) with:

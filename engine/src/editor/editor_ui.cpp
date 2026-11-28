@@ -3,9 +3,11 @@
 #include "sage/audio/audio_engine.h"
 #include "sage/physics/physics_world.h"
 #include "sage/platform/window.h"
+#include "sage/version.h"
 #include "sage/world/world.h"
 
 #include <SDL3/SDL.h>
+#include <string>
 
 #ifdef _MSC_VER
 #pragma warning(push, 0)
@@ -112,7 +114,10 @@ void EditorUI::render(
         ImGui::SetNextWindowPos(ImVec2(14.0f, 14.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(345.0f, 0.0f), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("SAGE Engine v1.5.0 — AAA World Editor (F1)", &m_visible)) {
+        // "###" keeps a stable ImGui window ID so saved layout survives version bumps.
+        static const std::string kEditorTitle =
+            std::string("SAGE Engine v") + kEngineVersion + " — World Editor (F1)###SageWorldEditor";
+        if (ImGui::Begin(kEditorTitle.c_str(), &m_visible)) {
             ImGui::Text("FPS: %.0f (%.2f ms)", stats.fps, stats.frameMs);
             ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 34.0f));
             ImGui::TextDisabled("GPU: %s", stats.gpuRenderer.c_str());
