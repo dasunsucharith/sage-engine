@@ -1,6 +1,6 @@
 # SAGE Engine — Lua API Reference
 
-> **Status:** Live (**`v1.4.0`**) — **GPU-Instanced Wind-Swaying 3D Grass & Wildflowers (~57k blades in 1 draw call + interactive parting)**, **Real-Time Screen-Space Reflections (SSR)**, **6-Plane Camera Frustum Culling & Startup Asset Pre-Warming**, **Autonomous Reactive GTA-Style AI Crowd**, **Procedural 3D Heightmap Terrain + Jolt 129×129 HeightField Physics**, **Volumetric Sun Shafts (God-Rays)**, **Drifting Cloud Shadows**, **3D Spatial Stereo Audio Emitters**, **Self-Learning AI Session Telemetry**, **glTF 2.0 GPU Skeletal Skinning & Crossfade Blending**, **FXAA 3.11**, **Cook-Torrance GGX PBR + Depth SSAO**, **2-Cascade PCF Soft Shadows**, **Dynamic Rain & Wet Roads**, **Live World Editor (`F1`)**, **33 Blender `.glb` Models**, **Jolt Physics 5.7**, and **miniaudio 0.11**.
+> **Status:** Live (**`v1.5.0`**) — **Automatic GPU-Instanced Static Prop Batching (`glDrawElementsInstanced`)**, **3-Split Tiered Cascaded Shadow Maps (`24m / 92m / 255m` 3-CSM)**, **Euphoria-Style Active-Physics Ragdoll Blending & Procedural Head/Torso Look-At IK**, **Native C++20 Catmull-Rom 3D Spline Navigation (`world.evalSpline`)**, **Exact Per-Model Bounding-Sphere Frustum Culling & GPU Shader Warmup**, **GPU-Instanced 3D Wind Grass (~57k blades)**, **Real-Time Screen-Space Reflections (SSR)**, **Procedural 3D Heightmap Terrain + Jolt 129×129 HeightField**, **Volumetric God-Rays**, **Drifting Cloud Shadows**, **3D Spatial Audio**, **Self-Learning AI Telemetry**, **glTF 2.0 GPU Skinning & Crossfade Blending**, **FXAA 3.11**, **Cook-Torrance GGX PBR + SSAO**, **Live World Editor (`F1`)**, **33 Blender `.glb` Models**, **Jolt Physics 5.7**, and **miniaudio 0.11**.
 > This file is the single source of truth for both human scripters and AI agents writing Lua for SAGE.
 
 ---
@@ -39,7 +39,7 @@ function onShutdown()    -- Called when the resource stops or before hot-reload
 
 ---
 
-## Implemented Namespaces (`v1.4.0`)
+## Implemented Namespaces (`v1.5.0`)
 
 ### `sage`
 | Function | Description |
@@ -85,7 +85,13 @@ Right-handed 3D coordinates in meters: **`+Y` is up**, **`+Z` is forward** (`yaw
 | `world.setSSAO(enabled)` | Enables or disables Screen-Space Depth Contact Ambient Occlusion (`true` by default). |
 | `world.setSSR(enabled [, intensity])` | Toggles Real-Time Screen-Space Reflections (SSR) for glossy wet roads & metallic vehicles and optionally sets reflection strength (`0.0`–`1.2`, default `0.62`). |
 | `world.setGrassEnabled(enabled)` | Enables or disables the single-draw-call GPU-instanced wind-swaying 3D grass & wildflower field (`true` by default). |
+| `world.setInstancingEnabled(enabled)` | Enables or disables automatic GPU-instanced batching (`glDrawElementsInstanced`) for repeated static `.glb` props across both Shadow & PBR passes (`true` by default). |
 | `world.setGrassInteractPos(x, y, z)` | Updates the real-time 3D world position (player or active vehicle) that bends and parts nearby 3D grass blades smoothly as you move through meadows. |
+| `world.setLookAt(id, tx, ty, tz [, weight])` | Enables real-time procedural Head, Neck & Chest Look-At IK on a rigged character toward `(tx, ty, tz)` (`weight` `0.0`–`1.0`, default `0.85`). |
+| `world.clearLookAt(id)` | Disables procedural Look-At IK on an entity so its skeletal animation controls the head/torso naturally. |
+| `world.triggerRagdoll(id, ix, iy, iz [, duration])` | Launches a rigged character into an Euphoria-style active-physics ragdoll tumble with velocity impulse `(ix, iy, iz)` for `duration` seconds (default `2.4`), bouncing on 3D terrain and smoothly blending back into standing animation on recovery. |
+| `world.getRagdollState(id)` | Returns `active, blend01` indicating whether an entity is currently ragdolling or blending out of recovery (`blend01` in `0..1`). |
+| `world.evalSpline(pointsTable, t [, closed])` | Evaluates a smooth C1 3D Catmull-Rom spline (`pointsTable` = list of `{x, y, z}` waypoints, `t` in `0..1`, `closed` default `true`) and returns `x, y, z, tanX, tanY, tanZ, yawDeg`. |
 | `world.setGodRays(enabled [, intensity])` | Toggles Screen-Space Volumetric Sun Shafts (Crepuscular God-Rays) and optionally sets intensity (`0.0`–`1.5`, default `0.42`). |
 | `world.setCloudShadows(enabled)` | Toggles drifting FBM cloud shadows cast across terrain, mountains, roads, and city blocks (`true` by default). |
 | `world.setTerrainEnabled(enabled)` | Enables or disables the synchronized 160×160 3D multi-biome heightmap terrain (`true` by default). |

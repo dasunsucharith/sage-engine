@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
@@ -241,10 +242,104 @@ struct LuaEngine::Impl {
                 world->sky().grassEnabled = enabled;
             }
         });
+        worldTbl.set_function("setInstancingEnabled", [this](bool enabled) {
+            if (world) {
+                world->sky().instancedPropsEnabled = enabled;
+            }
+        });
         worldTbl.set_function("setGrassInteractPos", [this](float x, float y, float z) {
             if (world) {
                 world->sky().grassInteractPos = {x, y, z};
             }
+        });
+        worldTbl.set_function("setLookAt", [this](const std::string& id, float tx, float ty, float tz, sol::optional<float> weight) -> bool {
+            return world ? world->setLookAt(id, {tx, ty, tz}, weight.value_or(0.85f)) : false;
+        });
+        worldTbl.set_function("clearLookAt", [this](const std::string& id) -> bool {
+            return world ? world->clearLookAt(id) : false;
+        });
+        worldTbl.set_function("triggerRagdoll", [this](const std::string& id, float ix, float iy, float iz, sol::optional<float> duration) -> bool {
+            return world ? world->triggerRagdoll(id, {ix, iy, iz}, duration.value_or(2.4f)) : false;
+        });
+        worldTbl.set_function("getRagdollState", [this](const std::string& id) -> std::tuple<bool, float> {
+            if (!world) {
+                return {false, 0.0f};
+            }
+            return {world->isRagdollActive(id), world->getRagdollBlend(id)};
+        });
+        // Native C++20 Catmull-Rom 3D Spline Evaluator for AAA AI Traffic, Crowds, Rails & Cameras (v1.5.0)!
+        worldTbl.set_function("evalSpline", [](const sol::table& pointsTbl, float tNorm, sol::optional<bool> closedOpt)
+            -> std::tuple<float, float, float, float, float, float, float> {
+            std::vector<Vec3> pts;
+            const std::size_t count = pointsTbl.size();
+            pts.reserve(count);
+            for (std::size_t i = 1; i <= count; ++i) {
+                sol::object obj = pointsTbl[i];
+                if (!obj.is<sol::table>()) continue;
+                sol::table pt = obj.as<sol::table>();
+                const float px = pt.get_or(1, pt.get_or("x", 0.0f));
+                const float py = pt.get_or(2, pt.get_or("y", 0.0f));
+                const float pz = pt.get_or(3, pt.get_or("z", 0.0f));
+                pts.push_back({px, py, pz});
+            }
+            if (pts.size() < 2) {
+                if (pts.size() == 1) return {pts[0].x, pts[0].y, pts[0].z, 0.0f, 0.0f, 1.0f, 0.0f};
+                return {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+            }
+
+            const bool closed = closedOpt.value_or(true);
+            const int n = static_cast<int>(pts.size());
+            const int segCount = closed ? n : (n - 1);
+            float u = closed ? std::fmod(tNorm, 1.0f) : std::clamp(tNorm, 0.0f, 1.0f);
+            if (u < 0.0f) u += 1.0f;
+
+            const float scaled = u * static_cast<float>(segCount);
+            int seg = static_cast<int>(std::floor(scaled));
+            if (seg >= segCount) seg = segCount - 1;
+            const float s = scaled - static_cast<float>(seg);
+
+            auto at = [&](int idx) -> const Vec3& {
+                if (closed) {
+                    int m = idx % n;
+                    if (m < 0) m += n;
+                    return pts[static_cast<std::size_t>(m)];
+                }
+                return pts[static_cast<std::size_t>(std::clamp(idx, 0, n - 1))];
+            };
+
+            const Vec3& p0 = at(seg - 1);
+            const Vec3& p1 = at(seg);
+            const Vec3& p2 = at(seg + 1);
+            const Vec3& p3 = at(seg + 2);
+
+            const float s2 = s * s;
+            const float s3 = s2 * s;
+            auto evalAxis = [&](float v0, float v1, float v2, float v3) -> float {
+                return 0.5f * ((2.0f * v1) +
+                    (-v0 + v2) * s +
+                    (2.0f * v0 - 5.0f * v1 + 4.0f * v2 - v3) * s2 +
+                    (-v0 + 3.0f * v1 - 3.0f * v2 + v3) * s3);
+            };
+            auto derivAxis = [&](float v0, float v1, float v2, float v3) -> float {
+                return 0.5f * ((-v0 + v2) +
+                    2.0f * (2.0f * v0 - 5.0f * v1 + 4.0f * v2 - v3) * s +
+                    3.0f * (-v0 + 3.0f * v1 - 3.0f * v2 + v3) * s2);
+            };
+
+            const float x = evalAxis(p0.x, p1.x, p2.x, p3.x);
+            const float y = evalAxis(p0.y, p1.y, p2.y, p3.y);
+            const float z = evalAxis(p0.z, p1.z, p2.z, p3.z);
+            float tx = derivAxis(p0.x, p1.x, p2.x, p3.x);
+            float ty = derivAxis(p0.y, p1.y, p2.y, p3.y);
+            float tz = derivAxis(p0.z, p1.z, p2.z, p3.z);
+            const float tLen = std::sqrt(tx * tx + ty * ty + tz * tz);
+            if (tLen > 1e-5f) {
+                tx /= tLen; ty /= tLen; tz /= tLen;
+            } else {
+                tx = 0.0f; ty = 0.0f; tz = 1.0f;
+            }
+            const float yawDeg = std::atan2(tx, tz) * (180.0f / 3.14159265358979323846f);
+            return {x, y, z, tx, ty, tz, yawDeg};
         });
         worldTbl.set_function("sampleTerrain", [this](float x, float z)
             -> std::tuple<float, float, float, float, int> {

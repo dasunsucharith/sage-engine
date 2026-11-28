@@ -135,7 +135,7 @@ bool Engine::checkSceneHotReload() {
 
 bool Engine::initialize() {
     std::cout << "========================================\n";
-    std::cout << "  SAGE Engine v1.4.0 — GPU Instanced Grass + Screen-Space Reflections + Frustum Culling + Preload\n";
+    std::cout << "  SAGE Engine v1.5.0 — GPU Prop Instancing + 3-CSM + Euphoria Ragdoll + Spline AI\n";
     std::cout << "  App: " << m_config.appName << "\n";
     std::cout << "  Window: " << m_config.windowWidth << "x" << m_config.windowHeight
               << " (VSync: " << (m_config.vsync ? "ON" : "OFF") << ")\n";
@@ -262,6 +262,10 @@ void Engine::render(double elapsedSeconds) {
     stats.loadedModels = m_renderer->loadedModelCount();
     stats.grassClumps = m_renderer->grassInstanceCount();
     stats.culledEntities = m_renderer->lastCulledCount();
+    stats.drawCalls = m_renderer->lastDrawCallCount();
+    stats.instancedBatches = m_renderer->lastInstancedBatchCount();
+    stats.instancedProps = m_renderer->lastInstancedPropCount();
+    stats.savedDrawCalls = m_renderer->lastSavedDrawCalls();
     stats.luaResources = m_lua.activeResourceCount();
     stats.freeFlyMode = m_freeFlyMode;
 
@@ -288,7 +292,7 @@ void Engine::render(double elapsedSeconds) {
     };
     actions.onSaveScene = [this]() -> bool {
         const fs::path exportPath = m_projectRoot / "scenes" / "exported_scene.json";
-        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.4.0 Exported World");
+        return SceneLoader::saveToFile(exportPath, m_world, "SAGE v1.5.0 Exported World");
     };
     actions.onRenderCustomUi = [this]() {
         m_lua.renderUI();
@@ -313,7 +317,7 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     const SkySettings& sky = m_world.sky();
 
     nlohmann::json j;
-    j["engineVersion"] = "1.4.0";
+    j["engineVersion"] = "1.5.0";
     j["smokeTest"] = (m_config.maxFrames > 0);
     j["gpu"] = {
         {"renderer", gpu.gpuRenderer},
@@ -325,13 +329,18 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
         {"sessionSeconds", totalSeconds},
         {"avgFrameMs", avgMs},
         {"peakFrameMs", m_peakFrameMs},
-        {"avgFps", avgFps}
+        {"avgFps", avgFps},
+        {"lastDrawCalls", m_renderer ? m_renderer->lastDrawCallCount() : 0},
+        {"instancedBatches", m_renderer ? m_renderer->lastInstancedBatchCount() : 0},
+        {"instancedProps", m_renderer ? m_renderer->lastInstancedPropCount() : 0},
+        {"savedDrawCalls", m_renderer ? m_renderer->lastSavedDrawCalls() : 0}
     };
     j["world"] = {
         {"entities", m_world.entityCount()},
         {"loadedModels", m_renderer ? m_renderer->loadedModelCount() : 0},
         {"grassClumps", m_renderer ? m_renderer->grassInstanceCount() : 0},
         {"lastCulledEntities", m_renderer ? m_renderer->lastCulledCount() : 0},
+        {"activeRagdolls", m_world.activeRagdollCount()},
         {"joltBodies", m_physics.bodyCount()},
         {"dynamicBodies", m_physics.dynamicBodyCount()},
         {"pointLights", m_world.pointLights().size()},
@@ -340,6 +349,7 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
     };
     j["features"] = {
         {"terrain3D", m_world.terrain().enabled},
+        {"instancedProps", sky.instancedPropsEnabled},
         {"grassInstanced", sky.grassEnabled},
         {"ssr", sky.ssrEnabled},
         {"godRays", sky.godRaysEnabled},
@@ -347,7 +357,7 @@ void Engine::writeSessionTelemetry(int totalFrames, double totalSeconds) const {
         {"fxaa", sky.fxaaEnabled},
         {"ssao", sky.ssaoEnabled},
         {"bloom", sky.bloomEnabled},
-        {"shadows2Cascade", sky.shadowsEnabled}
+        {"shadows3Cascade", sky.shadowsEnabled}
     };
 
     std::ofstream out(outPath, std::ios::trunc);
@@ -465,11 +475,13 @@ int Engine::run() {
         }
 
         if (m_config.maxFrames > 0 && totalFrames >= m_config.maxFrames) {
-            std::cout << "[SAGE] v1.4.0 Smoke test completed (" << totalFrames
+            std::cout << "[SAGE] v1.5.0 Smoke test completed (" << totalFrames
                       << " frames, " << m_lua.activeResourceCount()
                       << " Lua resource(s), " << m_world.entityCount()
                       << " entities, " << m_renderer->loadedModelCount()
-                      << " .glb model(s), " << m_renderer->grassInstanceCount()
+                      << " .glb model(s), " << m_renderer->lastInstancedBatchCount()
+                      << " instanced batches (" << m_renderer->lastSavedDrawCalls()
+                      << " draw calls saved), " << m_renderer->grassInstanceCount()
                       << " grass clumps, " << m_renderer->lastCulledCount()
                       << " culled, " << m_physics.bodyCount()
                       << " Jolt bodies, " << m_world.pointLights().size()

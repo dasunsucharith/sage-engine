@@ -34,6 +34,9 @@ using GLsizeiptr = std::ptrdiff_t;
 #ifndef GL_STATIC_DRAW
 #define GL_STATIC_DRAW 0x88E4
 #endif
+#ifndef GL_DYNAMIC_DRAW
+#define GL_DYNAMIC_DRAW 0x88E8
+#endif
 #ifndef GL_FRAGMENT_SHADER
 #define GL_FRAGMENT_SHADER 0x8B30
 #endif
@@ -66,6 +69,9 @@ using GLsizeiptr = std::ptrdiff_t;
 #endif
 #ifndef GL_TEXTURE5
 #define GL_TEXTURE5 0x84C5
+#endif
+#ifndef GL_TEXTURE6
+#define GL_TEXTURE6 0x84C6
 #endif
 #ifndef GL_RGBA16F
 #define GL_RGBA16F 0x881A
@@ -145,6 +151,7 @@ using PFNGLVERTEXATTRIBPOINTERPROC = void(APIENTRYP)(GLuint index, GLint size, G
 using PFNGLENABLEVERTEXATTRIBARRAYPROC = void(APIENTRYP)(GLuint index);
 using PFNGLVERTEXATTRIBDIVISORPROC = void(APIENTRYP)(GLuint index, GLuint divisor);
 using PFNGLDRAWARRAYSINSTANCEDPROC = void(APIENTRYP)(GLenum mode, GLint first, GLsizei count, GLsizei instancecount);
+using PFNGLDRAWELEMENTSINSTANCEDPROC = void(APIENTRYP)(GLenum mode, GLsizei count, GLenum type, const void* indices, GLsizei instancecount);
 
 using PFNGLACTIVETEXTUREPROC = void(APIENTRYP)(GLenum texture);
 using PFNGLGENERATEMIPMAPPROC = void(APIENTRYP)(GLenum target);
@@ -197,6 +204,7 @@ extern PFNGLVERTEXATTRIBPOINTERPROC vertexAttribPointer;
 extern PFNGLENABLEVERTEXATTRIBARRAYPROC enableVertexAttribArray;
 extern PFNGLVERTEXATTRIBDIVISORPROC vertexAttribDivisor;
 extern PFNGLDRAWARRAYSINSTANCEDPROC drawArraysInstanced;
+extern PFNGLDRAWELEMENTSINSTANCEDPROC drawElementsInstanced;
 
 extern PFNGLACTIVETEXTUREPROC activeTexture;
 extern PFNGLGENERATEMIPMAPPROC generateMipmap;

@@ -44,6 +44,10 @@ public:
     virtual std::size_t loadedModelCount() const = 0;
     virtual std::size_t grassInstanceCount() const { return 0; }
     virtual std::size_t lastCulledCount() const { return 0; }
+    virtual std::size_t lastDrawCallCount() const { return 0; }
+    virtual std::size_t lastInstancedBatchCount() const { return 0; }
+    virtual std::size_t lastInstancedPropCount() const { return 0; }
+    virtual std::size_t lastSavedDrawCalls() const { return 0; }
 };
 
 // Creates the default OpenGL 3.3 Core 3D renderer backend.

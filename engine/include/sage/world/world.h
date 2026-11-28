@@ -65,6 +65,20 @@ struct Entity {
     bool prevAnimLoop = true;
     float blendDuration = 0.0f;
     float blendElapsed = 0.0f;
+
+    // Real-time Procedural Head/Upper-Body Look-At IK (v1.5.0)
+    bool lookAtEnabled = false;
+    Vec3 lookAtTarget{0.0f, 0.0f, 0.0f};
+    float lookAtWeight = 0.0f;
+
+    // Euphoria-Style Active-Physics Ragdoll & Hit-Reaction Blending (v1.5.0)
+    bool ragdollActive = false;
+    float ragdollBlend = 0.0f;
+    float ragdollTimer = 0.0f;
+    float ragdollElapsed = 0.0f;
+    Vec3 ragdollVel{0.0f, 0.0f, 0.0f};
+    Vec3 ragdollAngVel{0.0f, 0.0f, 0.0f};
+    Vec3 ragdollAngle{0.0f, 0.0f, 0.0f};
 };
 
 // Real-time dynamic point light (headlights, street lamps, neon arches, lighthouse beam!)
@@ -132,6 +146,7 @@ struct SkySettings {
     bool ssrEnabled = true;
     float ssrIntensity = 0.62f;
     bool grassEnabled = true;
+    bool instancedPropsEnabled = true;
     Vec3 grassInteractPos{0.0f, 0.0f, 0.0f};
     float exposure = 1.08f;
     float rainIntensity = 0.0f;
@@ -173,6 +188,12 @@ public:
     bool playAnimation(const std::string& id, const std::string& clipName = "", bool loop = true, float speed = 1.0f, float blendSeconds = 0.18f);
     bool stopAnimation(const std::string& id);
     bool setAnimationSpeed(const std::string& id, float speed);
+    bool setLookAt(const std::string& id, Vec3 target, float weight = 0.85f);
+    bool clearLookAt(const std::string& id);
+    bool triggerRagdoll(const std::string& id, Vec3 impulse, float duration = 2.4f);
+    bool isRagdollActive(const std::string& id) const;
+    float getRagdollBlend(const std::string& id) const;
+    std::size_t activeRagdollCount() const;
     void updateAnimations(float dt);
 
     // Dynamic point lights (up to 16 active in HDR shader & water specular reflections)

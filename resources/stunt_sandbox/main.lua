@@ -1,9 +1,9 @@
 -- =============================================================================
--- SAGE Engine v1.4.0 Showcase: GPU Instanced Grass + SSR + Reactive AI Crowd
---   * 70,000+ GPU-Instanced Wind-Swaying 3D Grass Blades (Interactive Parting!)
---   * Real-Time Screen-Space Reflections (SSR) on Wet Roads & Metallic Cars
---   * 6 Autonomous Reactive Rigged NPCs (Patrol / Idle / Dodge Oncoming Cars!)
---   * 3D Heightmap Terrain + 4-Wheel Suspension + Volumetric God-Rays + 3D Audio
+-- SAGE Engine v1.5.0 Showcase: GPU Prop Instancing + 3-CSM + Euphoria Ragdoll + Spline AI
+--   * Automatic GPU-Instanced Static Prop Batching + 3-Split Cascaded Shadows
+--   * Euphoria-Style Active-Physics Ragdoll Blending & Procedural Head Look-At IK
+--   * 10 Smart-Yielding Catmull-Rom Spline AI Cruisers + 10 Reactive AI Citizens
+--   * Q = Kinetic Repulsor Blast | X = Radial Shockwave | F = Walk/Swim/Drive/Boat
 -- =============================================================================
 -- CONTROLS:
 --   W / S (or Up / Down)   : Drive / Brake (or Walk Forward / Back on foot)
@@ -11,14 +11,16 @@
 --   F                      : Exit / Enter Supercar (Walk & Swim as 3D Character!)
 --   Space                  : Handbrake Drift (or Jump on foot)
 --   Left Shift             : Nitro Boost (or Sprint on foot)
+--   Q                      : Kinetic Repulsor Blast (Ragdolls NPCs & blasts Jolt props!)
+--   X                      : Radial Physics Shockwave (blasts props & NPCs around you!)
 --   Right-Mouse Drag       : Orbit 3D Camera
 --   C                      : Cycle Camera (Far Chase -> Close Action -> Hood Cam)
---   X                      : Physics Shockwave (blasts nearby crates/balls/cones!)
 --   B                      : Drop fresh 6-crate Jolt Physics pyramid ahead
 --   T                      : Cycle Time of Day (Sunset -> Noon -> Starry Night -> Sunrise)
+--   G                      : Cycle Dynamic Weather (Clear -> Drizzle -> Rainstorm + SSR)
 --   H                      : Hide / Show Cockpit HUD
 --   Esc                    : Pause Menu (Main Menu hides completely on Play!)
---   F1                     : Toggle Developer Dear ImGui Inspector
+--   F1                     : Toggle Developer Dear ImGui Inspector & GPU Profiler
 --   Tab                    : Toggle Free-Fly 3D Inspector Camera
 --   F5 / Ctrl+S            : Live Hot-Reload (JSON scene + Lua scripts)
 -- =============================================================================
@@ -143,24 +145,50 @@ local seagulls = {
     { id = "gull_4", cx = 165.0, cz = -192.0, r = 28.0, h = 15.5, spd = -0.44, phase = 4.7 },
 }
 
--- 6 Autonomous Reactive Rigged 3D Citizens (Patrol -> Idle Look -> Flee Oncoming Vehicle!)
+-- 10 Autonomous Reactive Rigged 3D Citizens (Patrol -> Look-At IK -> Flee -> Euphoria Ragdoll!)
 local crowdNpcs = {
-    { id = "npc_plaza_1", x =  14.2, z = -18.0, ax =  14.2, az = -24.0, bx =  14.2, bz =  16.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.6 },
-    { id = "npc_plaza_2", x = -14.2, z =  12.0, ax = -14.2, az =  22.0, bx = -14.2, bz = -18.0, dir =  1, yaw = 180.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.4 },
-    { id = "npc_plaza_3", x =  24.0, z =  14.2, ax =  16.0, az =  14.2, bx =  52.0, bz =  14.2, dir =  1, yaw =  90.0, state = "IDLE", anim = "Idle", timer = 2.0, speed = 2.5 },
-    { id = "npc_high_1",  x = 136.0, z =  82.0, ax = 136.0, az =  66.0, bx = 136.0, bz = 116.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.7 },
-    { id = "npc_marina_1",x = 148.0, z =-164.0, ax = 134.0, az =-164.0, bx = 162.0, bz =-164.0, dir =  1, yaw =  90.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.3 },
-    { id = "npc_desert_1",x =-136.0, z =-142.0, ax =-136.0, az =-162.0, bx =-136.0, bz =-122.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.5 },
+    { id = "npc_plaza_1",  x =  14.2, z = -18.0, ax =  14.2, az = -24.0, bx =  14.2, bz =  16.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.6, ragdolling = false },
+    { id = "npc_plaza_2",  x = -14.2, z =  12.0, ax = -14.2, az =  22.0, bx = -14.2, bz = -18.0, dir =  1, yaw = 180.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.4, ragdolling = false },
+    { id = "npc_plaza_3",  x =  24.0, z =  14.2, ax =  16.0, az =  14.2, bx =  52.0, bz =  14.2, dir =  1, yaw =  90.0, state = "IDLE", anim = "Idle", timer = 2.0, speed = 2.5, ragdolling = false },
+    { id = "npc_plaza_4",  x = -26.0, z = -14.2, ax = -52.0, az = -14.2, bx = -16.0, bz = -14.2, dir =  1, yaw =  90.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.5, ragdolling = false },
+    { id = "npc_high_1",   x = 136.0, z =  82.0, ax = 136.0, az =  66.0, bx = 136.0, bz = 116.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.7, ragdolling = false },
+    { id = "npc_high_2",   x = 160.0, z = 104.0, ax = 160.0, az =  78.0, bx = 160.0, bz = 128.0, dir = -1, yaw = 180.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.4, ragdolling = false },
+    { id = "npc_marina_1", x = 148.0, z =-164.0, ax = 134.0, az =-164.0, bx = 162.0, bz =-164.0, dir =  1, yaw =  90.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.3, ragdolling = false },
+    { id = "npc_marina_2", x = 134.0, z =-176.0, ax = 122.0, az =-176.0, bx = 154.0, bz =-176.0, dir =  1, yaw =  90.0, state = "IDLE", anim = "Idle", timer = 1.6, speed = 2.4, ragdolling = false },
+    { id = "npc_desert_1", x =-136.0, z =-142.0, ax =-136.0, az =-162.0, bx =-136.0, bz =-122.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.5, ragdolling = false },
+    { id = "npc_metro_1",  x = -76.0, z =  76.0, ax = -76.0, az =  52.0, bx = -76.0, bz = 106.0, dir =  1, yaw =   0.0, state = "WALK", anim = "Walk", timer = 0.0, speed = 2.6, ragdolling = false },
 }
 
--- 6 Autonomous AI Traffic Cruisers looping the Mid (±148m) & Outer Coastal (±236m) Highways!
+-- Closed-Loop Catmull-Rom Highway Splines (native C++ world.evalSpline!) for 10 Smart-Yielding AI Cruisers!
+local function buildRoundedRingSpline(R)
+    local c = R * 0.90
+    return {
+        { -c, 0.07,  R }, {  0, 0.07,  R }, {  c, 0.07,  R },
+        {  R, 0.07,  c }, {  R, 0.07,  0 }, {  R, 0.07, -c },
+        {  c, 0.07, -R }, {  0, 0.07, -R }, { -c, 0.07, -R },
+        { -R, 0.07, -c }, { -R, 0.07,  0 }, { -R, 0.07,  c },
+    }
+end
+
+local trafficSplines = {
+    inner_cw  = buildRoundedRingSpline(67.2),
+    mid_cw    = buildRoundedRingSpline(151.4),
+    mid_ccw   = buildRoundedRingSpline(144.6),
+    outer_cw  = buildRoundedRingSpline(239.6),
+    outer_ccw = buildRoundedRingSpline(232.4),
+}
+
 local trafficCars = {
-    { id = "ai_car_1", ring = 148.0, laneOffset =  3.4, dir =  1, pos =   0.0, speed = 18.0, color = { 0.90, 0.16, 0.18 }, x = 0, z = 0, yaw = 0 },
-    { id = "ai_car_2", ring = 148.0, laneOffset = -3.4, dir = -1, pos = 420.0, speed = 16.5, color = { 0.14, 0.56, 0.96 }, x = 0, z = 0, yaw = 0 },
-    { id = "ai_car_3", ring = 148.0, laneOffset =  3.4, dir =  1, pos = 760.0, speed = 19.5, color = { 0.96, 0.96, 0.98 }, x = 0, z = 0, yaw = 0 },
-    { id = "ai_car_4", ring = 236.0, laneOffset =  3.8, dir =  1, pos = 120.0, speed = 22.0, color = { 0.16, 0.82, 0.42 }, x = 0, z = 0, yaw = 0 },
-    { id = "ai_car_5", ring = 236.0, laneOffset = -3.8, dir = -1, pos = 880.0, speed = 21.0, color = { 1.00, 0.72, 0.14 }, x = 0, z = 0, yaw = 0 },
-    { id = "ai_car_6", ring = 236.0, laneOffset =  3.8, dir =  1, pos = 1450.0, speed = 23.0, color = { 0.72, 0.76, 0.84 }, x = 0, z = 0, yaw = 0 },
+    { id = "ai_car_1",  spline = "inner_cw",  dir =  1, t = 0.05, maxSpeed = 14.5, curSpeed = 14.5, perim =  540.0, color = { 0.92, 0.22, 0.20 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_2",  spline = "inner_cw",  dir =  1, t = 0.55, maxSpeed = 14.0, curSpeed = 14.0, perim =  540.0, color = { 0.18, 0.78, 0.95 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_3",  spline = "mid_cw",    dir =  1, t = 0.00, maxSpeed = 18.5, curSpeed = 18.5, perim = 1210.0, color = { 0.90, 0.16, 0.18 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_4",  spline = "mid_ccw",   dir = -1, t = 0.34, maxSpeed = 17.0, curSpeed = 17.0, perim = 1156.0, color = { 0.14, 0.56, 0.96 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_5",  spline = "mid_cw",    dir =  1, t = 0.62, maxSpeed = 19.5, curSpeed = 19.5, perim = 1210.0, color = { 0.96, 0.96, 0.98 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_6",  spline = "mid_ccw",   dir = -1, t = 0.80, maxSpeed = 18.0, curSpeed = 18.0, perim = 1156.0, color = { 0.96, 0.54, 0.14 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_7",  spline = "outer_cw",  dir =  1, t = 0.08, maxSpeed = 22.5, curSpeed = 22.5, perim = 1916.0, color = { 0.16, 0.82, 0.42 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_8",  spline = "outer_ccw", dir = -1, t = 0.44, maxSpeed = 21.0, curSpeed = 21.0, perim = 1859.0, color = { 1.00, 0.72, 0.14 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_9",  spline = "outer_cw",  dir =  1, t = 0.72, maxSpeed = 23.0, curSpeed = 23.0, perim = 1916.0, color = { 0.72, 0.76, 0.84 }, x = 0, z = 0, yaw = 0, braking = false },
+    { id = "ai_car_10", spline = "outer_ccw", dir = -1, t = 0.92, maxSpeed = 21.5, curSpeed = 21.5, perim = 1859.0, color = { 0.62, 0.24, 0.92 }, x = 0, z = 0, yaw = 0, braking = false },
 }
 
 local camPresets = {
@@ -193,7 +221,7 @@ local deliverySpots = {
     { x =  148.0, z =  192.0, label = "Pine Wind Ridge Overlook" },
 }
 
-local keyLatch = { T = false, G = false, C = false, X = false, B = false, R = false, H = false, F = false, Escape = false }
+local keyLatch = { T = false, G = false, C = false, X = false, Q = false, B = false, R = false, H = false, F = false, Escape = false }
 
 local crates = {}
 local nextCrateSeq = 0
@@ -392,11 +420,13 @@ local function spawnDynamicPropsAndPhysics()
     world.spawnModel("sky_jet", CONFIG.jetModel, -300.0, 78.0, 120.0)
     world.setScale("sky_jet", 1.4, 1.4, 1.4)
 
-    -- 6 Autonomous AI Traffic Cruisers (.glb)
+    -- 10 Autonomous Catmull-Rom Spline AI Traffic Cruisers (.glb)
     for _, tc in ipairs(trafficCars) do
-        local tx, tz, tyaw = sampleSquareLoop(tc.ring, tc.laneOffset, tc.dir, tc.pos)
+        local splinePts = trafficSplines[tc.spline]
+        local tx, ty, tz, _, _, _, tyaw = world.evalSpline(splinePts, tc.t, true)
+        if tc.dir < 0 then tyaw = tyaw + 180.0 end
         tc.x, tc.z, tc.yaw = tx, tz, tyaw
-        world.spawnModel(tc.id, CONFIG.trafficModel, tx, 0.07, tz)
+        world.spawnModel(tc.id, CONFIG.trafficModel, tx, ty, tz)
         world.setRotation(tc.id, 0.0, tyaw, 0.0)
         world.setColor(tc.id, tc.color[1], tc.color[2], tc.color[3])
     end
@@ -466,20 +496,70 @@ end
 -- Autonomous AI Traffic, Crates & Mission Loop
 -- -----------------------------------------------------------------------------
 local function updateAiTraffic(dt)
+    local obsX = player.onFoot and player.x or car.x
+    local obsZ = player.onFoot and player.z or car.z
+
     for idx, tc in ipairs(trafficCars) do
-        tc.pos = tc.pos + tc.speed * tc.dir * dt
-        local tx, tz, tyaw = sampleSquareLoop(tc.ring, tc.laneOffset, tc.dir, tc.pos)
+        local splinePts = trafficSplines[tc.spline]
+        local tx, ty, tz, tdx, _, tdz, tyaw = world.evalSpline(splinePts, tc.t, true)
+        if tc.dir < 0 then
+            tdx, tdz = -tdx, -tdz
+            tyaw = tyaw + 180.0
+        end
+
+        -- Smart Yielding & Braking AI: slow down cleanly if player or another cruiser is directly ahead!
+        local shouldBrake = false
+        local pdx, pdz = obsX - tx, obsZ - tz
+        local pAhead = pdx * tdx + pdz * tdz
+        local pSide = math.abs(pdx * (-tdz) + pdz * tdx)
+        if pAhead > 1.5 and pAhead < 17.5 and pSide < 4.2 then
+            shouldBrake = true
+        end
+        if not shouldBrake then
+            for j, other in ipairs(trafficCars) do
+                if j ~= idx then
+                    local odx, odz = other.x - tx, other.z - tz
+                    local oAhead = odx * tdx + odz * tdz
+                    local oSide = math.abs(odx * (-tdz) + odz * tdx)
+                    if oAhead > 1.0 and oAhead < 15.0 and oSide < 3.4 then
+                        shouldBrake = true
+                        break
+                    end
+                end
+            end
+        end
+
+        tc.braking = shouldBrake
+        local targetSpd = shouldBrake and 0.0 or tc.maxSpeed
+        tc.curSpeed = lerp(tc.curSpeed, targetSpd, (shouldBrake and 7.5 or 2.8) * dt)
+        tc.t = (tc.t + (tc.curSpeed * tc.dir * dt) / tc.perim) % 1.0
+        if tc.t < 0.0 then tc.t = tc.t + 1.0 end
+
+        tx, ty, tz, tdx, _, tdz, tyaw = world.evalSpline(splinePts, tc.t, true)
+        if tc.dir < 0 then
+            tdx, tdz = -tdx, -tdz
+            tyaw = tyaw + 180.0
+        end
+        local groundY = math.max(world.sampleTerrain(tx, tz), 0.07)
         tc.x, tc.z, tc.yaw = tx, tz, tyaw
-        world.setPosition(tc.id, tx, 0.07, tz)
+        world.setPosition(tc.id, tx, groundY, tz)
         world.setRotation(tc.id, 0.0, tyaw, 0.0)
 
-        -- Live headlight point lights on AI cruisers (GPU automatically selects nearest 16!)
+        -- Live headlight / red brake-light glow (GPU automatically selects nearest 16!)
         local trad = degToRad(tyaw)
-        world.setPointLight(
-            tc.id .. "_head",
-            tx + math.sin(trad) * 4.2, 1.15, tz + math.cos(trad) * 4.2,
-            1.0, 0.94, 0.80, 18.0, 1.9
-        )
+        if tc.braking then
+            world.setPointLight(
+                tc.id .. "_head",
+                tx - math.sin(trad) * 2.6, groundY + 0.95, tz - math.cos(trad) * 2.6,
+                1.0, 0.14, 0.10, 14.0, 2.6
+            )
+        else
+            world.setPointLight(
+                tc.id .. "_head",
+                tx + math.sin(trad) * 4.2, groundY + 1.15, tz + math.cos(trad) * 4.2,
+                1.0, 0.94, 0.80, 18.0, 1.9
+            )
+        end
 
         -- Solid vehicle-vs-AI-traffic collision bounce + sparks!
         if not player.onFoot then
@@ -496,7 +576,7 @@ local function updateAiTraffic(dt)
                 car.vz = car.vz * 0.55 + nz * 9.0
                 if impactSoundCooldown <= 0.0 then
                     audio.playImpact(0.75)
-                    world.spawnParticles((car.x + tx) * 0.5, 0.9, (car.z + tz) * 0.5, 0.0, 4.5, 0.0, 1.0, 0.78, 0.28, 12, 0.18, 0.45, true, 14.0)
+                    world.spawnParticles((car.x + tx) * 0.5, groundY + 0.9, (car.z + tz) * 0.5, 0.0, 4.5, 0.0, 1.0, 0.78, 0.28, 12, 0.18, 0.45, true, 14.0)
                     impactSoundCooldown = 0.28
                 end
             end
@@ -588,8 +668,8 @@ function onStart()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
 
     sage.log("===================================================================")
-    sage.log("  SAGE Engine v1.4.0 — GPU Instanced Grass + SSR + Reactive AI Crowd!")
-    sage.log("  Press F = Walk/Swim/Enter Car or Speedboat | G = Rain | F1 = Editor")
+    sage.log("  SAGE Engine v1.5.0 — Prop Instancing + 3-CSM + Euphoria Ragdoll + Spline AI!")
+    sage.log("  Press F = Walk/Swim/Drive | Q = Kinetic Blast | X = Shockwave | F1 = Editor")
     sage.log("  All-Time Best Score Loaded: " .. tostring(bestScore))
     sage.log("===================================================================")
 
@@ -662,74 +742,117 @@ function onTick(dt)
     local gz = player.onFoot and player.z or car.z
     world.setGrassInteractPos(gx, gy, gz)
 
-    -- Autonomous Reactive GTA-Style Rigged Citizen AI (Patrol <-> Idle Look <-> Sprint Flee Vehicle!)
+    -- Autonomous Reactive GTA-Style Rigged Citizen AI (Patrol <-> Look-At IK <-> Flee <-> Euphoria Ragdoll!)
     local carSpdNow = math.sqrt(car.vx * car.vx + car.vz * car.vz)
+    local lookX = player.onFoot and player.x or car.x
+    local lookY = (player.onFoot and player.y or car.y) + 1.45
+    local lookZ = player.onFoot and player.z or car.z
+
     for _, npc in ipairs(crowdNpcs) do
-        local dxCar = npc.x - car.x
-        local dzCar = npc.z - car.z
-        local distCar = math.sqrt(dxCar * dxCar + dzCar * dzCar)
-        local threatened = (not player.onFoot) and (carSpdNow > 5.0) and (distCar < 11.5)
-
-        if threatened then
+        local ragActive = world.getRagdollState(npc.id)
+        if ragActive then
+            local rx, _, rz = world.getPosition(npc.id)
+            npc.x, npc.z = rx, rz
+            npc.ragdolling = true
             npc.state = "FLEE"
-            npc.timer = 1.6
-        end
-
-        local targetAnim = "Idle"
-        local animSpeed = 0.92
-        local blendTime = 0.20
-
-        if npc.state == "FLEE" then
-            npc.timer = npc.timer - dt
-            local invD = distCar > 0.1 and (1.0 / distCar) or 1.0
-            local fx, fz = dxCar * invD, dzCar * invD
-            local fleeSpd = 7.4
-            npc.x = clamp(npc.x + fx * fleeSpd * dt, -CONFIG.arenaHalfSize + 4.0, CONFIG.arenaHalfSize - 4.0)
-            npc.z = clamp(npc.z + fz * fleeSpd * dt, -CONFIG.arenaHalfSize + 4.0, CONFIG.arenaHalfSize - 4.0)
-            npc.yaw = math.deg(math.atan(fx, fz))
-            targetAnim = "Run"
-            animSpeed = 1.12
-            blendTime = 0.14
-            if npc.timer <= 0.0 and distCar > 14.0 then
-                npc.state = "IDLE"
-                npc.timer = 1.4
-            end
-        elseif npc.state == "IDLE" then
-            npc.timer = npc.timer - dt
-            targetAnim = "Idle"
-            animSpeed = 0.90
-            blendTime = 0.24
-            if npc.timer <= 0.0 then
-                npc.state = "WALK"
-            end
+            npc.timer = 2.6
         else
-            local tx = (npc.dir > 0) and npc.bx or npc.ax
-            local tz = (npc.dir > 0) and npc.bz or npc.az
-            local dtx, dtz = tx - npc.x, tz - npc.z
-            local distT = math.sqrt(dtx * dtx + dtz * dtz)
-            if distT < 0.8 then
-                npc.dir = -npc.dir
-                npc.state = "IDLE"
-                npc.timer = 1.8
-                targetAnim = "Idle"
+            if npc.ragdolling then
+                npc.ragdolling = false
+                npc.state = "FLEE"
+                npc.timer = 2.4
+            end
+
+            local dxCar = npc.x - car.x
+            local dzCar = npc.z - car.z
+            local distCar = math.sqrt(dxCar * dxCar + dzCar * dzCar)
+
+            -- Euphoria Ragdoll Launch if hit directly by player vehicle at speed!
+            if (not player.onFoot) and (carSpdNow > 4.0) and (distCar < 2.65) then
+                local invD = distCar > 0.05 and (1.0 / distCar) or 1.0
+                local lx = (dxCar * invD) * (carSpdNow * 0.55 + 5.0) + car.vx * 0.45
+                local lz = (dzCar * invD) * (carSpdNow * 0.55 + 5.0) + car.vz * 0.45
+                local ly = clamp(5.5 + carSpdNow * 0.24, 6.0, 14.5)
+                world.triggerRagdoll(npc.id, lx, ly, lz, 2.5)
+                world.clearLookAt(npc.id)
+                npc.ragdolling = true
+                if impactSoundCooldown <= 0.0 then
+                    audio.playImpact(clamp(carSpdNow / 24.0, 0.45, 1.0))
+                    world.spawnParticles(npc.x, world.sampleTerrain(npc.x, npc.z) + 0.9, npc.z, lx * 0.2, 4.5, lz * 0.2, 1.0, 0.85, 0.45, 10, 0.18, 0.45, true, 12.0)
+                    impactSoundCooldown = 0.22
+                end
             else
-                local ux, uz = dtx / distT, dtz / distT
-                npc.x = npc.x + ux * npc.speed * dt
-                npc.z = npc.z + uz * npc.speed * dt
-                npc.yaw = math.deg(math.atan(ux, uz))
-                targetAnim = "Walk"
-                animSpeed = clamp(npc.speed / 2.8, 0.75, 1.15)
-                blendTime = 0.20
+                local threatened = (not player.onFoot) and (carSpdNow > 5.0) and (distCar < 12.0)
+                if threatened then
+                    npc.state = "FLEE"
+                    npc.timer = 1.8
+                end
+
+                local targetAnim = "Idle"
+                local animSpeed = 0.92
+                local blendTime = 0.20
+
+                if npc.state == "FLEE" then
+                    npc.timer = npc.timer - dt
+                    local invD = distCar > 0.1 and (1.0 / distCar) or 1.0
+                    local fx, fz = dxCar * invD, dzCar * invD
+                    local fleeSpd = 7.4
+                    npc.x = clamp(npc.x + fx * fleeSpd * dt, -CONFIG.arenaHalfSize + 4.0, CONFIG.arenaHalfSize - 4.0)
+                    npc.z = clamp(npc.z + fz * fleeSpd * dt, -CONFIG.arenaHalfSize + 4.0, CONFIG.arenaHalfSize - 4.0)
+                    npc.yaw = math.deg(math.atan(fx, fz))
+                    targetAnim = "Run"
+                    animSpeed = 1.15
+                    blendTime = 0.14
+                    if npc.timer <= 0.0 and distCar > 14.5 then
+                        npc.state = "IDLE"
+                        npc.timer = 1.4
+                    end
+                elseif npc.state == "IDLE" then
+                    npc.timer = npc.timer - dt
+                    targetAnim = "Idle"
+                    animSpeed = 0.90
+                    blendTime = 0.24
+                    if npc.timer <= 0.0 then
+                        npc.state = "WALK"
+                    end
+                else
+                    local tx = (npc.dir > 0) and npc.bx or npc.ax
+                    local tz = (npc.dir > 0) and npc.bz or npc.az
+                    local dtx, dtz = tx - npc.x, tz - npc.z
+                    local distT = math.sqrt(dtx * dtx + dtz * dtz)
+                    if distT < 0.8 then
+                        npc.dir = -npc.dir
+                        npc.state = "IDLE"
+                        npc.timer = 1.8
+                        targetAnim = "Idle"
+                    else
+                        local ux, uz = dtx / distT, dtz / distT
+                        npc.x = npc.x + ux * npc.speed * dt
+                        npc.z = npc.z + uz * npc.speed * dt
+                        npc.yaw = math.deg(math.atan(ux, uz))
+                        targetAnim = "Walk"
+                        animSpeed = clamp(npc.speed / 2.8, 0.75, 1.15)
+                        blendTime = 0.20
+                    end
+                end
+
+                if targetAnim ~= npc.anim then
+                    npc.anim = targetAnim
+                    world.playAnimation(npc.id, targetAnim, true, animSpeed, blendTime)
+                end
+                local ny = world.sampleTerrain(npc.x, npc.z)
+                world.setPosition(npc.id, npc.x, ny, npc.z)
+                world.setRotation(npc.id, 0.0, npc.yaw, 0.0)
+
+                -- Procedural Head & Chest Look-At IK: citizens turn heads to watch the player pass by!
+                local dLook = math.sqrt((npc.x - lookX) ^ 2 + (npc.z - lookZ) ^ 2)
+                if dLook < 22.0 and npc.state ~= "FLEE" then
+                    world.setLookAt(npc.id, lookX, lookY, lookZ, clamp(1.0 - dLook / 24.0, 0.35, 0.95))
+                else
+                    world.clearLookAt(npc.id)
+                end
             end
         end
-
-        if targetAnim ~= npc.anim then
-            npc.anim = targetAnim
-            world.playAnimation(npc.id, targetAnim, true, animSpeed, blendTime)
-        end
-        local ny = world.sampleTerrain(npc.x, npc.z)
-        world.setPosition(npc.id, npc.x, ny, npc.z)
-        world.setRotation(npc.id, 0.0, npc.yaw, 0.0)
     end
 
     updateAiTraffic(dt)
@@ -754,9 +877,9 @@ function onTick(dt)
             camera.setPosition(car.x + math.sin(orbit) * 10.8, car.y + 3.8, car.z + math.cos(orbit) * 10.8)
             camera.setTarget(car.x, car.y + 1.1, car.z)
             camera.setFov(55.0)
-            sage.setTitle("SAGE Engine v1.4.0 — Main Menu | Instanced Grass, SSR & AI Crowd")
+            sage.setTitle("SAGE Engine v1.5.0 — Main Menu | GPU Prop Instancing, 3-CSM, Euphoria Ragdoll & Spline AI")
         else
-            sage.setTitle("SAGE Engine v1.4.0 — PAUSED (Press Esc to Resume)")
+            sage.setTitle("SAGE Engine v1.5.0 — PAUSED (Press Esc to Resume)")
         end
         return
     end
@@ -846,14 +969,53 @@ function onTick(dt)
         end
     end
 
+    -- Q: Forward Kinetic Repulsor Blast (launches Jolt props & triggers Euphoria Ragdoll on NPCs ahead!)
+    if keyJustPressed("Q") then
+        local fx = player.onFoot and player.x or car.x
+        local fy = player.onFoot and player.y or car.y
+        local fz = player.onFoot and player.z or car.z
+        local fyaw = player.onFoot and player.yaw or car.yaw
+        local frad = degToRad(fyaw)
+        local dirX, dirZ = math.sin(frad), math.cos(frad)
+        local blastX, blastZ = fx + dirX * 9.5, fz + dirZ * 9.5
+
+        local hitProps = physics.applyExplosion(blastX, fy + 1.0, blastZ, 16.0, 360.0)
+        local hitNpcs = 0
+        for _, npc in ipairs(crowdNpcs) do
+            local ndx, ndz = npc.x - fx, npc.z - fz
+            local dist = math.sqrt(ndx * ndx + ndz * ndz)
+            local ahead = ndx * dirX + ndz * dirZ
+            if dist < 24.0 and ahead > -1.0 then
+                local invD = dist > 0.1 and (1.0 / dist) or 1.0
+                local pwr = clamp(1.0 - dist / 26.0, 0.35, 1.0)
+                world.triggerRagdoll(npc.id, (ndx * invD * 14.0 + dirX * 8.0) * pwr, 10.5 * pwr, (ndz * invD * 14.0 + dirZ * 8.0) * pwr, 2.8)
+                hitNpcs = hitNpcs + 1
+            end
+        end
+        audio.playExplosion()
+        world.spawnParticles(fx + dirX * 2.2, fy + 1.3, fz + dirZ * 2.2, dirX * 18.0, 3.2, dirZ * 18.0, 0.18, 0.90, 1.0, 24, 0.24, 0.55, true, 4.0)
+        sage.log(string.format("KINETIC BLAST! Launched %d Jolt prop(s) & %d Euphoria ragdoll(s)!", hitProps, hitNpcs))
+    end
+
     if keyJustPressed("X") then
         local fx = player.onFoot and player.x or car.x
         local fy = player.onFoot and player.y or car.y
         local fz = player.onFoot and player.z or car.z
         local hitCount = physics.applyExplosion(fx, fy + 0.5, fz, 28.0, 420.0)
+        local ragCount = 0
+        for _, npc in ipairs(crowdNpcs) do
+            local ndx, ndz = npc.x - fx, npc.z - fz
+            local dist = math.sqrt(ndx * ndx + ndz * ndz)
+            if dist < 24.0 then
+                local invD = dist > 0.1 and (1.0 / dist) or 1.0
+                local pwr = clamp(1.0 - dist / 26.0, 0.35, 1.0)
+                world.triggerRagdoll(npc.id, ndx * invD * 18.0 * pwr, 11.5 * pwr, ndz * invD * 18.0 * pwr, 2.8)
+                ragCount = ragCount + 1
+            end
+        end
         audio.playExplosion()
         world.spawnParticles(fx, fy + 0.8, fz, 0.0, 7.5, 0.0, 1.0, 0.65, 0.18, 22, 0.34, 0.75, true, 12.0)
-        sage.log("SHOCKWAVE! Blasted " .. hitCount .. " Jolt Physics objects!")
+        sage.log(string.format("SHOCKWAVE! Blasted %d Jolt object(s) & %d Euphoria ragdoll(s)!", hitCount, ragCount))
     end
 
     if keyJustPressed("B") then
@@ -1053,7 +1215,7 @@ function onTick(dt)
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
             local biome = getCurrentBiomeName(player.x, player.z)
-            sage.setTitle(string.format("SAGE v1.4 | %s | ON FOOT [%s] (F = Enter Car/Boat)", biome, player.currentAnim))
+            sage.setTitle(string.format("SAGE v1.5 | %s | ON FOOT [%s] (F = Car/Boat | Q = Kinetic Blast)", biome, player.currentAnim))
         end
         return
     end
@@ -1144,7 +1306,7 @@ function onTick(dt)
         titleUpdateAccum = titleUpdateAccum + dt
         if titleUpdateAccum >= 0.25 then
             titleUpdateAccum = 0.0
-            sage.setTitle(string.format("SAGE v1.4 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
+            sage.setTitle(string.format("SAGE v1.5 | PALM MARINA SPEEDBOAT | %d knots | F = Exit Boat", math.floor(math.abs(boat.speed) * 1.94)))
         end
         return
     end
@@ -1495,7 +1657,7 @@ function onTick(dt)
         local kmh = math.floor(speed * 3.6)
         local biome = getCurrentBiomeName(car.x, car.z)
         sage.setTitle(string.format(
-            "SAGE v1.4 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
+            "SAGE v1.5 | %s | G%d %d km/h | %s | Score: %d (Best: %d)",
             biome, car.gear, kmh, weatherPresets[weatherPresetIdx].name, score, bestScore
         ))
     end
@@ -1508,11 +1670,11 @@ function onRenderUI()
     local vpW, vpH = ui.getViewportSize()
 
     if gameState == "MENU" then
-        if ui.beginCenteredWindow("SAGE ENGINE v1.4.0 — AAA INSTANCED GRASS & SSR", 470, 455) then
+        if ui.beginCenteredWindow("SAGE ENGINE v1.5.0 — AAA PROP INSTANCING, 3-CSM & EUPHORIA AI", 490, 460) then
             ui.setFontScale(1.38)
             ui.textCentered("SAGE STUNT & DELIVERY")
             ui.setFontScale(1.0)
-            ui.textCentered("v1.4.0  |  70k+ Wind Grass  |  Real-Time SSR  |  Reactive AI Crowd")
+            ui.textCentered("v1.5.0  |  GPU Prop Batching  |  3-CSM  |  Euphoria Ragdoll  |  Spline AI")
             ui.textCentered("All-Time Best Score: " .. tostring(bestScore))
             ui.spacing()
             ui.separator()
@@ -1658,10 +1820,22 @@ function onRenderUI()
                 ui.drawRect(rx0, ry0, rx1 - rx0, ry1 - ry0, 0.36, 0.38, 0.44, 0.85, false)
             end
 
-            -- AI Traffic Cruisers (Silver), Patrol Helicopter (Orange), Delivery Target (Pulsing Gold)
+            -- AI Traffic Cruisers (Silver/Red braking), Citizens (Yellow/Orange ragdoll), Helicopter, Delivery Target
             for _, tc in ipairs(trafficCars) do
                 local tx, ty = toMap(tc.x, tc.z)
-                ui.drawCircle(tx, ty, 2.5, 0.85, 0.88, 0.94, 0.95, true)
+                if tc.braking then
+                    ui.drawCircle(tx, ty, 2.8, 1.0, 0.25, 0.18, 0.98, true)
+                else
+                    ui.drawCircle(tx, ty, 2.5, 0.85, 0.88, 0.94, 0.95, true)
+                end
+            end
+            for _, npc in ipairs(crowdNpcs) do
+                local nx, ny = toMap(npc.x, npc.z)
+                if npc.ragdolling then
+                    ui.drawCircle(nx, ny, 2.8, 1.0, 0.35, 0.12, 1.0, true)
+                else
+                    ui.drawCircle(nx, ny, 2.0, 0.96, 0.88, 0.35, 0.90, true)
+                end
             end
             local hmx, hmy = toMap(heliPos.x, heliPos.z)
             ui.drawCircle(hmx, hmy, 3.0, 1.0, 0.52, 0.12, 0.95, true)
@@ -1723,5 +1897,5 @@ end
 function onShutdown()
     updateBestScore()
     audio.setVehicleState(0.0, 0.0, 0.0, 0.0, false)
-    sage.log("v1.4.0 AAA Instanced Grass, SSR & Reactive AI Crowd Sandbox shutting down cleanly.")
+    sage.log("v1.5.0 AAA GPU Instancing, 3-CSM, Euphoria Ragdoll & Spline AI Sandbox shutting down cleanly.")
 end

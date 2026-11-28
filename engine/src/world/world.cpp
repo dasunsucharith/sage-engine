@@ -324,6 +324,77 @@ bool World::setAnimationSpeed(const std::string& id, float speed) {
     return false;
 }
 
+bool World::setLookAt(const std::string& id, Vec3 target, float weight) {
+    if (Entity* e = findEntity(id)) {
+        e->lookAtEnabled = true;
+        e->lookAtTarget = target;
+        e->lookAtWeight = std::clamp(weight, 0.0f, 1.0f);
+        return true;
+    }
+    return false;
+}
+
+bool World::clearLookAt(const std::string& id) {
+    if (Entity* e = findEntity(id)) {
+        e->lookAtEnabled = false;
+        e->lookAtWeight = 0.0f;
+        return true;
+    }
+    return false;
+}
+
+bool World::triggerRagdoll(const std::string& id, Vec3 impulse, float duration) {
+    if (Entity* e = findEntity(id)) {
+        e->ragdollActive = true;
+        e->ragdollTimer = std::max(e->ragdollTimer, std::clamp(duration, 0.6f, 8.0f));
+        if (e->ragdollBlend < 0.05f) {
+            e->ragdollElapsed = 0.0f;
+            e->ragdollAngle = {0.0f, 0.0f, 0.0f};
+        }
+        e->ragdollVel.x = std::clamp(e->ragdollVel.x + impulse.x, -38.0f, 38.0f);
+        e->ragdollVel.y = std::clamp(std::max(e->ragdollVel.y, 0.0f) + std::max(impulse.y, 4.5f), 2.5f, 24.0f);
+        e->ragdollVel.z = std::clamp(e->ragdollVel.z + impulse.z, -38.0f, 38.0f);
+
+        // Derive realistic tumble angular velocity from horizontal impact vector!
+        const float yawRad = e->rotation.y * (kPi / 180.0f);
+        const float fwdX = std::sin(yawRad);
+        const float fwdZ = std::cos(yawRad);
+        const float rightX = std::cos(yawRad);
+        const float rightZ = -std::sin(yawRad);
+        const float hitFwd = impulse.x * fwdX + impulse.z * fwdZ;
+        const float hitSide = impulse.x * rightX + impulse.z * rightZ;
+        e->ragdollAngVel.x = std::clamp(hitFwd * 0.45f + 2.8f, -11.0f, 11.0f);
+        e->ragdollAngVel.z = std::clamp(-hitSide * 0.45f, -10.0f, 10.0f);
+        e->ragdollAngVel.y = std::clamp((hitSide - hitFwd) * 0.18f, -6.0f, 6.0f);
+        return true;
+    }
+    return false;
+}
+
+bool World::isRagdollActive(const std::string& id) const {
+    if (const Entity* e = findEntity(id)) {
+        return e->ragdollActive || e->ragdollBlend > 0.02f;
+    }
+    return false;
+}
+
+float World::getRagdollBlend(const std::string& id) const {
+    if (const Entity* e = findEntity(id)) {
+        return e->ragdollBlend;
+    }
+    return 0.0f;
+}
+
+std::size_t World::activeRagdollCount() const {
+    std::size_t count = 0;
+    for (const Entity& e : m_entities) {
+        if (e.ragdollActive || e.ragdollBlend > 0.02f) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 void World::updateAnimations(float dt) {
     for (Entity& e : m_entities) {
         if (e.shape == EntityShape::Model && e.animPlaying) {
@@ -336,6 +407,74 @@ void World::updateAnimations(float dt) {
                     e.blendElapsed = 0.0f;
                     e.prevAnimation.clear();
                 }
+            }
+        }
+
+        // Euphoria-Style Active-Physics Ragdoll Simulation & Smooth Get-Up Recovery (v1.5.0)
+        if (e.ragdollActive || e.ragdollBlend > 0.001f) {
+            e.ragdollElapsed += dt;
+            if (e.ragdollActive) {
+                e.ragdollBlend = std::min(1.0f, e.ragdollBlend + dt * 9.5f);
+                e.ragdollTimer -= dt;
+
+                // Ballistic gravity + aerodynamic drag
+                e.ragdollVel.y -= 24.0f * dt;
+                const float airDrag = std::exp(-0.45f * dt);
+                e.ragdollVel.x *= airDrag;
+                e.ragdollVel.z *= airDrag;
+
+                e.position.x = std::clamp(e.position.x + e.ragdollVel.x * dt, -270.0f, 270.0f);
+                e.position.y += e.ragdollVel.y * dt;
+                e.position.z = std::clamp(e.position.z + e.ragdollVel.z * dt, -270.0f, 270.0f);
+
+                e.ragdollAngle.x += e.ragdollAngVel.x * dt;
+                e.ragdollAngle.y += e.ragdollAngVel.y * dt;
+                e.ragdollAngle.z += e.ragdollAngVel.z * dt;
+
+                const TerrainSample ts = sampleTerrain(e.position.x, e.position.z);
+                const float floorY = ts.height;
+                if (e.position.y <= floorY) {
+                    e.position.y = floorY;
+                    if (e.ragdollVel.y < -3.2f) {
+                        const float impactSpd = -e.ragdollVel.y;
+                        e.ragdollVel.y = impactSpd * 0.32f;
+                        e.ragdollVel.x *= 0.62f;
+                        e.ragdollVel.z *= 0.62f;
+                        e.ragdollAngVel.x *= 0.68f;
+                        e.ragdollAngVel.z *= 0.68f;
+                        spawnParticles(
+                            {e.position.x, floorY + 0.15f, e.position.z},
+                            {e.ragdollVel.x * 0.25f, 1.8f, e.ragdollVel.z * 0.25f},
+                            {0.78f, 0.72f, 0.64f}, 5, 0.16f, 0.42f, false, 8.0f);
+                    } else {
+                        e.ragdollVel.y = 0.0f;
+                        const float slideDrag = std::exp(-5.8f * dt);
+                        e.ragdollVel.x *= slideDrag;
+                        e.ragdollVel.z *= slideDrag;
+                        const float angDrag = std::exp(-5.0f * dt);
+                        e.ragdollAngVel.x *= angDrag;
+                        e.ragdollAngVel.y *= angDrag;
+                        e.ragdollAngVel.z *= angDrag;
+                        // Settle torso flat on back or front (~90 deg pitch) while grounded
+                        const float targetPitch = (e.ragdollAngle.x >= 0.0f) ? 1.48f : -1.48f;
+                        e.ragdollAngle.x += (targetPitch - e.ragdollAngle.x) * std::min(1.0f, 5.5f * dt);
+                        e.ragdollAngle.z *= std::exp(-4.0f * dt);
+                    }
+                }
+
+                const float horizSpdSq = e.ragdollVel.x * e.ragdollVel.x + e.ragdollVel.z * e.ragdollVel.z;
+                if (e.ragdollTimer <= 0.0f && e.position.y <= floorY + 0.08f && horizSpdSq < 1.2f) {
+                    e.ragdollActive = false;
+                }
+            } else {
+                // Smooth Euphoria get-up recovery blend (1.0 -> 0.0 over ~0.65s)
+                e.ragdollBlend = std::max(0.0f, e.ragdollBlend - dt * 1.55f);
+                const float settle = std::exp(-6.0f * dt);
+                e.ragdollAngle.x *= settle;
+                e.ragdollAngle.y *= settle;
+                e.ragdollAngle.z *= settle;
+                e.ragdollVel = {0.0f, 0.0f, 0.0f};
+                e.ragdollAngVel = {0.0f, 0.0f, 0.0f};
             }
         }
     }

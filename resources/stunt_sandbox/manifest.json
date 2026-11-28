@@ -1,9 +1,9 @@
 {
   "name": "stunt_sandbox",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "author": "Dasun Sucharith",
   "enabled": true,
-  "description": "SAGE Engine v1.4.0 AAA Showcase — 70,000+ GPU-Instanced Interactive Wind Grass Blades, Real-Time Screen-Space Reflections (SSR), 6-Plane Frustum Culling, Pre-Warmed Asset Pipeline, Reactive GTA-Style Rigged NPC Crowd AI, 3D Heightmap Terrain, 4-Wheel Suspension, Volumetric God-Rays & Spatial 3D Audio.",
+  "description": "SAGE Engine v1.5.0 AAA Showcase — Automatic GPU-Instanced Static Prop Batching, 3-Split Cascaded Shadow Maps (3-CSM), Euphoria-Style Active-Physics Ragdoll Blending & Procedural Head Look-At IK, 10 Smart-Yielding Catmull-Rom Spline AI Traffic Cruisers, 10 Reactive Citizens, Kinetic Repulsor Blast (Q), 57k+ Interactive 3D Grass Blades, Real-Time SSR, 3D Heightmap Terrain, 4-Wheel Suspension, Volumetric God-Rays & Spatial 3D Audio.",
   "scripts": [
     "main.lua"
   ]

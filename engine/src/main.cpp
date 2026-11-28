@@ -4,7 +4,7 @@
 
 int main(int argc, char* argv[]) {
     sage::EngineConfig config;
-    config.appName = "SAGE Engine v1.4.0 — GPU Instanced Grass, Screen-Space Reflections & AI Crowd";
+    config.appName = "SAGE Engine v1.5.0 — GPU Prop Instancing, 3-CSM, Euphoria Ragdoll & Spline AI";
     config.windowWidth = 1280;
     config.windowHeight = 720;
 

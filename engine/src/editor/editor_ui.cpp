@@ -62,7 +62,7 @@ bool EditorUI::initialize(Window& window) {
     }
 
     m_initialized = true;
-    std::cout << "[SAGE][Editor] Dear ImGui " << IMGUI_VERSION << " v1.4 AAA World Editor ready (Press F1 to toggle)\n";
+    std::cout << "[SAGE][Editor] Dear ImGui " << IMGUI_VERSION << " v1.5 AAA World Editor ready (Press F1 to toggle)\n";
     return true;
 }
 
@@ -112,12 +112,14 @@ void EditorUI::render(
         ImGui::SetNextWindowPos(ImVec2(14.0f, 14.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(345.0f, 0.0f), ImGuiCond_FirstUseEver);
 
-        if (ImGui::Begin("SAGE Engine v1.4.0 — AAA World Editor (F1)", &m_visible)) {
+        if (ImGui::Begin("SAGE Engine v1.5.0 — AAA World Editor (F1)", &m_visible)) {
             ImGui::Text("FPS: %.0f (%.2f ms)", stats.fps, stats.frameMs);
             ImGui::PlotLines("##fps", m_fpsHistory, 90, m_fpsOffset, nullptr, 0.0f, 165.0f, ImVec2(-1.0f, 34.0f));
             ImGui::TextDisabled("GPU: %s", stats.gpuRenderer.c_str());
-            ImGui::Text("Entities: %zu (Culled: %zu) | .glb: %zu",
-                world.entityCount(), stats.culledEntities, stats.loadedModels);
+            ImGui::Text("Entities: %zu (Culled: %zu) | Ragdolls: %zu",
+                world.entityCount(), stats.culledEntities, world.activeRagdollCount());
+            ImGui::Text("Draw Calls: %zu | Batches: %zu (%zu props, -%zu calls)",
+                stats.drawCalls, stats.instancedBatches, stats.instancedProps, stats.savedDrawCalls);
             ImGui::Text("Grass Blades: %zu | Jolt: %zu | Lights: %zu",
                 stats.grassClumps * 2, physics.bodyCount(), world.pointLights().size());
 
@@ -173,12 +175,13 @@ void EditorUI::render(
                 }
 
                 ImGui::Checkbox("3D Heightmap Terrain (Hills & Peaks)", &world.terrain().enabled);
-                ImGui::Checkbox("GPU Instanced Wind Grass (70k+ Blades)", &world.sky().grassEnabled);
+                ImGui::Checkbox("GPU-Instanced Prop Batching (Trees/Lamps/Rocks)", &world.sky().instancedPropsEnabled);
+                ImGui::Checkbox("GPU Instanced Wind Grass (57k+ Blades)", &world.sky().grassEnabled);
                 ImGui::Checkbox("Screen-Space Reflections (SSR)", &world.sky().ssrEnabled);
                 if (world.sky().ssrEnabled) {
                     ImGui::SliderFloat("SSR Strength", &world.sky().ssrIntensity, 0.0f, 1.2f, "%.2f");
                 }
-                ImGui::Checkbox("2-Cascade Soft Shadows (2048px CSM)", &world.sky().shadowsEnabled);
+                ImGui::Checkbox("3-Cascade Soft Shadows (2048px 3-CSM)", &world.sky().shadowsEnabled);
                 ImGui::Checkbox("Drifting Cloud Shadows", &world.sky().cloudShadowsEnabled);
                 ImGui::Checkbox("Screen-Space Contact AO (SSAO)", &world.sky().ssaoEnabled);
                 ImGui::Checkbox("FXAA 3.11 Edge Anti-Aliasing", &world.sky().fxaaEnabled);
@@ -335,7 +338,7 @@ void EditorUI::render(
             }
 
             ImGui::Separator();
-            ImGui::TextWrapped("Controls: WASD Move | F Exit/Enter Car | G Weather | T Sky | Space Drift/Jump | Shift Nitro/Sprint | Esc Menu");
+            ImGui::TextWrapped("Controls: WASD Move | F Exit/Enter Car | Q Kinetic Blast | X Shockwave | G Weather | T Sky | Space Drift/Jump | Shift Nitro/Sprint | Esc Menu");
         }
         ImGui::End();
     }

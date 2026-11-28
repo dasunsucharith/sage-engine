@@ -19,6 +19,10 @@ struct EditorStats {
     std::size_t loadedModels = 0;
     std::size_t grassClumps = 0;
     std::size_t culledEntities = 0;
+    std::size_t drawCalls = 0;
+    std::size_t instancedBatches = 0;
+    std::size_t instancedProps = 0;
+    std::size_t savedDrawCalls = 0;
     std::size_t luaResources = 0;
     bool freeFlyMode = false;
 };

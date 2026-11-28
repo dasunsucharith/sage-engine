@@ -1,5 +1,5 @@
 {
-  "name": "SAGE v1.4.0 \u2014 GPU Instanced Grass, Screen-Space Reflections, Reactive AI Crowd, 3D Terrain & Volumetric God-Rays",
+  "name": "SAGE v1.5.0 \u2014 GPU Prop Instancing, 3-CSM, Euphoria Ragdoll, Look-At IK, Spline AI Traffic & Instanced Grass",
   "version": 2,
   "sky": {
     "timeOfDay": 17.4,
