@@ -136,6 +136,12 @@
       "version": "1.6.0+",
       "domain": "Automated Tests & CI",
       "lesson": "World, PhysicsWorld (Jolt), LuaEngine, SceneLoader and a silent AudioEngine all run headless, so a doctest suite linking sage_core covers handles, interpolation, terrain, the Lua sandbox/watchdog/saves and full-scenario determinism in ~1.4 s without a GPU, which makes it CI-friendly. Lua tests read results back via sage.saveData files, so no LuaEngine internals need exposing. ALWAYS mutation-check new tests: plant the bug the test should catch and confirm it fails (4/4 caught here). Gotcha: on Windows, git restores files with CRLF, so a naive \n-based search/replace silently applies nothing (and a silently failing rebuild makes everything 'pass'). The mutation script must normalise line endings, assert the bug applied, and the rebuild exit code must be checked. CI: don't hard-code a Visual Studio generator version (runner images change); let CMake pick, and build/test with --config Release / -C Release."
+    },
+    {
+      "id": "L023",
+      "version": "1.7.0",
+      "domain": "Benchmark Methodology (run order)",
+      "lesson": "Alternating OLD then NEW with NEW always second produced a consistent-looking 0.9 ms 'regression' (3/3 runs) that disappeared under rotated run order: 6 rounds, each build first, middle and last equally often, compared by MEDIAN, gave 2.38 / 2.31 / 2.56 ms with overlapping ranges and identical GPU time. The suspected build's engine code was identical to a build that measured fastest. Laptops heat up within a group of back-to-back runs, so fixed ordering biases whatever runs later. Rotate or randomise order, use medians, look at the less noisy GPU and renderSubmit numbers, and check whether the code under suspicion even changed before calling a regression."
     }
   ],
   "aaaRoadmapToSurpassRAGE": [
@@ -264,6 +270,16 @@
         "run2": {"meanFrameMs": 3.13, "p50FrameMs": 2.59, "p95FrameMs": 6.25, "p99FrameMs": 10.82, "maxFrameMs": 25.65}
       },
       "note": "Use THIS as the baseline for future comparisons, not the coldStart12FrameAvgMs fields above. CPU wall-clock frame time only (no GPU timer queries yet)."
+    },
+    {
+      "version": "1.7.0",
+      "gpu": "NVIDIA GeForce RTX 5050 Laptop GPU",
+      "buildConfig": "Release",
+      "method": "sage.exe --benchmark 1200 (120 warm-up, VSync off, 1280x720). Echo Island: median of 6 runs in rotated order against two older builds. Stunt City: 3 runs.",
+      "stuntCity": {"p50FrameMs": [2.60, 3.09, 2.54], "p95FrameMs": [6.37, 6.31, 5.24], "p99FrameMs": [9.03, 8.15, 6.82], "gpuTotalP50Ms": [1.49, 1.51, 1.58]},
+      "echoIslandSurvival": {"p50FrameMsMedian": 2.56, "p50FrameMsRange": [2.15, 2.99], "gpuTotalP50MsMedian": 1.15, "renderSubmitMsMedian": 1.06},
+      "sameSessionComparison": {"d6589f7_entityHandles": {"p50Median": 2.38, "gpuMedian": 1.16}, "c952f5c_rendererSplit": {"p50Median": 2.31, "gpuMedian": 1.17}},
+      "note": "Machine noise was high this session (single-run p50 spread up to 1.3 ms). A first 3-run A/B suggested a 0.9 ms regression, but the new build always ran second; rotated-order medians showed no real difference (GPU identical, the v1.7 engine code is identical to c952f5c). Compare future versions with rotated-order medians and GPU/renderSubmit times, not single runs."
     }
   ]
 }
